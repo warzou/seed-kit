@@ -1,8 +1,21 @@
 # Seed-Kit
 
-Petit toolkit léger pour installer, reprendre et reconstruire des petites machines :
-Debian, Raspberry Pi OS, OpenWRT/Flint, mini VPS.
+Petit toolkit shell pour installer, deployer et reprendre simplement de petites machines :
+Debian, Raspberry Pi OS, OpenWRT/Flint plus tard, mini VPS.
 
-Objectif : une commande simple, une UI texte claire, des modules faciles à ajouter.
+Objectif : une commande simple, une UI texte claire, des modules faciles a ajouter.
 
-Seed-Kit doit rester simple, lisible et utile rapidement.
+Le contexte et les limites du projet sont dans [CONTEXT.md](CONTEXT.md).
+
+## Installation
+
+```sh
+sh install.sh --plan
+```
+
+## Test rapide
+
+```sh
+sh seed-kit.sh --plan
+sh seed-kit.sh --detect
+```
