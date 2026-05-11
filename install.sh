@@ -18,12 +18,13 @@ EOF
 case "${1:-}" in
   --plan|"")
     echo "Seed-Kit install plan"
+    echo "plan-only mode / no system changes"
     echo
-    echo "Project directory: $ROOT_DIR"
+    echo "project: $ROOT_DIR"
     echo "- keep scripts in place"
     echo "- run with: sh seed-kit.sh --plan"
-    echo "- no packages installed in V0"
-    echo "- no system files changed in V0"
+    echo "- no packages installed"
+    echo "- no system files changed"
     ;;
   -h|--help)
     usage

@@ -122,7 +122,7 @@ suggested_next_step() {
   if ! command -v git >/dev/null 2>&1; then
     echo "install git"
   elif ! command -v tailscale >/dev/null 2>&1; then
-    echo "review tailscale"
+    echo "decide if tailscale is needed"
   else
     echo "review module plan"
   fi
