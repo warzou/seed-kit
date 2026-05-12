@@ -28,8 +28,13 @@ Conventions légères prévues :
 
 - `--plan` : affichage du plan.
 - `--modules` : liste des modules disponibles.
-- `--apply` : mode d’application (V0: aperçu seul, pas de changements).
-- `-y` : prévu pour confirmation automatique quand l’apply sera actif.
+- `--apply [--modules=git,docker] [--yes|-y]` : affiche le preview puis applique les modules demandés.
+- Sans `--modules`, `--apply` reste en preview-only (aucune action réelle).
+- `-y` : passe la confirmation SAFE (`[y/N]`) pour accélérer l’exécution en mode apply.
+
+SAFE rule :
+
+- `sh seed-kit.sh --apply` : aucune action réelle.
 
 Format de progression cible (ambient) :
 
