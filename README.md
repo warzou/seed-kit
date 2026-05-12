@@ -22,6 +22,25 @@ sh seed-kit.sh --modules
 sh seed-kit.sh --apply
 ```
 
+## Test terrain (machine fraiche)
+
+```sh
+sh seed-kit.sh --plan
+sh seed-kit.sh --modules
+sh seed-kit.sh --apply
+sh seed-kit.sh --apply --modules=git
+sh seed-kit.sh --apply --modules=git -y
+```
+
+Attendus :
+
+* lisibilite SSH et progression
+* message explicite : no modules selected for apply: use --modules=git
+* confirmation SAFE [y/N] quand applicatif
+* erreurs lisibles en cas de sudo/auth/apt ([apply], [git])
+* Git deja installe : [git] already installed
+* Git absent : etapes de verification/install affichees
+
 ## Direction CLI (V0)
 
 Conventions légères prévues :
