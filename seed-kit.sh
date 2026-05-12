@@ -143,7 +143,7 @@ apply_safe_confirm() {
       return 0
       ;;
     *)
-      echo "aborted by user"
+      echo "[apply] aborted by user"
       return 2
       ;;
   esac
@@ -157,7 +157,7 @@ apply_module_git() {
   fi
 
   if ! is_debian_like; then
-    echo "unsupported OS for git apply: $SEED_OS_NAME" >&2
+    echo "[git] unsupported OS for apply: $SEED_OS_NAME" >&2
     return 2
   fi
 
@@ -168,7 +168,7 @@ apply_module_git() {
   ui_line "[git] install via apt"
   if [ "$(id -u)" -ne 0 ]; then
     if ! command -v sudo >/dev/null 2>&1; then
-      echo "sudo required for apt install (not running as root)" >&2
+      echo "[git] sudo required for apt install (not running as root)" >&2
       return 3
     fi
     SUDO=sudo
@@ -178,13 +178,13 @@ apply_module_git() {
 
   ui_line "[git] running apt-get update"
   if ! $SUDO apt-get update; then
-    echo "apt-get update failed" >&2
+    echo "[git] apt-get update failed" >&2
     return 4
   fi
 
   ui_line "[git] running apt-get install"
   if ! $SUDO apt-get install -y git; then
-    echo "apt-get install git failed" >&2
+    echo "[git] apt-get install failed" >&2
     return 5
   fi
 
@@ -194,7 +194,7 @@ apply_module_git() {
     return 0
   fi
 
-  echo "post-install check failed: git not found" >&2
+  echo "[git] post-install check failed: binary not found" >&2
   return 6
 }
 
