@@ -469,7 +469,7 @@ case "${1:-}" in
     fi
     show_apply_preview "$APPLY_MODULES"
     if [ -z "$APPLY_MODULES" ]; then
-      ui_line "no modules selected for apply"
+      ui_line "no modules selected for apply: use --modules=git"
       exit 0
     fi
     run_apply_modules
