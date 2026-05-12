@@ -6,12 +6,11 @@ Seed-Kit is a V0 shell toolkit with:
 
 * plan-only `install.sh`
 * `seed-kit.sh` entrypoint
-* OS detection
-* lightweight backends
-* placeholder modules
-* responsive terminal UI
-
-No real install/restore/secrets work has been added yet.
+* OS detection + lightweight backends
+* CLI with `--plan`, `--detect`, `--modules`, `--apply` and `-y`
+* ambient terminal cockpit UI (responsive split default)
+* module list and targetable apply preview flow
+* one real minimal action implemented: `--apply --modules=git` on Debian-like systems
 
 ## UX Decision
 
@@ -30,7 +29,7 @@ Current UI traits:
 * Unicode + ASCII fallback
 * `NO_COLOR` support
 
-Exploratory styles still available:
+Exploratory styles:
 
 ```sh
 SEED_UI_STYLE=focus sh seed-kit.sh --plan
@@ -41,11 +40,21 @@ sh seed-kit.sh --ui-demo
 ## Keep
 
 * calm modern terminal UI
+* SAFE behavior: `sh seed-kit.sh --apply` does not run real actions
 * simple shell helpers in `lib/ui.sh`
 * low density
 * strong spacing
+* shell-first, minimal, readable implementation
 * small diffs
 * real SSH testing
+
+Current stable behavior:
+
+* `--apply --modules=git` performs a minimal install check/step when needed
+* `--apply --modules=git,docker` applies git and reports `not implemented` for docker in V0
+* `-y` only skips SAFE confirmation prompt; it does not skip auth or errors
+* non-git modules remain V0 placeholders (`docker`, `tailscale`, `homepage`)
+* unknown modules are rejected explicitly
 
 ## Avoid
 
