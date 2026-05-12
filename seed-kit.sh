@@ -150,6 +150,7 @@ apply_safe_confirm() {
 }
 
 apply_module_git() {
+  ui_line "[git] checking installation"
   if command -v git >/dev/null 2>&1; then
     ui_line "[git] already installed"
     return 0
@@ -175,16 +176,19 @@ apply_module_git() {
     SUDO=
   fi
 
+  ui_line "[git] running apt-get update"
   if ! $SUDO apt-get update; then
     echo "apt-get update failed" >&2
     return 4
   fi
 
+  ui_line "[git] running apt-get install"
   if ! $SUDO apt-get install -y git; then
     echo "apt-get install git failed" >&2
     return 5
   fi
 
+  ui_line "[git] verifying installation"
   if command -v git >/dev/null 2>&1; then
     ui_line "[git] installed"
     return 0
