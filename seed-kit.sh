@@ -115,7 +115,83 @@ status_word() {
     *)
       echo "$1"
       ;;
+    esac
+}
+
+is_debian_like() {
+  case "$SEED_OS_ID" in
+    debian|ubuntu|raspberrypi)
+      return 0
+      ;;
   esac
+
+  case " $SEED_OS_LIKE " in
+    *" debian "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+apply_safe_confirm() {
+  if [ "$APPLY_AUTO" -eq 1 ]; then
+    return 0
+  fi
+
+  ui_prompt "confirm safe action: continue [y/N]:"
+  IFS= read -r answer || return 1
+  case "$answer" in
+    y|Y)
+      return 0
+      ;;
+    *)
+      echo "aborted by user"
+      return 2
+      ;;
+  esac
+}
+
+apply_module_git() {
+  if command -v git >/dev/null 2>&1; then
+    ui_line "[git] already installed"
+    return 0
+  fi
+
+  if ! is_debian_like; then
+    echo "unsupported OS for git apply: $SEED_OS_NAME" >&2
+    return 2
+  fi
+
+  if ! apply_safe_confirm; then
+    return 2
+  fi
+
+  ui_line "[git] install via apt"
+  if [ "$(id -u)" -ne 0 ]; then
+    if ! command -v sudo >/dev/null 2>&1; then
+      echo "sudo required for apt install (not running as root)" >&2
+      return 3
+    fi
+    SUDO=sudo
+  else
+    SUDO=
+  fi
+
+  if ! $SUDO apt-get update; then
+    echo "apt-get update failed" >&2
+    return 4
+  fi
+
+  if ! $SUDO apt-get install -y git; then
+    echo "apt-get install git failed" >&2
+    return 5
+  fi
+
+  if command -v git >/dev/null 2>&1; then
+    ui_line "[git] installed"
+    return 0
+  fi
+
+  echo "post-install check failed: git not found" >&2
+  return 6
 }
 
 suggested_next_step() {
@@ -208,7 +284,7 @@ seed_kit_usage() {
   echo "Planned CLI shape:"
   echo "  --plan           show the full execution plan"
   echo "  --modules        list available modules"
-  echo "  --apply [--modules=git,docker] [--yes|-y]  plan + apply when implemented (V0 is plan-only)"
+  echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --detect         show OS detection details"
 }
 
@@ -217,7 +293,7 @@ parse_apply_modules() {
   old_ifs=$IFS
   IFS=,
   if [ -z "$requested_modules" ]; then
-    APPLY_MODULES="$MODULES"
+    APPLY_MODULES=""
     IFS=$old_ifs
     return 0
   fi
@@ -270,13 +346,35 @@ parse_apply_options() {
 
 show_apply_preview() {
   ui_header "apply mode preview"
-  ui_whisper "plan-only mode / no system changes in V0"
+  ui_whisper "minimal actions in V0"
   ui_line "selected modules: $1"
   ui_separator "progress"
   ui_line "[1/4] detect system"
   ui_line "[2/4] prepare plan"
   ui_line "[3/4] confirm safe steps"
   ui_line "[4/4] apply"
+}
+
+run_apply_modules() {
+  for module in $APPLY_MODULES; do
+    case "$module" in
+      git)
+        apply_module_git
+        ;;
+      docker)
+        ui_line "[docker] not implemented in V0"
+        ;;
+      tailscale)
+        ui_line "[tailscale] not implemented in V0"
+        ;;
+      homepage)
+        ui_line "[homepage] not implemented in V0"
+        ;;
+      *)
+        ui_line "unknown module: $module"
+        ;;
+    esac
+  done
 }
 
 show_ui_demo() {
@@ -363,9 +461,14 @@ case "${1:-}" in
       exit 2
     fi
     if [ "$APPLY_AUTO" -eq 1 ]; then
-      ui_whisper "auto-confirm mode requested (V0 preview only)"
+      ui_whisper "auto-confirm mode requested"
     fi
     show_apply_preview "$APPLY_MODULES"
+    if [ -z "$APPLY_MODULES" ]; then
+      ui_line "no modules selected for apply"
+      exit 0
+    fi
+    run_apply_modules
     ;;
   --detect)
     ui_header "os detection"
