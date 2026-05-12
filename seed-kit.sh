@@ -196,6 +196,32 @@ show_dashboard() {
   esac
 }
 
+show_modules_list() {
+  for module in $MODULES; do
+    ui_line "$module"
+  done
+}
+
+seed_kit_usage() {
+  echo "Usage: sh seed-kit.sh [--plan|--detect|--ui-demo|--modules|--apply]"
+  echo ""
+  echo "Planned CLI shape:"
+  echo "  --plan           show the full execution plan"
+  echo "  --modules        list available modules"
+  echo "  --apply [-y]     plan + apply when implemented (V0 is plan-only)"
+  echo "  --detect         show OS detection details"
+}
+
+show_apply_preview() {
+  ui_header "apply mode preview"
+  ui_whisper "plan-only mode / no system changes in V0"
+  ui_separator "progress"
+  ui_line "[1/4] detect system"
+  ui_line "[2/4] prepare plan"
+  ui_line "[3/4] confirm safe steps"
+  ui_line "[4/4] apply"
+}
+
 show_ui_demo() {
   old_style=${SEED_UI_STYLE:-cockpit}
 
@@ -274,24 +300,34 @@ case "${1:-}" in
   --plan)
     show_plan
     ;;
+  --apply)
+    if [ "${2:-}" = "-y" ] || [ "${2:-}" = "--yes" ]; then
+      ui_whisper "auto-confirm mode requested (V0 preview only)"
+    fi
+    show_apply_preview
+    ;;
   --detect)
     ui_header "os detection"
     ui_kv "id" "$SEED_OS_ID"
     ui_kv "name" "$SEED_OS_NAME"
     ui_kv "like" "$SEED_OS_LIKE"
     ;;
+  --modules)
+    ui_header "modules"
+    show_modules_list
+    ;;
   --ui-demo)
     show_ui_demo
     ;;
   -h|--help)
-    echo "Usage: sh seed-kit.sh [--plan|--detect|--ui-demo]"
+    seed_kit_usage
     ;;
   "")
     show_menu
     ;;
   *)
     echo "Unknown option: $1" >&2
-    echo "Usage: sh seed-kit.sh [--plan|--detect|--ui-demo]" >&2
+    seed_kit_usage >&2
     exit 2
     ;;
 esac
