@@ -208,13 +208,70 @@ seed_kit_usage() {
   echo "Planned CLI shape:"
   echo "  --plan           show the full execution plan"
   echo "  --modules        list available modules"
-  echo "  --apply [-y]     plan + apply when implemented (V0 is plan-only)"
+  echo "  --apply [--modules=git,docker] [--yes|-y]  plan + apply when implemented (V0 is plan-only)"
   echo "  --detect         show OS detection details"
+}
+
+parse_apply_modules() {
+  requested_modules="$1"
+  old_ifs=$IFS
+  IFS=,
+  if [ -z "$requested_modules" ]; then
+    APPLY_MODULES="$MODULES"
+    IFS=$old_ifs
+    return 0
+  fi
+
+  APPLY_MODULES=""
+
+  for module in $requested_modules; do
+    case " $MODULES " in
+      *" $module "*) ;;
+      *)
+        IFS=$old_ifs
+        echo "unknown module: $module" >&2
+        return 1
+        ;;
+    esac
+
+    if [ -z "$APPLY_MODULES" ]; then
+      APPLY_MODULES="$module"
+    else
+      APPLY_MODULES="$APPLY_MODULES $module"
+    fi
+  done
+  IFS=$old_ifs
+}
+
+parse_apply_options() {
+  APPLY_AUTO=0
+  APPLY_MODULES_FILTER=""
+  for arg in "$@"; do
+    case "$arg" in
+      -y|--yes)
+        APPLY_AUTO=1
+        ;;
+      --modules=*)
+        APPLY_MODULES_FILTER="${arg#--modules=}"
+        ;;
+      --modules)
+        echo "unknown option: --modules (use --modules=<comma-separated> instead)" >&2
+        return 2
+        ;;
+      *)
+        echo "unknown option: $arg" >&2
+        return 2
+        ;;
+    esac
+  done
+
+  parse_apply_modules "$APPLY_MODULES_FILTER"
 }
 
 show_apply_preview() {
   ui_header "apply mode preview"
   ui_whisper "plan-only mode / no system changes in V0"
+  ui_line "selected modules: $1"
   ui_separator "progress"
   ui_line "[1/4] detect system"
   ui_line "[2/4] prepare plan"
@@ -301,10 +358,14 @@ case "${1:-}" in
     show_plan
     ;;
   --apply)
-    if [ "${2:-}" = "-y" ] || [ "${2:-}" = "--yes" ]; then
+    shift
+    if ! parse_apply_options "$@"; then
+      exit 2
+    fi
+    if [ "$APPLY_AUTO" -eq 1 ]; then
       ui_whisper "auto-confirm mode requested (V0 preview only)"
     fi
-    show_apply_preview
+    show_apply_preview "$APPLY_MODULES"
     ;;
   --detect)
     ui_header "os detection"
