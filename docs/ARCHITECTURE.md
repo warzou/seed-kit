@@ -38,6 +38,31 @@ The default path is SAFE:
 
 Keep the core small. Avoid heavy frameworks, YAML manifests, dependency engines, plugin systems, and abstractions before real module pressure proves they are needed.
 
+## Node shapes
+
+Seed-Kit supports two target shapes:
+
+```text
+minimal resilient node
+  tailscale
+  cloudflared
+  caddy
+  homer
+
+edge services node
+  tailscale
+  cloudflared
+  caddy
+  docker
+  homepage
+```
+
+Docker is optional. It is useful for edge services, but it is not part of the minimal resilient host-level base.
+
+Tailscale is host-level. It must not depend on Docker.
+
+`homer` is the recommended lightweight dashboard for low-RAM and rescue-style nodes. `homepage` stays optional and is likely tied to Docker or a heavier services stack.
+
 ## Runtime
 
 The bootstrap runtime is intentionally minimal. It creates local `lib/`, `modules/`, and `backends/` placeholders so a copied single file can become usable on a fresh node.

@@ -133,6 +133,26 @@ module_tailscale_plan() {
 EOF
   fi
 
+  if [ ! -f "$ROOT_DIR/modules/cloudflared.sh" ]; then
+    cat > "$ROOT_DIR/modules/cloudflared.sh" <<'EOF'
+#!/bin/sh
+module_cloudflared_plan() {
+  echo "- runtime bootstrap placeholder"
+  echo "- full cloudflared plan requires repository runtime"
+}
+EOF
+  fi
+
+  if [ ! -f "$ROOT_DIR/modules/caddy.sh" ]; then
+    cat > "$ROOT_DIR/modules/caddy.sh" <<'EOF'
+#!/bin/sh
+module_caddy_plan() {
+  echo "- runtime bootstrap placeholder"
+  echo "- full caddy plan requires repository runtime"
+}
+EOF
+  fi
+
   if [ ! -f "$ROOT_DIR/modules/homepage.sh" ]; then
     cat > "$ROOT_DIR/modules/homepage.sh" <<'EOF'
 #!/bin/sh
@@ -179,7 +199,7 @@ if ! bootstrap_runtime_ready; then
   . "$RUNTIME_OS"
 fi
 
-MODULES="git docker tailscale homepage"
+MODULES="git docker tailscale cloudflared caddy homepage"
 
 load_backend() {
   case "$SEED_OS_ID" in
@@ -600,6 +620,12 @@ run_apply_modules() {
         ;;
       tailscale)
         ui_line "[tailscale] not implemented in V0"
+        ;;
+      cloudflared)
+        ui_line "[cloudflared] not implemented in V0"
+        ;;
+      caddy)
+        ui_line "[caddy] not implemented in V0"
         ;;
       homepage)
         ui_line "[homepage] not implemented in V0"

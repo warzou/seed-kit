@@ -43,6 +43,14 @@ Keep:
 * `docs/` as project documentation
 * minimal SSH-friendly UI integrated in `seed-kit.sh`
 
+Product direction:
+
+* Docker is optional, not part of the minimal base.
+* Tailscale is host-level and must not depend on Docker.
+* Minimal resilient node: `tailscale`, `cloudflared`, `caddy`, `homer`.
+* Edge services node: `tailscale`, `cloudflared`, `caddy`, `docker`, `homepage`.
+* `wifi-kit` replaces the old `wifi-portal` concept and must use a temporary minimal HTTP server, compatible with BusyBox `httpd`.
+
 ## UX Direction
 
 Direction: calm modern terminal UI.

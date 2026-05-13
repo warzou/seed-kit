@@ -25,17 +25,39 @@ Apply support is currently handled in `seed-kit.sh` for the first real path (`gi
 
 Near-term modules:
 
-- `docker`
 - `tailscale`
 - `cloudflared`
 - `caddy`
+- `homer`
+- `docker`
 - `homepage`
+
+External official module boundaries are documented in [EXTERNAL-MODULES.md](EXTERNAL-MODULES.md).
 
 Strategic module:
 
-- `wifi-portal`: temporary hotspot plus Wi-Fi configuration from a phone, especially for Raspberry Pi Zero W, nomadic nodes, and rescue nodes.
+- `wifi-kit`: temporary hotspot plus Wi-Fi configuration from a phone, especially for Raspberry Pi Zero W, nomadic nodes, and rescue nodes.
 
-`wifi-portal` should start as documentation and SAFE prototype work before it performs system changes. It will likely need careful handling around networking, access point mode, rollback, and SSH rescue paths.
+`wifi-kit` should start as documentation and SAFE prototype work before it performs system changes. It must not depend on Docker, Homepage, Caddy, or Internet access. It should use a temporary minimal HTTP server compatible with BusyBox `httpd`, with low overhead for Raspberry Pi Zero W, OpenWRT, and rescue nodes.
+
+## Node shapes
+
+Minimal resilient node:
+
+- `tailscale`
+- `cloudflared`
+- `caddy`
+- `homer`
+
+Edge services node:
+
+- `tailscale`
+- `cloudflared`
+- `caddy`
+- `docker`
+- `homepage`
+
+Docker is optional. Tailscale, Cloudflared, Caddy, and Homer are host-level modules for the minimal node path. Homepage remains optional and likely depends on Docker or a heavier web services stack.
 
 ## Dependencies and profiles
 
@@ -57,4 +79,4 @@ Parallel module development becomes reasonable when:
 
 Seed-Kit is close to this threshold. The runtime bootstrap, module listing, planning, targeted apply, SAFE confirmation, and sudo UX are in place.
 
-The remaining gap is convention hardening: module apply boundaries and shared helper usage are still mostly implicit. From this point, `wifi-portal` can begin in parallel with engine work, but only as documentation and SAFE prototype work at first.
+The remaining gap is convention hardening: module apply boundaries and shared helper usage are still mostly implicit. From this point, `wifi-kit` can begin in parallel with engine work, but only as documentation and SAFE prototype work at first.
