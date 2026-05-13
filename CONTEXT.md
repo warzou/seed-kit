@@ -25,7 +25,23 @@ Everything else is secondary.
 * simple OS detection
 * simple backends: `debian`, `raspberrypi`, `openwrt`
 * placeholder modules: `git`, `docker`, `tailscale`, `homepage`
-* terminal UI only; no system changes yet
+* modular monorepo layout: `modules/`, `backends/`, `docs/`, and planned `profiles/`
+* minimal inline terminal UI
+* one real minimal apply path: `--apply --modules=git`
+* generated bootstrap runtime can be removed with `--uninstall-runtime`
+
+## Architecture Direction
+
+Seed-Kit is a modular monorepo, not a collection of separate module repositories.
+
+Keep:
+
+* `seed-kit.sh` as engine and only entrypoint
+* `modules/` as installable capabilities
+* `profiles/` as planned module compositions
+* `backends/` as OS support
+* `docs/` as project documentation
+* minimal SSH-friendly UI integrated in `seed-kit.sh`
 
 ## UX Direction
 

@@ -6,6 +6,8 @@ Debian, Raspberry Pi OS, OpenWRT/Flint plus tard, mini VPS.
 Objectif : une commande simple, une UI texte claire, des modules faciles a ajouter.
 
 Le contexte et les limites du projet sont dans [CONTEXT.md](CONTEXT.md).
+Architecture monorepo: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Conventions modules: [docs/MODULES.md](docs/MODULES.md).
 
 ## Installation
 
