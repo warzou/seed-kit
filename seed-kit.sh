@@ -331,6 +331,30 @@ apply_safe_confirm() {
   esac
 }
 
+require_sudo_for_system_action() {
+  if [ "$(id -u)" -eq 0 ]; then
+    ui_line "running as root; no sudo needed for this action"
+    return 0
+  fi
+
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "sudo is required for this action but is not installed." >&2
+    return 3
+  fi
+
+  if ! sudo -n true >/dev/null 2>&1; then
+    echo "sudo access is required."
+    echo "This SSH session cannot provide a sudo password."
+    echo "Try:"
+    echo "  ssh -t user@host"
+    echo "  sudo -v"
+    echo "  sh seed-kit.sh --apply --modules=git"
+    return 4
+  fi
+
+  return 0
+}
+
 apply_module_git() {
   ui_line "[git] checking installation"
   if command -v git >/dev/null 2>&1; then
@@ -347,15 +371,15 @@ apply_module_git() {
     return 2
   fi
 
+  if ! require_sudo_for_system_action; then
+    return 2
+  fi
+
   ui_line "[git] install via apt"
-  if [ "$(id -u)" -ne 0 ]; then
-    if ! command -v sudo >/dev/null 2>&1; then
-      echo "[git] sudo required for apt install (not running as root)" >&2
-      return 3
-    fi
-    SUDO=sudo
-  else
+  if [ "$(id -u)" -eq 0 ]; then
     SUDO=
+  else
+    SUDO=sudo
   fi
 
   ui_line "[git] running apt-get update"
