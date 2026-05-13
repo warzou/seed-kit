@@ -1,22 +1,46 @@
 # Wi-Fi Kit (SAFE / simulation)
 
-Ce dossier contient la première passe documentaire et de simulation de `wifi-kit` pour Seed-Kit.
+`wifi-kit` est un module Seed-Kit pour preparer un flux Wi-Fi minimal, resilient et utilisable sur petit noeud nomade.
 
-## Objectif de cette passe
+Le coeur de `wifi-kit` n'est pas le portail web. Le portail sera seulement une interface possible plus tard. Le coeur est:
 
-- ne rien modifier côté réseau réel,
-- ne pas démarrer hostapd / dnsmasq / NetworkManager en vrai,
-- modéliser l'état et les transitions,
-- documenter architecture, recovery, sécurité et feuille de route,
-- fournir un prototype shell safe, portable et sans dépendance lourde.
+- known networks,
+- `reconnect-plan`,
+- recovery,
+- fallback AP plus tard.
+
+Le hotspot est un mode de secours, pas le moteur principal.
+
+## Etat actuel
+
+Cette passe reste SAFE / simulation:
+
+- aucune modification reseau reelle,
+- aucun `hostapd`,
+- aucun `dnsmasq`,
+- aucun NetworkManager,
+- aucun secret Wi-Fi manipule.
+
+## Choix V1
+
+V1 privilegie:
+
+- Raspberry Pi OS Lite,
+- `wpa_supplicant` direct,
+- DHCP existant via `dhcpcd`, `dhclient`, ou default systeme,
+- BusyBox `httpd` + CGI shell plus tard pour l'UI,
+- `hostapd` + `dnsmasq` seulement plus tard pour le vrai hotspot rescue,
+- OpenWRT via `uci` / `wifi` plus tard.
+
+NetworkManager n'est pas retenu en V1 car il est plus lourd, moins adapte aux RPi Zero / faible RAM, et moins proche d'OpenWRT.
 
 ## Structure
 
-- `docs/ARCHITECTURE.md` : architecture cible (états, services, données de pilotage).
-- `docs/RECOVERY.md` : stratégie de bascule AP <-> client <-> recovery.
-- `docs/SECURITY.md` : stratégie de stockage des secrets / logs / permissions.
-- `docs/ROADMAP.md` : étapes V0->V2 avec décisions réseau à arbitrer.
-- `prototype/wifi-kit.sh` : script shell V0 simulé.
+- `docs/ARCHITECTURE.md`: architecture cible et choix V1.
+- `docs/RECOVERY.md`: strategie de bascule AP / client / recovery.
+- `docs/SECURITY.md`: stockage des secrets, metadonnees et permissions.
+- `docs/ROADMAP.md`: suite technique.
+- `prototype/wifi-kit.sh`: script shell V0 simule.
 
 ## Utilisation (simulation)
 
@@ -29,23 +53,12 @@ sh modules/wifi-kit/prototype/wifi-kit.sh reconnect-plan
 sh modules/wifi-kit/prototype/wifi-kit.sh recovery-plan
 ```
 
-## Intégration core
+## Integration core
 
-`wifi-kit` est enregistré en core comme module plan-only (`module_wifi_kit_plan`).
-`module_wifi_kit_apply` est ajouté en V0 final pour un dry-run SAFE
-sans action réseau réelle.
+`wifi-kit` est enregistre comme module plan-only (`module_wifi_kit_plan`) et expose un apply SAFE / simulation (`module_wifi_kit_apply`).
 
-Le coeur actuel :
-- détecte les modules via des scripts `modules/*.sh`,
-- attend des fonctions `module_<nom>_plan`.
+```sh
+sh seed-kit.sh --apply --modules=wifi-kit
+```
 
-Le flux `seed-kit` supporte aujourd'hui:
-- `sh seed-kit.sh --apply --modules=wifi-kit` (simulation):
-  - check docs,
-  - check prototype,
-  - status scan reconnect-plan recovery-plan simulation,
-  - pas d'action réseau réelle.
-
-### Point de bascule prévue
-
-- Quand le modèle de module commun sera stabilisé, on fera un durcissement de l'`apply` avec dry-run simulé puis actions réseau réelles.
+Cette commande affiche uniquement un plan simule: docs, prototype, status, scan, reconnect-plan et recovery-plan.

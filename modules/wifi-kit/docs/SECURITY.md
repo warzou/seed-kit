@@ -1,40 +1,51 @@
-# Sécurité (V0 simulation)
+# Securite wifi-kit
 
-## Règles fortes
+## Regles fortes
 
-- Aucune vraie commande hostapd/dnsmasq/NetworkManager.
-- Aucune gestion réelle de mot de passe dans cette passe.
-- Les mots de passe, si transmis pour simulation, ne sont jamais loggés.
-- `psk` est toujours redressé en `[REDACTED]` dans les sorties.
+- Aucune vraie commande `hostapd`, `dnsmasq` ou NetworkManager en V0/V1 docs.
+- Aucun mot de passe Wi-Fi stocke dans les fichiers metier de `wifi-kit`.
+- Aucun mot de passe Wi-Fi affiche dans les logs.
+- Les sorties doivent rester lisibles sans secret.
 
-## Stockage local recommandé (future version réelle)
+## Source de verite des secrets
 
-Pour la suite, stocker l’état sur le nœud avec un chemin contrôlé, par exemple:
+Pour V1, `wpa_supplicant` reste la source de verite des secrets Wi-Fi.
 
-- `/var/lib/wifi-kit/` (ou équivalent),
-- répertoires en `0700`,
-- fichiers d’état en `0600`,
-- propriétaire root (ou utilisateur d’administration dédié),
-- ACL/groupes minimaux.
+`wifi-kit` ne doit pas recopier les PSK dans ses propres fichiers. Son role est de piloter et documenter le flux resilient autour des reseaux connus, pas de devenir un coffre de secrets.
 
-Le prototype V0 simule cet emplacement pour rester non-invasif.
+## Metadonnees autorisees
 
-## Politique secrets
+`wifi-kit` peut garder uniquement des metadonnees non secretes:
 
-- Les SSID sont des identifiants non secrets et peuvent être en clair.
-- Les PSK ne doivent jamais être écrits en clair dans un fichier.
-- Les logs doivent rester lisibles sans secret.
-- Toute future persistance de credentials doit utiliser un coffre local adapté au système cible
-  (ou chiffrement applicatif).
+- `ssid`,
+- `priority`,
+- `last_success`,
+- `last_failure`,
+- `retry_count`.
 
-## Surfaces à éviter V0
+Ces metadonnees servent au `reconnect-plan`, a la recovery et au futur fallback AP.
 
-- Pas d’export de dump d’état sensible,
-- pas de token dans les messages.
+## Permissions futures
 
-## Contrôles de revue recommandés
+Emplacement cible pour la configuration locale:
 
-- vérifier qu’aucune commande ne fait d’IO réseau réelle,
-- vérifier qu’aucun `echo` ne montre des secrets,
-- vérifier permissions sur répertoire/fichiers d’état,
-- vérifier mode de secours cohérent en cas d’échec répété.
+- `/etc/seed-kit/wifi-kit/`
+- proprietaire: `root:root`
+- repertoire: `0700`
+- fichiers sensibles eventuels: `0600`
+
+Si un fichier runtime separe est necessaire plus tard, il devra garder le meme principe de moindre exposition.
+
+## Surfaces a eviter
+
+- Pas d'export de dump d'etat contenant des secrets.
+- Pas de token dans les messages.
+- Pas de PSK dans les traces de shell.
+- Pas d'ecriture automatique dans `wpa_supplicant` avant une etape explicitement dediee.
+
+## Controles de revue recommandes
+
+- verifier qu'aucune commande ne fait d'I/O reseau reelle quand le mode annonce est SAFE,
+- verifier qu'aucun `echo` ne montre des secrets,
+- verifier les permissions sur repertoires et fichiers,
+- verifier que la recovery reste non destructive.

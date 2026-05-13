@@ -1,16 +1,37 @@
-# Architecture cible (v0 prototype)
+# Architecture wifi-kit
 
 ## Principe
 
-`wifi-kit` doit fournir un flux d’embarquement Wi-Fi minimal et robuste pour des nœuds nomades:
+`wifi-kit` doit fournir un flux Wi-Fi minimal et robuste pour des noeuds nomades ou resilients.
 
-- mode `AP/bootstrap` pour configuration depuis téléphone,
-- mode `client` pour usage normal du réseau externe,
-- mode `recovery` en cas d’échec de connexion répété.
+Le coeur de `wifi-kit` n'est pas le portail web. Le portail est une interface possible, utile plus tard pour un telephone, mais le moteur principal reste:
 
-Cette passe V0 est **100% simulée** (no hostapd, no dnsmasq, no NetworkManager réel).
+- les reseaux connus,
+- le `reconnect-plan`,
+- la recovery,
+- le fallback AP plus tard.
 
-## Structure de module proposée
+Le hotspot est un mode de secours. Il ne doit pas devenir le moteur principal du module.
+
+## Choix techniques V1
+
+Pour V1, la cible officielle est:
+
+- Raspberry Pi OS Lite,
+- `wpa_supplicant` direct,
+- DHCP existant via `dhcpcd`, `dhclient`, ou le default systeme,
+- BusyBox `httpd` + CGI shell plus tard pour l'UI,
+- `hostapd` + `dnsmasq` seulement plus tard pour le vrai hotspot rescue,
+- OpenWRT via `uci` / `wifi` plus tard.
+
+NetworkManager n'est pas retenu en V1:
+
+- plus confortable, mais plus lourd,
+- moins adapte aux RPi Zero / faible RAM,
+- moins proche d'OpenWRT,
+- moins aligné avec l'objectif "minimal resilient node".
+
+## Structure de module
 
 ```text
 modules/wifi-kit/
@@ -24,62 +45,53 @@ modules/wifi-kit/
     wifi-kit.sh
 ```
 
-## Contrôles simulés
+## Etats modelises
 
-Le prototype expose des commandes SAFE:
+Etat minimal:
 
-- `status`
-- `scan`
-- `connect <SSID>`
-- `save-known-network <SSID>`
-- `reconnect-plan`
-- `recovery-plan`
-
-Toutes ces commandes :
-
-- lisent un état local simulé,
-- mettent à jour un état local simulé,
-- écrivent des logs non sensibles,
-- ne changent rien au réseau réel.
-
-## Modèle d’état (V0)
-
-État minimal gardé localement:
-
-- `mode` : `ap`, `client`, `recovery`,
+- `mode`: `ap`, `client`, `recovery`,
 - `last_successful_ssid`,
 - `known_networks`,
 - `last_error`,
 - `retry_count`.
 
-`known_networks` est une liste d’objets sans secret:
+Metadonnees futures par reseau connu:
 
 - `ssid`,
-- `last_seen_at`,
-- `added_at`,
-- `last_result`.
+- `priority`,
+- `last_success`,
+- `last_failure`,
+- `retry_count`.
 
-## Chemin de pilotage (simulation)
+`wifi-kit` ne stocke pas les mots de passe Wi-Fi dans ses propres fichiers metier. `wpa_supplicant` reste la source de verite des secrets Wi-Fi.
 
-- au boot / bootstrap: `mode=ap`,
-- tentative `connect`: passe en `client` si succès, met à jour `last_successful_ssid`,
-- échec de connexion: incrémente `retry_count`, renseigne `last_error`,
-- dépassement de seuil: bascule logique vers `recovery`,
-- `recovery` garde les nœuds de secours, puis tente une reconnection via un plan (`reconnect-plan`).
+## Flux cible
 
-## Contraintes du design
+- Au boot, lire l'etat local et les metadonnees connues.
+- Construire un `reconnect-plan` sans secret.
+- Tenter plus tard une reconnexion controlee via le backend choisi.
+- Passer en `recovery` si les echecs depassent un seuil.
+- Activer un fallback AP plus tard seulement pour garder une porte de secours.
 
-Shell-first, pas de Docker/Caddy/CMS lourd, faible empreinte RAM, compatible BusyBox/httpd plus tard, sans dépendre d’Internet.
+## Prototype V0
 
-Le code V0 reste volontairement compact:
+Le prototype actuel reste 100% SAFE / simulation:
 
-- scripts POSIX `/bin/sh`,
-- fichiers d’état simples,
-- pas de framework.
+- `status`,
+- `scan`,
+- `connect <SSID>`,
+- `save-known-network <SSID>`,
+- `reconnect-plan`,
+- `recovery-plan`.
 
-## Interfaces prévues plus tard
+Il ne lance pas `hostapd`, `dnsmasq`, NetworkManager, ni aucune modification reseau reelle.
 
-- UI HTTP minimale compatible BusyBox/httpd,
-- JSON status API local (optionnel),
-- action "plan/apply/recovery" avec garde-fous,
-- persistence réelle des profils Wi-Fi autorisée par design (hors V0).
+## Prochaine etape technique
+
+Apres cette documentation, la prochaine etape est un prototype read-only reel:
+
+- `backend-detect`,
+- `scan-real`,
+- `status-real`.
+
+Cette etape read-only ne doit faire aucune connexion, aucune ecriture reseau, aucun `hostapd` / `dnsmasq` reel.

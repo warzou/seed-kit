@@ -1,46 +1,64 @@
 # Roadmap wifi-kit
 
-## V0 - SAFE + simulation (ce flux)
+## V0 - SAFE + simulation
 
-- docs completes (`ARCHITECTURE`, `RECOVERY`, `SECURITY`, `ROADMAP`),
-- prototype shell `prototype/wifi-kit.sh` sans action reseau reelle,
-- gestion d'etat minimale:
-  - mode (`ap/client/recovery`),
-  - last successful SSID,
-  - known networks,
-  - last error,
-  - retry count.
-- integration core plan-only (`module_wifi_kit_plan`) + `--apply --modules=wifi-kit` en SAFE simulation:
-  - check docs,
-  - check prototype,
-  - `status`, `scan`, `reconnect-plan`, `recovery-plan` (dry-run uniquement).
+- Docs de base (`ARCHITECTURE`, `RECOVERY`, `SECURITY`, `ROADMAP`).
+- Prototype shell `prototype/wifi-kit.sh` sans action reseau reelle.
+- Integration module plan-only via `module_wifi_kit_plan`.
+- Apply SAFE / simulation via `module_wifi_kit_apply`.
 
-Objectif: rendre le flux de travail clair et testable sans casser le core.
+## V1 - choix techniques documentes
 
-## V1 - integration core + apply garde
+Choix officiel V1:
 
-- module appliquable en simulation uniquement via `module_wifi_kit_apply`,
-- hook `--modules=wifi-kit` dans le core utilise en mode no-op safe,
-- `plan` oriente actions reelles documentees,
-- prototype `apply` en mode dry-run.
+- Raspberry Pi OS Lite,
+- `wpa_supplicant` direct,
+- DHCP existant via `dhcpcd`, `dhclient`, ou default systeme,
+- BusyBox `httpd` + CGI shell plus tard pour l'UI,
+- `hostapd` + `dnsmasq` seulement plus tard pour le vrai hotspot rescue,
+- OpenWRT via `uci` / `wifi` plus tard.
 
-### Arbitrages reseau a decider
+NetworkManager n'est pas retenu en V1:
 
-- choisir l'implementation de base Wi-Fi:
-  - NetworkManager uniquement ou support Wi-Fi supplicant natif en fallback,
-  - hostapd + dnsmasq direct ou approche plus simple selon l'OS.
-- definir un point de verite pour les profils connus (`wpa_supplicant` vs autre).
+- plus confortable, mais plus lourd,
+- moins adapte aux RPi Zero / faible RAM,
+- moins proche d'OpenWRT,
+- moins "minimal resilient node".
+
+Le coeur produit reste:
+
+- known networks,
+- `reconnect-plan`,
+- recovery,
+- fallback AP plus tard.
+
+Le hotspot est un mode de secours, pas le moteur principal.
+
+## Prochaine etape technique
+
+Prototype read-only reel:
+
+- `backend-detect`,
+- `scan-real`,
+- `status-real`.
+
+Contraintes de cette etape:
+
+- aucune connexion,
+- aucune ecriture reseau,
+- aucun `hostapd` reel,
+- aucun `dnsmasq` reel,
+- aucune manipulation de secret Wi-Fi.
 
 ## V2 - mode reel controle
 
-- service minimal HTTP BusyBox/httpd + templates local,
-- page de connexion telephone (SSR minimale),
-- sauvegarde reelle des SSID connus (sans mot de passe en texte),
-- reconnection automatisee avec backoff et seuils,
-- bascule AP/client recovery operationnelle.
+- Ecriture controlee via `wpa_supplicant` quand les garde-fous seront documentes.
+- Gestion des priorites et resultats de reconnexion.
+- Page de connexion telephone en CGI shell minimal.
+- Sauvegarde des metadonnees de reseaux connus sans mot de passe.
 
-## V3 - hardening operationnel
+## V3 - rescue hotspot et OpenWRT
 
-- persistance chiffree des credentials la ou possible,
-- observabilite legere,
-- tests manuels de bout en bout sur Debian/RPi/OpenWRT.
+- Hotspot rescue reel via `hostapd` + `dnsmasq`.
+- Backend OpenWRT via `uci` / `wifi`.
+- Tests manuels de bout en bout sur Raspberry Pi OS Lite et OpenWRT.
