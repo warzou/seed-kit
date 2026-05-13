@@ -6,6 +6,124 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 RUNTIME_UI="$ROOT_DIR/lib/ui.sh"
 RUNTIME_OS="$ROOT_DIR/lib/os.sh"
 
+bootstrap_init_runtime() {
+  mkdir -p "$ROOT_DIR/lib" "$ROOT_DIR/modules" "$ROOT_DIR/backends"
+
+  if [ ! -f "$RUNTIME_OS" ]; then
+    cat > "$RUNTIME_OS" <<'EOF'
+#!/bin/sh
+set -eu
+
+seed_detect_os() {
+  SEED_OS_ID="generic"
+  SEED_OS_NAME="bootstrap local runtime"
+  SEED_OS_LIKE=" "
+
+  if [ -r /etc/os-release ]; then
+    . /etc/os-release
+    [ -n "${ID-}" ] && SEED_OS_ID="$ID"
+    [ -n "${NAME-}" ] && SEED_OS_NAME="$NAME"
+    [ -n "${ID_LIKE-}" ] && SEED_OS_LIKE="$ID_LIKE"
+  fi
+}
+EOF
+  fi
+
+  if [ ! -f "$RUNTIME_UI" ]; then
+    cat > "$RUNTIME_UI" <<'EOF'
+#!/bin/sh
+set -eu
+
+ui_line() { printf '%s\n' "$*"; }
+ui_header() { printf '\n%s\n%s\n' "$1" "${2:-}"; }
+ui_card_pair() { printf '%s\n' "$1: $2"; printf '%s\n' "$3: $4"; printf '%s\n' "$5: $6"; }
+ui_separator() { printf '%s\n' "$1"; }
+ui_status() { ui_line "$1: $2"; }
+ui_whisper() { ui_line "$1"; }
+ui_masthead() { ui_header "$1" "$2"; }
+ui_focus() { ui_line "$1: $2 / $3"; }
+ui_kv() { ui_line "$1: $2"; }
+ui_split_focus() { ui_line "$1: $2"; ui_line "$3: $4"; ui_line "$5"; ui_line "$6"; ui_line "$7"; }
+ui_section() { ui_line "$1"; }
+ui_choice_bar() { ui_line "1 plan  2 detect  3 modules  q quit"; }
+ui_prompt() { printf '%s ' "$1"; }
+ui_pause() { :; }
+EOF
+  fi
+
+  if [ ! -f "$ROOT_DIR/backends/generic.sh" ]; then
+    cat > "$ROOT_DIR/backends/generic.sh" <<'EOF'
+#!/bin/sh
+backend_name() { echo "generic"; }
+backend_plan() { echo "- local bootstrap runtime"; echo "- install and apply are limited"; }
+EOF
+  fi
+
+  if [ ! -f "$ROOT_DIR/backends/debian.sh" ]; then
+    cat > "$ROOT_DIR/backends/debian.sh" <<'EOF'
+#!/bin/sh
+backend_name() { echo "debian"; }
+backend_plan() { echo "- local bootstrap runtime"; echo "- apt flow is not available in placeholder mode"; }
+EOF
+  fi
+
+  if [ ! -f "$ROOT_DIR/backends/raspberrypi.sh" ]; then
+    cat > "$ROOT_DIR/backends/raspberrypi.sh" <<'EOF'
+#!/bin/sh
+backend_name() { echo "raspberrypi"; }
+backend_plan() { echo "- local bootstrap runtime"; echo "- apt flow is not available in placeholder mode"; }
+EOF
+  fi
+
+  if [ ! -f "$ROOT_DIR/backends/openwrt.sh" ]; then
+    cat > "$ROOT_DIR/backends/openwrt.sh" <<'EOF'
+#!/bin/sh
+backend_name() { echo "openwrt"; }
+backend_plan() { echo "- local bootstrap runtime"; echo "- apply modules are not available in placeholder mode"; }
+EOF
+  fi
+
+  if [ ! -f "$ROOT_DIR/modules/git.sh" ]; then
+    cat > "$ROOT_DIR/modules/git.sh" <<'EOF'
+#!/bin/sh
+module_git_plan() {
+  echo "- runtime bootstrap placeholder"
+  echo "- full git plan requires repository runtime"
+}
+EOF
+  fi
+
+  if [ ! -f "$ROOT_DIR/modules/docker.sh" ]; then
+    cat > "$ROOT_DIR/modules/docker.sh" <<'EOF'
+#!/bin/sh
+module_docker_plan() {
+  echo "- runtime bootstrap placeholder"
+  echo "- full docker plan requires repository runtime"
+}
+EOF
+  fi
+
+  if [ ! -f "$ROOT_DIR/modules/tailscale.sh" ]; then
+    cat > "$ROOT_DIR/modules/tailscale.sh" <<'EOF'
+#!/bin/sh
+module_tailscale_plan() {
+  echo "- runtime bootstrap placeholder"
+  echo "- full tailscale plan requires repository runtime"
+}
+EOF
+  fi
+
+  if [ ! -f "$ROOT_DIR/modules/homepage.sh" ]; then
+    cat > "$ROOT_DIR/modules/homepage.sh" <<'EOF'
+#!/bin/sh
+module_homepage_plan() {
+  echo "- runtime bootstrap placeholder"
+  echo "- full homepage plan requires repository runtime"
+}
+EOF
+  fi
+}
+
 if [ ! -f "$RUNTIME_OS" ] || [ ! -f "$RUNTIME_UI" ]; then
   echo "runtime files not found"
   echo "bootstrap mode"
@@ -18,7 +136,23 @@ if [ ! -f "$RUNTIME_OS" ] || [ ! -f "$RUNTIME_UI" ]; then
   echo "runtime provides OS detection, dashboard rendering, module plans, and backend execution"
   echo "Seed-Kit is running as a single-file shell snapshot."
   echo "copy full repo for dev/test, or future bootstrap will fetch runtime"
-  exit 0
+
+  printf "initialize local runtime structure? [y/N]: "
+  if ! IFS= read -r bootstrap_answer; then
+    bootstrap_answer=
+  fi
+
+  case "$bootstrap_answer" in
+    y|Y)
+      bootstrap_init_runtime
+      echo "runtime structure initialized in: $(pwd)"
+      echo "rerun seed-kit.sh for normal mode"
+      exit 0
+      ;;
+    *)
+      exit 0
+      ;;
+  esac
 fi
 
 . "$RUNTIME_OS"
