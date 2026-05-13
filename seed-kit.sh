@@ -9,6 +9,13 @@ RUNTIME_OS="$ROOT_DIR/lib/os.sh"
 if [ ! -f "$RUNTIME_OS" ] || [ ! -f "$RUNTIME_UI" ]; then
   echo "runtime files not found"
   echo "bootstrap mode"
+  echo "runtime missing"
+  echo "runtime expected:"
+  echo "  lib/"
+  echo "  modules/"
+  echo "  backends/"
+  echo "current dir: $(pwd)"
+  echo "runtime provides OS detection, dashboard rendering, module plans, and backend execution"
   echo "Seed-Kit is running as a single-file shell snapshot."
   echo "copy full repo for dev/test, or future bootstrap will fetch runtime"
   exit 0
