@@ -125,6 +125,13 @@ EOF
   fi
 }
 
+bootstrap_runtime_ready() {
+  command -v seed_detect_os >/dev/null 2>&1 &&
+    command -v ui_line >/dev/null 2>&1 &&
+    command -v ui_header >/dev/null 2>&1 &&
+    command -v ui_section >/dev/null 2>&1
+}
+
 if [ ! -f "$RUNTIME_OS" ] || [ ! -f "$RUNTIME_UI" ]; then
   echo "runtime files not found"
   echo "bootstrap mode"
@@ -158,6 +165,11 @@ fi
 
 . "$RUNTIME_OS"
 . "$RUNTIME_UI"
+if ! bootstrap_runtime_ready; then
+  bootstrap_init_runtime
+  . "$RUNTIME_OS"
+  . "$RUNTIME_UI"
+fi
 
 MODULES="git docker tailscale homepage"
 
