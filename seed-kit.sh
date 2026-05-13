@@ -3,8 +3,43 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-RUNTIME_UI="$ROOT_DIR/lib/ui.sh"
 RUNTIME_OS="$ROOT_DIR/lib/os.sh"
+
+if [ -z "${NO_COLOR:-}" ] && [ -t 1 ] && [ "${TERM:-}" != "dumb" ]; then
+  COLOR_RESET=$(printf '\033[0m')
+  COLOR_LABEL=$(printf '\033[1m')
+  COLOR_DIM=$(printf '\033[2m')
+  COLOR_GOOD=$(printf '\033[32m')
+  COLOR_WARN=$(printf '\033[33m')
+  COLOR_MUTED=$(printf '\033[37m')
+else
+  COLOR_RESET=""
+  COLOR_LABEL=""
+  COLOR_DIM=""
+  COLOR_GOOD=""
+  COLOR_WARN=""
+  COLOR_MUTED=""
+fi
+
+ui_line() { printf '%s\n' "$*"; }
+ui_header() {
+  printf '\n%s%s%s\n' "$COLOR_LABEL" "$1" "$COLOR_RESET"
+  if [ -n "${2:-}" ]; then
+    printf '%s%s%s\n' "$COLOR_DIM" "$2" "$COLOR_RESET"
+  fi
+}
+ui_section() { printf '\n%s%s%s\n' "$COLOR_LABEL" "$1" "$COLOR_RESET"; }
+ui_separator() { ui_line "$1"; }
+ui_kv() { printf '  %-12s %s\n' "$1:" "$2"; }
+ui_status() { printf '  %-12s %s\n' "$1:" "$2"; }
+ui_whisper() { printf '%s%s%s\n' "$COLOR_MUTED" "$*" "$COLOR_RESET"; }
+ui_prompt() { printf '%s ' "$1"; }
+ui_masthead() { ui_header "$1" "$2"; }
+ui_focus() { ui_kv "$1" "$2"; [ -n "${3:-}" ] && printf '%s\n' "$3"; }
+ui_split_focus() { ui_kv "$1" "$2"; ui_kv "$3" "$4"; ui_line "$5"; ui_line "$6"; ui_line "$7"; }
+ui_card_pair() { ui_kv "$1" "$2"; ui_kv "$3" "$4"; ui_kv "$5" "$6"; }
+ui_choice_bar() { ui_line "1 plan  2 detect  3 modules  q quit"; }
+ui_pause() { :; }
 
 bootstrap_init_runtime() {
   mkdir -p "$ROOT_DIR/lib" "$ROOT_DIR/modules" "$ROOT_DIR/backends"
@@ -33,28 +68,6 @@ seed_detect_os() {
     fi
   fi
 }
-EOF
-  fi
-
-  if [ ! -f "$RUNTIME_UI" ]; then
-    cat > "$RUNTIME_UI" <<'EOF'
-#!/bin/sh
-set -eu
-
-ui_line() { printf '%s\n' "$*"; }
-ui_header() { printf '\n%s\n%s\n' "$1" "${2:-}"; }
-ui_card_pair() { printf '%s\n' "$1: $2"; printf '%s\n' "$3: $4"; printf '%s\n' "$5: $6"; }
-ui_separator() { printf '%s\n' "$1"; }
-ui_status() { ui_line "$1: $2"; }
-ui_whisper() { ui_line "$1"; }
-ui_masthead() { ui_header "$1" "$2"; }
-ui_focus() { ui_line "$1: $2 / $3"; }
-ui_kv() { ui_line "$1: $2"; }
-ui_split_focus() { ui_line "$1: $2"; ui_line "$3: $4"; ui_line "$5"; ui_line "$6"; ui_line "$7"; }
-ui_section() { ui_line "$1"; }
-ui_choice_bar() { ui_line "1 plan  2 detect  3 modules  q quit"; }
-ui_prompt() { printf '%s ' "$1"; }
-ui_pause() { :; }
 EOF
   fi
 
@@ -132,24 +145,14 @@ EOF
 }
 
 bootstrap_runtime_ready() {
-  command -v seed_detect_os >/dev/null 2>&1 &&
-    command -v ui_line >/dev/null 2>&1 &&
-    command -v ui_header >/dev/null 2>&1 &&
-    command -v ui_section >/dev/null 2>&1
+  command -v seed_detect_os >/dev/null 2>&1
 }
 
-if [ ! -f "$RUNTIME_OS" ] || [ ! -f "$RUNTIME_UI" ]; then
-  echo "runtime files not found"
-  echo "bootstrap mode"
-  echo "runtime missing"
-  echo "runtime expected:"
-  echo "  lib/"
-  echo "  modules/"
-  echo "  backends/"
-  echo "current dir: $(pwd)"
-  echo "runtime provides OS detection, dashboard rendering, module plans, and backend execution"
-  echo "Seed-Kit is running as a single-file shell snapshot."
-  echo "copy full repo for dev/test, or future bootstrap will fetch runtime"
+if [ ! -f "$RUNTIME_OS" ]; then
+  echo "Seed-Kit"
+  echo "Small shell bootstrap toolkit"
+  echo ""
+  echo "System: runtime missing"
 
   printf "initialize local runtime structure? [y/N]: "
   if ! IFS= read -r bootstrap_answer; then
@@ -159,7 +162,8 @@ if [ ! -f "$RUNTIME_OS" ] || [ ! -f "$RUNTIME_UI" ]; then
   case "$bootstrap_answer" in
     y|Y)
       bootstrap_init_runtime
-      echo "runtime structure initialized in: $(pwd)"
+      echo "runtime initialized in: $(pwd)"
+      echo "runtime files ready (OS/backend/modules)"
       echo "rerun seed-kit.sh for normal mode"
       exit 0
       ;;
@@ -170,11 +174,9 @@ if [ ! -f "$RUNTIME_OS" ] || [ ! -f "$RUNTIME_UI" ]; then
 fi
 
 . "$RUNTIME_OS"
-. "$RUNTIME_UI"
 if ! bootstrap_runtime_ready; then
   bootstrap_init_runtime
   . "$RUNTIME_OS"
-  . "$RUNTIME_UI"
 fi
 
 MODULES="git docker tailscale homepage"
@@ -388,72 +390,23 @@ suggested_next_step() {
   fi
 }
 
-show_dashboard_cockpit() {
-  ui_header "Seed-Kit" "machine-aware terminal companion"
-  ui_card_pair \
-    "machine" \
-    "$SEED_OS_NAME" \
-    "$(machine_model)" \
-    "$(machine_ram) / $(machine_arch)" \
-    "context" \
-    "backend: $(backend_name)" \
-    "mode: plan only" \
-    "host: $(machine_hostname)"
-
-  ui_separator "recommended setup"
-  ui_status "Git" "$(command_status git)" "base tool"
-  ui_status "Tailscale" "$(command_status tailscale)" "recommended"
-  ui_status "Docker" "$(docker_status)" "optional on small machines"
-  ui_status "Homepage" "later" "placeholder"
-
-  ui_separator "suggested next step"
-  ui_line "$(suggested_next_step)"
-}
-
-show_dashboard_focus() {
-  ui_masthead "Seed-Kit" "calm machine setup" "$(machine_hostname) / $(backend_name) / plan only"
-
-  ui_focus "suggested next step" "$(suggested_next_step)" "$SEED_OS_NAME / $(machine_ram)"
-
-  ui_separator "machine"
-  ui_kv "system" "$SEED_OS_NAME"
-  ui_kv "model" "$(machine_model)"
-  ui_kv "memory" "$(machine_ram)"
-
-  ui_separator "readiness"
-  ui_status "Git" "$(command_status git)" "base tool"
-  ui_status "Tailscale" "$(command_status tailscale)" "recommended"
-  ui_status "Docker" "$(docker_status)" "optional"
-}
-
-show_dashboard_split() {
-  ui_masthead "Seed-Kit" "ambient terminal cockpit" ""
-  ui_split_focus \
-    "machine" \
-    "$SEED_OS_NAME" \
-    "$(machine_model) / $(machine_ram)" \
-    "readiness" \
-    "Git: $(status_word "$(command_status git)")" \
-    "Tailscale: $(status_word "$(command_status tailscale)")" \
-    "Docker: $(status_word "$(docker_status)")"
-
-  ui_separator "next"
-  ui_line "$(suggested_next_step)"
-  ui_whisper "plan-only mode / no system changes"
-}
-
 show_dashboard() {
-  case "${SEED_UI_STYLE:-split}" in
-    focus)
-      show_dashboard_focus
-      ;;
-    split)
-      show_dashboard_split
-      ;;
-    cockpit|*)
-      show_dashboard_cockpit
-      ;;
-  esac
+  ui_header "Seed-Kit" "small shell bootstrap toolkit"
+  ui_section "System"
+  ui_kv "OS" "$SEED_OS_NAME"
+  ui_kv "Backend" "$(backend_name)"
+  ui_kv "Runtime" "${SEED_RUNTIME_MODE:-full}"
+  ui_kv "Next" "--plan"
+
+  ui_section "Status"
+  ui_kv "Git" "$(command_status git)"
+  ui_kv "Docker" "$(docker_status)"
+  ui_kv "Tailscale" "$(command_status tailscale)"
+
+  ui_section "Commands"
+  ui_line "  --plan       show install plan"
+  ui_line "  --modules    list available modules"
+  ui_line "  --apply      apply selected modules"
 }
 
 show_modules_list() {
@@ -562,21 +515,7 @@ run_apply_modules() {
 }
 
 show_ui_demo() {
-  old_style=${SEED_UI_STYLE:-cockpit}
-
-  SEED_UI_STYLE=cockpit
-  ui_separator "variant / cockpit"
   show_dashboard
-
-  SEED_UI_STYLE=focus
-  ui_separator "variant / focus"
-  show_dashboard
-
-  SEED_UI_STYLE=split
-  ui_separator "variant / split"
-  show_dashboard
-
-  SEED_UI_STYLE=$old_style
 }
 
 show_plan() {

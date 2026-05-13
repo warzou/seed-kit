@@ -7,15 +7,13 @@ Seed-Kit is a V0 shell toolkit with:
 * `seed-kit.sh` entrypoint
 * OS detection + lightweight backends
 * CLI with `--plan`, `--detect`, `--modules`, `--apply` and `-y`
-* ambient terminal cockpit UI (responsive split default)
+* minimal inline terminal UI in `seed-kit.sh`
 * module list and targetable apply preview flow
 * one real minimal action implemented: `--apply --modules=git` on Debian-like systems
 
 ## UX Decision
 
-Default UI style: `split`.
-
-Goal: ambient terminal cockpit.
+Default behavior: calm minimal terminal UI directly in `seed-kit.sh`.
 
 Current UI traits:
 
@@ -40,7 +38,7 @@ sh seed-kit.sh --ui-demo
 
 * calm modern terminal UI
 * SAFE behavior: `sh seed-kit.sh --apply` does not run real actions
-* simple shell helpers in `lib/ui.sh`
+* simple terminal helpers in `seed-kit.sh`
 * low density
 * strong spacing
 * shell-first, minimal, readable implementation
@@ -69,7 +67,7 @@ Current stable behavior:
 
 1. Read `CONTEXT.md`.
 2. Run `sh seed-kit.sh --ui-demo`.
-3. Run `SEED_WIDTH=54 sh seed-kit.sh --plan`.
+3. Run `sh seed-kit.sh --plan`.
 4. Pick one small next change.
-5. Test with `bash -n` and `sh`.
+5. Test with `sh` and `bash -n`.
 6. Commit only after review.

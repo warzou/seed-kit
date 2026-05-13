@@ -62,7 +62,7 @@ Use:
 
 * POSIX shell where practical
 * `printf`
-* small helpers in `lib/ui.sh`
+* minimal in-script terminal helpers in `seed-kit.sh`
 * BusyBox-compatible patterns when possible
 
 Avoid:
