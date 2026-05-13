@@ -298,8 +298,12 @@ command_status() {
   command -v "$1" >/dev/null 2>&1 && echo "present" || echo "missing"
 }
 
+module_is_installed() {
+  command -v "$1" >/dev/null 2>&1
+}
+
 docker_status() {
-  if command -v docker >/dev/null 2>&1; then
+  if module_is_installed docker; then
     echo "present"
   else
     echo "heavy"
@@ -333,6 +337,31 @@ is_debian_like() {
   esac
 }
 
+apply_step() {
+  ui_line "[apply] $*"
+}
+
+apply_skip() {
+  ui_line "[skip] $*"
+}
+
+require_network_for_apply() {
+  label=${1:-apply}
+
+  if ! command -v ping >/dev/null 2>&1; then
+    echo "network check required for $label, but ping is not available." >&2
+    return 3
+  fi
+
+  if ! ping -c 1 -W 2 1.1.1.1 >/dev/null 2>&1; then
+    echo "network access is required for $label." >&2
+    echo "Check connectivity, then rerun the selected apply command." >&2
+    return 4
+  fi
+
+  return 0
+}
+
 apply_safe_confirm() {
   if [ "$APPLY_AUTO" -eq 1 ]; then
     return 0
@@ -352,18 +381,20 @@ apply_safe_confirm() {
 }
 
 require_sudo_for_system_action() {
+  label=${1:-this action}
+
   if [ "$(id -u)" -eq 0 ]; then
-    ui_line "running as root; no sudo needed for this action"
+    ui_line "running as root; no sudo needed for $label"
     return 0
   fi
 
   if ! command -v sudo >/dev/null 2>&1; then
-    echo "sudo is required for this action but is not installed." >&2
+    echo "sudo is required for $label but is not installed." >&2
     return 3
   fi
 
   if ! sudo -n true >/dev/null 2>&1; then
-    echo "sudo access is required."
+    echo "sudo access is required for $label."
     echo "This SSH session cannot provide a sudo password."
     echo "Try:"
     echo "  ssh -t user@host"
@@ -376,9 +407,9 @@ require_sudo_for_system_action() {
 }
 
 apply_module_git() {
-  ui_line "[git] checking installation"
-  if command -v git >/dev/null 2>&1; then
-    ui_line "[git] already installed"
+  apply_step "git: checking installation"
+  if module_is_installed git; then
+    apply_skip "git already installed"
     return 0
   fi
 
@@ -391,32 +422,36 @@ apply_module_git() {
     return 2
   fi
 
-  if ! require_sudo_for_system_action; then
+  if ! require_network_for_apply "git package install"; then
     return 2
   fi
 
-  ui_line "[git] install via apt"
+  if ! require_sudo_for_system_action "git package install"; then
+    return 2
+  fi
+
+  apply_step "git: install via apt"
   if [ "$(id -u)" -eq 0 ]; then
     SUDO=
   else
     SUDO=sudo
   fi
 
-  ui_line "[git] running apt-get update"
+  apply_step "git: running apt-get update"
   if ! $SUDO apt-get update; then
     echo "[git] apt-get update failed" >&2
     return 4
   fi
 
-  ui_line "[git] running apt-get install"
+  apply_step "git: running apt-get install"
   if ! $SUDO apt-get install -y git; then
     echo "[git] apt-get install failed" >&2
     return 5
   fi
 
-  ui_line "[git] verifying installation"
-  if command -v git >/dev/null 2>&1; then
-    ui_line "[git] installed"
+  apply_step "git: verifying installation"
+  if module_is_installed git; then
+    apply_step "git: installed"
     return 0
   fi
 
