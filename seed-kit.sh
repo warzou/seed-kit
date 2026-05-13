@@ -22,9 +22,15 @@ seed_detect_os() {
 
   if [ -r /etc/os-release ]; then
     . /etc/os-release
-    [ -n "${ID-}" ] && SEED_OS_ID="$ID"
-    [ -n "${NAME-}" ] && SEED_OS_NAME="$NAME"
-    [ -n "${ID_LIKE-}" ] && SEED_OS_LIKE="$ID_LIKE"
+    if [ -n "${ID+x}" ] && [ -n "$ID" ]; then
+      SEED_OS_ID="$ID"
+    fi
+    if [ -n "${NAME+x}" ] && [ -n "$NAME" ]; then
+      SEED_OS_NAME="$NAME"
+    fi
+    if [ -n "${ID_LIKE+x}" ] && [ -n "$ID_LIKE" ]; then
+      SEED_OS_LIKE="$ID_LIKE"
+    fi
   fi
 }
 EOF
