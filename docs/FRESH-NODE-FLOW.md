@@ -27,3 +27,15 @@ sh seed-kit.sh --apply --modules=git
 ```
 
 `--apply --modules=git` runs a minimal git path on Debian-like systems; add `-y` for auto-confirm.
+
+To fetch the repo-backed `wifi-kit` module without cloning the full monorepo:
+
+```sh
+sh seed-kit.sh --fetch-module=wifi-kit
+cd ~/seed-kit-wifi-kit
+sh seed-kit.sh --modules
+sh seed-kit.sh --plan
+sh seed-kit.sh --apply --modules=wifi-kit
+```
+
+This uses git sparse checkout, writes to `~/seed-kit-wifi-kit`, and does not overwrite an existing directory.

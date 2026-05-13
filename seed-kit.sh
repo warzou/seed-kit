@@ -889,8 +889,120 @@ seed_kit_usage() {
   echo "  --plan           show the full execution plan"
   echo "  --modules        list available modules"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
+  echo "  --fetch-module=wifi-kit [--yes|-y]  fetch one repo-backed module with git sparse checkout"
   echo "  --detect         show OS detection details"
   echo "  --uninstall-runtime [--yes|-y]  remove local Seed-Kit runtime directories (lib/modules/backends)"
+}
+
+parse_fetch_options() {
+  FETCH_AUTO=0
+  for arg in "$@"; do
+    case "$arg" in
+      -y|--yes)
+        FETCH_AUTO=1
+        ;;
+      *)
+        echo "unknown option: $arg" >&2
+        return 2
+        ;;
+    esac
+  done
+}
+
+fetch_module_safe_confirm() {
+  if [ "$FETCH_AUTO" -eq 1 ]; then
+    return 0
+  fi
+
+  ui_prompt "fetch repo-backed module? [y/N]:"
+  IFS= read -r answer || answer=
+  case "$answer" in
+    y|Y)
+      return 0
+      ;;
+    *)
+      echo "[fetch] aborted by user"
+      return 2
+      ;;
+  esac
+}
+
+fetch_repo_module() {
+  module=$1
+
+  case "$module" in
+    wifi-kit)
+      target_dir="${HOME:-}/seed-kit-wifi-kit"
+      ;;
+    *)
+      echo "unsupported repo-backed module fetch: $module" >&2
+      echo "supported: wifi-kit" >&2
+      return 2
+      ;;
+  esac
+
+  if [ -z "${HOME:-}" ]; then
+    echo "HOME is not set; cannot choose a safe fetch directory." >&2
+    return 2
+  fi
+
+  if ! command -v git >/dev/null 2>&1; then
+    echo "git is required to fetch repo-backed modules."
+    echo "Try:"
+    echo "  sh seed-kit.sh --apply --modules=git"
+    return 2
+  fi
+
+  if [ -e "$target_dir" ]; then
+    echo "target already exists: $target_dir"
+    echo "No changes made."
+    echo "Try:"
+    echo "  cd $target_dir"
+    echo "  git status"
+    return 0
+  fi
+
+  ui_header "fetch module" "$module"
+  ui_line "Repository: https://github.com/warzou/seed-kit.git"
+  ui_line "Target: $target_dir"
+  ui_line "Mode: git sparse checkout"
+  ui_line "No git pull, no token, no overwrite."
+
+  if ! fetch_module_safe_confirm; then
+    return 2
+  fi
+
+  if [ "$FETCH_AUTO" -eq 1 ]; then
+    ui_whisper "auto-confirm mode requested"
+  fi
+
+  ui_line "[fetch] clone sparse repository"
+  if ! git clone --filter=blob:none --sparse https://github.com/warzou/seed-kit.git "$target_dir"; then
+    echo "[fetch] clone failed" >&2
+    return 3
+  fi
+
+  ui_line "[fetch] select wifi-kit paths"
+  if ! (
+    cd "$target_dir" &&
+    git sparse-checkout set --no-cone \
+      seed-kit.sh \
+      modules/wifi-kit \
+      modules/wifi-kit.sh \
+      docs/ARCHITECTURE.md \
+      docs/MODULES.md \
+      docs/FRESH-NODE-FLOW.md
+  ); then
+    echo "[fetch] sparse-checkout failed in $target_dir" >&2
+    return 4
+  fi
+
+  ui_line "Module fetched: wifi-kit"
+  ui_line "Next:"
+  ui_line "  cd $target_dir"
+  ui_line "  sh seed-kit.sh --modules"
+  ui_line "  sh seed-kit.sh --plan"
+  ui_line "  sh seed-kit.sh --apply --modules=wifi-kit"
 }
 
 parse_apply_modules() {
@@ -1149,6 +1261,14 @@ case "${1:-}" in
       exit 0
     fi
     run_apply_modules
+    ;;
+  --fetch-module=*)
+    fetch_module="${1#--fetch-module=}"
+    shift
+    if ! parse_fetch_options "$@"; then
+      exit 2
+    fi
+    fetch_repo_module "$fetch_module"
     ;;
   --detect)
     ui_header "os detection"

@@ -86,3 +86,11 @@ If the full repository is cloned later on a node, prefer `~/seed-kit`.
 Keep `/srv/seed-kit` for served content, such as `/srv/seed-kit/homer`, not for the source repository.
 
 Do not overwrite a full repository with generated runtime files. Also avoid running `--uninstall-runtime` from a full repository until a code guard explicitly protects that case.
+
+For a single repo-backed module, Seed-Kit can fetch a sparse checkout instead of the full monorepo:
+
+```sh
+sh seed-kit.sh --fetch-module=wifi-kit
+```
+
+This requires `git`, uses the public `warzou/seed-kit` repository, and writes to `~/seed-kit-wifi-kit` only if that directory does not already exist. It does not run `git pull`, use tokens, or make the full repository a startup dependency.
