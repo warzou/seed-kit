@@ -2,6 +2,7 @@
 
 module_cloudflared_plan() {
   echo "- check whether cloudflared is installed"
-  echo "- plan official Cloudflare package install later"
-  echo "- no tunnel credentials or login handled in V0"
+  echo "- install cloudflared from the official Cloudflare apt repository"
+  echo "- install-only: no tunnel login, no tunnel create, no credentials"
+  echo "- after install, configure tunnels manually outside Seed-Kit"
 }

@@ -49,7 +49,7 @@ Each real apply path should:
 | module | plan | apply | network required | sudo required | secrets required |
 | --- | --- | --- | --- | --- | --- |
 | `tailscale` | installed status, official apt install plan, auth note | install-only | yes | yes | no |
-| `cloudflared` | installed status, official package plan, tunnel note | later | yes | yes | no |
+| `cloudflared` | installed status, official apt install plan, tunnel note | install-only | yes | yes | no |
 | `caddy` | installed status, official package plan, service note | later | yes | yes | no |
 | `homer` | lightweight dashboard plan, static files/service note | later | maybe | maybe | no |
 | `docker` | installed status, package source plan, daemon note | later | yes | yes | no |
@@ -89,6 +89,8 @@ Current apply scope: install-only through the official Tailscale apt repository 
 Seed-Kit should check whether `cloudflared` is installed and describe the official package install path.
 
 Seed-Kit should not create tunnels, store credentials, configure Cloudflare accounts, or run token-based login.
+
+Current apply scope: install-only through the official Cloudflare apt repository. Seed-Kit does not run `cloudflared tunnel login`, create tunnels, install tunnel services, or store credentials.
 
 ### caddy
 

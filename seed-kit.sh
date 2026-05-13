@@ -138,7 +138,8 @@ EOF
 #!/bin/sh
 module_cloudflared_plan() {
   echo "- runtime bootstrap placeholder"
-  echo "- full cloudflared plan requires repository runtime"
+  echo "- full cloudflared install plan requires repository runtime"
+  echo "- install-only: no tunnel login, no tunnel create, no credentials"
 }
 EOF
   fi
@@ -626,6 +627,103 @@ apply_module_tailscale() {
   return 13
 }
 
+apply_module_cloudflared() {
+  apply_step "cloudflared: checking installation"
+  if module_is_installed cloudflared; then
+    apply_skip "cloudflared already installed"
+    ui_line "Next manual step: cloudflared tunnel login/create/configure outside Seed-Kit"
+    return 0
+  fi
+
+  if ! is_debian_like; then
+    echo "[cloudflared] unsupported OS for apply: $SEED_OS_NAME" >&2
+    return 2
+  fi
+
+  if ! apply_safe_confirm; then
+    return 2
+  fi
+
+  if ! require_network_for_apply "cloudflared package install"; then
+    return 2
+  fi
+
+  if ! require_sudo_for_system_action "cloudflared package install" "sh seed-kit.sh --apply --modules=cloudflared"; then
+    return 2
+  fi
+
+  if [ "$(id -u)" -eq 0 ]; then
+    SUDO=
+  else
+    SUDO=sudo
+  fi
+
+  apply_step "cloudflared: install apt prerequisites"
+  if ! $SUDO apt-get update; then
+    echo "[cloudflared] apt-get update failed" >&2
+    return 4
+  fi
+  if ! $SUDO apt-get install -y ca-certificates curl; then
+    echo "[cloudflared] prerequisite install failed" >&2
+    return 5
+  fi
+
+  cloudflared_key_tmp="${TMPDIR:-/tmp}/seed-kit-cloudflare-keyring.$$"
+  cloudflared_list_tmp="${TMPDIR:-/tmp}/seed-kit-cloudflared-list.$$"
+
+  apply_step "cloudflared: download official apt key"
+  if ! curl -fsSL "https://pkg.cloudflare.com/cloudflare-main.gpg" -o "$cloudflared_key_tmp"; then
+    rm -f "$cloudflared_key_tmp" "$cloudflared_list_tmp"
+    echo "[cloudflared] failed to download apt key: https://pkg.cloudflare.com/cloudflare-main.gpg" >&2
+    return 6
+  fi
+
+  apply_step "cloudflared: prepare official apt source"
+  if ! printf '%s\n' "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" > "$cloudflared_list_tmp"; then
+    rm -f "$cloudflared_key_tmp" "$cloudflared_list_tmp"
+    echo "[cloudflared] failed to prepare apt source" >&2
+    return 7
+  fi
+
+  apply_step "cloudflared: configure apt source"
+  if ! $SUDO mkdir -p /usr/share/keyrings; then
+    rm -f "$cloudflared_key_tmp" "$cloudflared_list_tmp"
+    echo "[cloudflared] failed to create keyring directory" >&2
+    return 8
+  fi
+  if ! $SUDO cp "$cloudflared_key_tmp" /usr/share/keyrings/cloudflare-main.gpg; then
+    rm -f "$cloudflared_key_tmp" "$cloudflared_list_tmp"
+    echo "[cloudflared] failed to install apt key" >&2
+    return 9
+  fi
+  if ! $SUDO cp "$cloudflared_list_tmp" /etc/apt/sources.list.d/cloudflared.list; then
+    rm -f "$cloudflared_key_tmp" "$cloudflared_list_tmp"
+    echo "[cloudflared] failed to install apt source" >&2
+    return 10
+  fi
+  rm -f "$cloudflared_key_tmp" "$cloudflared_list_tmp"
+
+  apply_step "cloudflared: install package"
+  if ! $SUDO apt-get update; then
+    echo "[cloudflared] apt-get update failed after adding repository" >&2
+    return 11
+  fi
+  if ! $SUDO apt-get install -y cloudflared; then
+    echo "[cloudflared] apt-get install cloudflared failed" >&2
+    return 12
+  fi
+
+  apply_step "cloudflared: verifying installation"
+  if module_is_installed cloudflared; then
+    apply_step "cloudflared: installed"
+    ui_line "Next manual step: cloudflared tunnel login/create/configure outside Seed-Kit"
+    return 0
+  fi
+
+  echo "[cloudflared] post-install check failed: binary not found" >&2
+  return 13
+}
+
 suggested_next_step() {
   if ! command -v git >/dev/null 2>&1; then
     echo "install git"
@@ -824,7 +922,7 @@ run_apply_modules() {
         apply_module_tailscale
         ;;
       cloudflared)
-        ui_line "[cloudflared] not implemented in V0"
+        apply_module_cloudflared
         ;;
       caddy)
         ui_line "[caddy] not implemented in V0"

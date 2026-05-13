@@ -61,6 +61,8 @@ Docker is optional. Tailscale, Cloudflared, Caddy, and Homer are host-level modu
 
 Tailscale apply scope is install-only: no `tailscale up`, no auth keys, no stored secrets, and no automatic tailnet join.
 
+Cloudflared apply scope is install-only: no Cloudflare login, no tunnel creation, no tunnel service install, no token, and no stored credentials.
+
 ## Dependencies and profiles
 
 Some modules will depend on packages, services, network access, or earlier modules. Document those expectations in the module plan first.
