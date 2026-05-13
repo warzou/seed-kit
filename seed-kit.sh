@@ -15,6 +15,7 @@ bootstrap_init_runtime() {
 set -eu
 
 seed_detect_os() {
+  SEED_RUNTIME_MODE="bootstrap"
   SEED_OS_ID="generic"
   SEED_OS_NAME="bootstrap local runtime"
   SEED_OS_LIKE=" "
@@ -200,6 +201,16 @@ run_module_plan() {
   # shellcheck source=/dev/null
   . "$module_file"
   "module_${module}_plan"
+}
+
+show_bootstrap_plan_summary() {
+  ui_section "bootstrap runtime"
+  ui_line "bootstrap runtime active"
+  ui_line "OS detected: $SEED_OS_NAME"
+  ui_line "backend detected: $(backend_name)"
+  ui_line "modules known: $MODULES"
+  ui_line "runtime minimal active"
+  ui_line "full repo runtime adds advanced module plans and stronger apply support"
 }
 
 machine_hostname() {
@@ -552,6 +563,11 @@ show_ui_demo() {
 
 show_plan() {
   show_dashboard
+
+  if [ "${SEED_RUNTIME_MODE:-}" = "bootstrap" ]; then
+    show_bootstrap_plan_summary
+    echo
+  fi
 
   ui_section "backend plan"
   backend_plan
