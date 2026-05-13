@@ -1,0 +1,29 @@
+# Fresh node flow (real machine)
+
+Use this flow on an empty/new machine after copying `seed-kit.sh`:
+
+```sh
+# on your machine
+scp seed-kit.sh warzy@rpi-edge-audit:/home/warzy/seed-kit.sh
+ssh warzy@rpi-edge-audit 'cd /home/warzy && rm -rf lib modules backends && sh seed-kit.sh'
+```
+
+At the `initialize local runtime structure?` prompt, answer `y`.
+
+Re-run in the same dir:
+
+```sh
+sh seed-kit.sh --plan
+sh seed-kit.sh --modules
+sh seed-kit.sh --apply
+```
+
+Expected: bootstrap runtime is initialized and those commands print meaningful output.
+
+Use this for module execution:
+
+```sh
+sh seed-kit.sh --apply --modules=git
+```
+
+`--apply --modules=git` runs a minimal git path on Debian-like systems; add `-y` for auto-confirm.

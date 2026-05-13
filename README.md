@@ -12,6 +12,9 @@ Le contexte et les limites du projet sont dans [CONTEXT.md](CONTEXT.md).
 Target flow: copy `seed-kit.sh`, run `sh seed-kit.sh`.
 Bootstrap runtime fetch is not implemented yet.
 
+For the concrete fresh-node SSH flow (bootstrap + plan/modules/apply), see:
+docs/FRESH-NODE-FLOW.md
+
 ```sh
 sh seed-kit.sh
 ```
