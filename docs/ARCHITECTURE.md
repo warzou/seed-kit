@@ -72,3 +72,17 @@ The bootstrap runtime is intentionally minimal. It creates local `lib/`, `module
 The full repository runtime provides richer module plans and real implementation detail.
 
 Use `sh seed-kit.sh --uninstall-runtime` to remove only generated local runtime directories when testing a fresh bootstrap flow.
+
+## Core and repository modes
+
+Seed-Kit has three practical modes:
+
+- single-file bootstrap mode: `seed-kit.sh` is copied alone, `lib/os.sh` is absent, and Seed-Kit can initialize a local runtime structure.
+- generated runtime mode: local `lib/`, `modules/`, and `backends/` directories exist with generated placeholders; this mode stays offline, minimal, and useful without a full repository.
+- full repo mode: `docs/ARCHITECTURE.md` and real repository modules are present; richer modules, `wifi-kit`, docs, prototypes, assets, and field tests can live here.
+
+If the full repository is cloned later on a node, prefer `~/seed-kit`.
+
+Keep `/srv/seed-kit` for served content, such as `/srv/seed-kit/homer`, not for the source repository.
+
+Do not overwrite a full repository with generated runtime files. Also avoid running `--uninstall-runtime` from a full repository until a code guard explicitly protects that case.
