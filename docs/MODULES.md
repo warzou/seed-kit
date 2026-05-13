@@ -59,6 +59,8 @@ Edge services node:
 
 Docker is optional. Tailscale, Cloudflared, Caddy, and Homer are host-level modules for the minimal node path. Homepage remains optional and likely depends on Docker or a heavier web services stack.
 
+Tailscale apply scope is install-only: no `tailscale up`, no auth keys, no stored secrets, and no automatic tailnet join.
+
 ## Dependencies and profiles
 
 Some modules will depend on packages, services, network access, or earlier modules. Document those expectations in the module plan first.

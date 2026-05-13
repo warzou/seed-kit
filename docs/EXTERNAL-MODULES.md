@@ -48,7 +48,7 @@ Each real apply path should:
 
 | module | plan | apply | network required | sudo required | secrets required |
 | --- | --- | --- | --- | --- | --- |
-| `tailscale` | installed status, official install plan, auth note | later | yes | yes | no |
+| `tailscale` | installed status, official apt install plan, auth note | install-only | yes | yes | no |
 | `cloudflared` | installed status, official package plan, tunnel note | later | yes | yes | no |
 | `caddy` | installed status, official package plan, service note | later | yes | yes | no |
 | `homer` | lightweight dashboard plan, static files/service note | later | maybe | maybe | no |
@@ -81,6 +81,8 @@ Seed-Kit should check whether Tailscale is installed and describe the official p
 Seed-Kit should not automate `tailscale up`, store auth keys, or log in to a tailnet. It can print the manual next command later.
 
 Tailscale is a host-level module and must not depend on Docker.
+
+Current apply scope: install-only through the official Tailscale apt repository on Debian/Raspberry Pi OS. After install, Seed-Kit prints `sudo tailscale up` as a manual next step.
 
 ### cloudflared
 

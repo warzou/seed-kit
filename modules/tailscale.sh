@@ -2,6 +2,7 @@
 
 module_tailscale_plan() {
   echo "- check whether tailscale is installed"
-  echo "- plan auth flow later"
-  echo "- no secrets handled in V0"
+  echo "- install Tailscale from the official apt repository on Debian/Raspberry Pi OS"
+  echo "- install-only: no tailscale up, no auth key, no tailnet join"
+  echo "- after install, run manually: sudo tailscale up"
 }

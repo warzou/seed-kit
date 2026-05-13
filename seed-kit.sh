@@ -199,7 +199,7 @@ if ! bootstrap_runtime_ready; then
   . "$RUNTIME_OS"
 fi
 
-MODULES="git docker tailscale cloudflared caddy homepage"
+MODULES="git docker tailscale cloudflared caddy homepage wifi-kit"
 
 load_backend() {
   case "$SEED_OS_ID" in
@@ -232,6 +232,8 @@ load_backend() {
 run_module_plan() {
   module=$1
   module_file="$ROOT_DIR/modules/$module.sh"
+  module_plan_base="$(printf '%s' "$module" | tr '-' '_')"
+  module_plan_fn="module_${module_plan_base}_plan"
 
   if [ ! -f "$module_file" ]; then
     ui_line "Missing module: $module"
@@ -240,7 +242,35 @@ run_module_plan() {
 
   # shellcheck source=/dev/null
   . "$module_file"
-  "module_${module}_plan"
+
+  if ! command -v "$module_plan_fn" >/dev/null 2>&1; then
+    ui_line "Missing module plan function: $module_plan_fn"
+    return 1
+  fi
+
+  "$module_plan_fn"
+}
+
+run_module_apply() {
+  module=$1
+  module_file="$ROOT_DIR/modules/$module.sh"
+  module_apply_base="$(printf '%s' "$module" | tr '-' '_')"
+  module_apply_fn="module_${module_apply_base}_apply"
+
+  if [ ! -f "$module_file" ]; then
+    ui_line "Missing module: $module"
+    return 1
+  fi
+
+  # shellcheck source=/dev/null
+  . "$module_file"
+
+  if ! command -v "$module_apply_fn" >/dev/null 2>&1; then
+    ui_line "Missing module apply function: $module_apply_fn"
+    return 1
+  fi
+
+  "$module_apply_fn"
 }
 
 show_bootstrap_plan_summary() {
@@ -382,6 +412,11 @@ apply_safe_confirm() {
 
 require_sudo_for_system_action() {
   label=${1:-this action}
+  if [ -n "${2:-}" ]; then
+    rerun_command=$2
+  else
+    rerun_command="sh seed-kit.sh --apply --modules=git"
+  fi
 
   if [ "$(id -u)" -eq 0 ]; then
     ui_line "running as root; no sudo needed for $label"
@@ -399,7 +434,7 @@ require_sudo_for_system_action() {
     echo "Try:"
     echo "  ssh -t user@host"
     echo "  sudo -v"
-    echo "  sh seed-kit.sh --apply --modules=git"
+    echo "  $rerun_command"
     return 4
   fi
 
@@ -426,7 +461,7 @@ apply_module_git() {
     return 2
   fi
 
-  if ! require_sudo_for_system_action "git package install"; then
+  if ! require_sudo_for_system_action "git package install" "sh seed-kit.sh --apply --modules=git"; then
     return 2
   fi
 
@@ -457,6 +492,138 @@ apply_module_git() {
 
   echo "[git] post-install check failed: binary not found" >&2
   return 6
+}
+
+tailscale_repo_distro() {
+  case "$SEED_OS_ID" in
+    raspberrypi)
+      echo "raspbian"
+      ;;
+    debian|ubuntu)
+      echo "$SEED_OS_ID"
+      ;;
+    *)
+      if is_debian_like; then
+        echo "debian"
+      else
+        return 1
+      fi
+      ;;
+  esac
+}
+
+tailscale_repo_codename() {
+  if [ -r /etc/os-release ]; then
+    (
+      . /etc/os-release
+      printf '%s\n' "${VERSION_CODENAME:-}"
+    )
+  fi
+}
+
+apply_module_tailscale() {
+  apply_step "tailscale: checking installation"
+  if module_is_installed tailscale; then
+    apply_skip "tailscale already installed"
+    ui_line "Next manual step: sudo tailscale up"
+    return 0
+  fi
+
+  if ! is_debian_like; then
+    echo "[tailscale] unsupported OS for apply: $SEED_OS_NAME" >&2
+    return 2
+  fi
+
+  if ! apply_safe_confirm; then
+    return 2
+  fi
+
+  if ! require_network_for_apply "tailscale package install"; then
+    return 2
+  fi
+
+  if ! require_sudo_for_system_action "tailscale package install" "sh seed-kit.sh --apply --modules=tailscale"; then
+    return 2
+  fi
+
+  tailscale_distro=$(tailscale_repo_distro)
+  tailscale_codename=$(tailscale_repo_codename)
+  if [ -z "$tailscale_codename" ]; then
+    echo "[tailscale] unable to detect VERSION_CODENAME from /etc/os-release" >&2
+    return 2
+  fi
+
+  if [ "$(id -u)" -eq 0 ]; then
+    SUDO=
+  else
+    SUDO=sudo
+  fi
+
+  apply_step "tailscale: install apt prerequisites"
+  if ! $SUDO apt-get update; then
+    echo "[tailscale] apt-get update failed" >&2
+    return 4
+  fi
+  if ! $SUDO apt-get install -y ca-certificates curl; then
+    echo "[tailscale] prerequisite install failed" >&2
+    return 5
+  fi
+
+  tailscale_base_url="https://pkgs.tailscale.com/stable/$tailscale_distro/$tailscale_codename"
+  tailscale_key_tmp="${TMPDIR:-/tmp}/seed-kit-tailscale-keyring.$$"
+  tailscale_list_tmp="${TMPDIR:-/tmp}/seed-kit-tailscale-list.$$"
+
+  apply_step "tailscale: download official apt key"
+  if ! curl -fsSL "$tailscale_base_url.noarmor.gpg" -o "$tailscale_key_tmp"; then
+    rm -f "$tailscale_key_tmp" "$tailscale_list_tmp"
+    echo "[tailscale] failed to download apt key: $tailscale_base_url.noarmor.gpg" >&2
+    return 6
+  fi
+
+  apply_step "tailscale: download official apt source"
+  if ! curl -fsSL "$tailscale_base_url.tailscale-keyring.list" -o "$tailscale_list_tmp"; then
+    rm -f "$tailscale_key_tmp" "$tailscale_list_tmp"
+    echo "[tailscale] failed to download apt source: $tailscale_base_url.tailscale-keyring.list" >&2
+    return 7
+  fi
+
+  apply_step "tailscale: configure apt source"
+  if ! $SUDO mkdir -p /usr/share/keyrings; then
+    rm -f "$tailscale_key_tmp" "$tailscale_list_tmp"
+    echo "[tailscale] failed to create keyring directory" >&2
+    return 8
+  fi
+  if ! $SUDO cp "$tailscale_key_tmp" /usr/share/keyrings/tailscale-archive-keyring.gpg; then
+    rm -f "$tailscale_key_tmp" "$tailscale_list_tmp"
+    echo "[tailscale] failed to install apt key" >&2
+    return 9
+  fi
+  if ! $SUDO cp "$tailscale_list_tmp" /etc/apt/sources.list.d/tailscale.list; then
+    rm -f "$tailscale_key_tmp" "$tailscale_list_tmp"
+    echo "[tailscale] failed to install apt source" >&2
+    return 10
+  fi
+  rm -f "$tailscale_key_tmp" "$tailscale_list_tmp"
+
+  apply_step "tailscale: install package"
+  if ! $SUDO apt-get update; then
+    echo "[tailscale] apt-get update failed after adding repository" >&2
+    return 11
+  fi
+  if ! $SUDO apt-get install -y tailscale; then
+    echo "[tailscale] apt-get install tailscale failed" >&2
+    return 12
+  fi
+
+  apply_step "tailscale: verifying installation"
+  if module_is_installed tailscale; then
+    apply_step "tailscale: installed"
+    ui_line "Next manual step: sudo tailscale up"
+    return 0
+  fi
+
+  echo "[tailscale] post-install check failed: binary not found" >&2
+  return 13
 }
 
 suggested_next_step() {
@@ -654,7 +821,7 @@ run_apply_modules() {
         ui_line "[docker] not implemented in V0"
         ;;
       tailscale)
-        ui_line "[tailscale] not implemented in V0"
+        apply_module_tailscale
         ;;
       cloudflared)
         ui_line "[cloudflared] not implemented in V0"
@@ -664,6 +831,9 @@ run_apply_modules() {
         ;;
       homepage)
         ui_line "[homepage] not implemented in V0"
+        ;;
+      wifi-kit)
+        run_module_apply "$module"
         ;;
       *)
         ui_line "unknown module: $module"
