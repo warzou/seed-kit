@@ -50,7 +50,7 @@ Each real apply path should:
 | --- | --- | --- | --- | --- | --- |
 | `tailscale` | installed status, official apt install plan, auth note | install-only | yes | yes | no |
 | `cloudflared` | installed status, official apt install plan, tunnel note | install-only | yes | yes | no |
-| `caddy` | installed status, official package plan, service note | later | yes | yes | no |
+| `caddy` | installed status, official apt install plan, service note | install-only | yes | yes | no |
 | `homer` | lightweight dashboard plan, static files/service note | later | maybe | maybe | no |
 | `docker` | installed status, package source plan, daemon note | later | yes | yes | no |
 | `homepage` | config/deploy plan, dependency note | later | maybe | maybe | no |
@@ -97,6 +97,8 @@ Current apply scope: install-only through the official Cloudflare apt repository
 Seed-Kit should check whether Caddy is installed and describe the official package install path.
 
 Seed-Kit should not publish sites, edit DNS, or assume certificate automation is safe until a module plan is explicit.
+
+Current apply scope: install-only through the official Caddy apt repository. Seed-Kit does not write Caddyfiles, configure reverse proxies, edit DNS, open firewalls, or request certificates.
 
 ### homer
 

@@ -149,7 +149,8 @@ EOF
 #!/bin/sh
 module_caddy_plan() {
   echo "- runtime bootstrap placeholder"
-  echo "- full caddy plan requires repository runtime"
+  echo "- full caddy install plan requires repository runtime"
+  echo "- install-only: no site config, no DNS, no certificate automation"
 }
 EOF
   fi
@@ -724,6 +725,116 @@ apply_module_cloudflared() {
   return 13
 }
 
+apply_module_caddy() {
+  apply_step "caddy: checking installation"
+  if module_is_installed caddy; then
+    apply_skip "caddy already installed"
+    ui_line "Next manual step: configure Caddy sites/services outside Seed-Kit"
+    return 0
+  fi
+
+  if ! is_debian_like; then
+    echo "[caddy] unsupported OS for apply: $SEED_OS_NAME" >&2
+    return 2
+  fi
+
+  if ! apply_safe_confirm; then
+    return 2
+  fi
+
+  if ! require_network_for_apply "caddy package install"; then
+    return 2
+  fi
+
+  if ! require_sudo_for_system_action "caddy package install" "sh seed-kit.sh --apply --modules=caddy"; then
+    return 2
+  fi
+
+  if [ "$(id -u)" -eq 0 ]; then
+    SUDO=
+  else
+    SUDO=sudo
+  fi
+
+  apply_step "caddy: install apt prerequisites"
+  if ! $SUDO apt-get update; then
+    echo "[caddy] apt-get update failed" >&2
+    return 4
+  fi
+  if ! $SUDO apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl gnupg; then
+    echo "[caddy] prerequisite install failed" >&2
+    return 5
+  fi
+
+  caddy_key_tmp="${TMPDIR:-/tmp}/seed-kit-caddy-key.$$"
+  caddy_keyring_tmp="${TMPDIR:-/tmp}/seed-kit-caddy-keyring.$$"
+  caddy_list_tmp="${TMPDIR:-/tmp}/seed-kit-caddy-list.$$"
+
+  apply_step "caddy: download official apt key"
+  if ! curl -1sLf "https://dl.cloudsmith.io/public/caddy/stable/gpg.key" -o "$caddy_key_tmp"; then
+    rm -f "$caddy_key_tmp" "$caddy_keyring_tmp" "$caddy_list_tmp"
+    echo "[caddy] failed to download apt key: https://dl.cloudsmith.io/public/caddy/stable/gpg.key" >&2
+    return 6
+  fi
+
+  apply_step "caddy: prepare apt keyring"
+  if ! gpg --dearmor < "$caddy_key_tmp" > "$caddy_keyring_tmp"; then
+    rm -f "$caddy_key_tmp" "$caddy_keyring_tmp" "$caddy_list_tmp"
+    echo "[caddy] failed to prepare apt keyring" >&2
+    return 7
+  fi
+
+  apply_step "caddy: download official apt source"
+  if ! curl -1sLf "https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt" -o "$caddy_list_tmp"; then
+    rm -f "$caddy_key_tmp" "$caddy_keyring_tmp" "$caddy_list_tmp"
+    echo "[caddy] failed to download apt source: https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt" >&2
+    return 8
+  fi
+
+  apply_step "caddy: configure apt source"
+  if ! $SUDO mkdir -p /usr/share/keyrings; then
+    rm -f "$caddy_key_tmp" "$caddy_keyring_tmp" "$caddy_list_tmp"
+    echo "[caddy] failed to create keyring directory" >&2
+    return 9
+  fi
+  if ! $SUDO cp "$caddy_keyring_tmp" /usr/share/keyrings/caddy-stable-archive-keyring.gpg; then
+    rm -f "$caddy_key_tmp" "$caddy_keyring_tmp" "$caddy_list_tmp"
+    echo "[caddy] failed to install apt keyring" >&2
+    return 10
+  fi
+  if ! $SUDO cp "$caddy_list_tmp" /etc/apt/sources.list.d/caddy-stable.list; then
+    rm -f "$caddy_key_tmp" "$caddy_keyring_tmp" "$caddy_list_tmp"
+    echo "[caddy] failed to install apt source" >&2
+    return 11
+  fi
+  if ! $SUDO chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg /etc/apt/sources.list.d/caddy-stable.list; then
+    rm -f "$caddy_key_tmp" "$caddy_keyring_tmp" "$caddy_list_tmp"
+    echo "[caddy] failed to set apt source permissions" >&2
+    return 12
+  fi
+  rm -f "$caddy_key_tmp" "$caddy_keyring_tmp" "$caddy_list_tmp"
+
+  apply_step "caddy: install package"
+  if ! $SUDO apt-get update; then
+    echo "[caddy] apt-get update failed after adding repository" >&2
+    return 13
+  fi
+  if ! $SUDO apt-get install -y caddy; then
+    echo "[caddy] apt-get install caddy failed" >&2
+    return 14
+  fi
+
+  apply_step "caddy: verifying installation"
+  if module_is_installed caddy; then
+    apply_step "caddy: installed"
+    ui_line "Next manual step: configure Caddy sites/services outside Seed-Kit"
+    return 0
+  fi
+
+  echo "[caddy] post-install check failed: binary not found" >&2
+  return 15
+}
+
 suggested_next_step() {
   if ! command -v git >/dev/null 2>&1; then
     echo "install git"
@@ -925,7 +1036,7 @@ run_apply_modules() {
         apply_module_cloudflared
         ;;
       caddy)
-        ui_line "[caddy] not implemented in V0"
+        apply_module_caddy
         ;;
       homepage)
         ui_line "[homepage] not implemented in V0"

@@ -63,6 +63,8 @@ Tailscale apply scope is install-only: no `tailscale up`, no auth keys, no store
 
 Cloudflared apply scope is install-only: no Cloudflare login, no tunnel creation, no tunnel service install, no token, and no stored credentials.
 
+Caddy apply scope is install-only: no site config, no reverse proxy automation, no DNS automation, no firewall changes, and no certificate provisioning.
+
 ## Dependencies and profiles
 
 Some modules will depend on packages, services, network access, or earlier modules. Document those expectations in the module plan first.
