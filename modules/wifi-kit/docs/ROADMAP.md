@@ -34,21 +34,27 @@ Le coeur produit reste:
 
 Le hotspot est un mode de secours, pas le moteur principal.
 
-## Prochaine etape technique
+## Prototype read-only reel
 
-Prototype read-only reel:
+Commandes ajoutees au prototype:
 
 - `backend-detect`,
 - `scan-real`,
 - `status-real`.
 
-Contraintes de cette etape:
+Contraintes:
 
 - aucune connexion,
 - aucune ecriture reseau,
 - aucun `hostapd` reel,
 - aucun `dnsmasq` reel,
 - aucune manipulation de secret Wi-Fi.
+
+`backend-detect` detecte les outils disponibles et recommande `rpios-wpa` quand Raspberry Pi OS / Debian + `wpa_supplicant` sont pertinents.
+
+`status-real` affiche les interfaces Wi-Fi, les adresses IP visibles et la route par defaut si disponible.
+
+`scan-real` utilise `iw dev <iface> scan` quand possible et ne remonte que SSID + signal.
 
 ## V2 - mode reel controle
 

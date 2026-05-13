@@ -53,6 +53,18 @@ sh modules/wifi-kit/prototype/wifi-kit.sh reconnect-plan
 sh modules/wifi-kit/prototype/wifi-kit.sh recovery-plan
 ```
 
+## Utilisation read-only reelle
+
+Ces commandes observent l'hote local sans modifier le reseau:
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit.sh backend-detect
+sh modules/wifi-kit/prototype/wifi-kit.sh status-real
+sh modules/wifi-kit/prototype/wifi-kit.sh scan-real
+```
+
+Elles ne lancent aucune connexion Wi-Fi, n'ecrivent pas dans `wpa_supplicant`, ne lisent pas de secret, et ne demarrent aucun service.
+
 ## Integration core
 
 `wifi-kit` est enregistre comme module plan-only (`module_wifi_kit_plan`) et expose un apply SAFE / simulation (`module_wifi_kit_apply`).

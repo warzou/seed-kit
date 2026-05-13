@@ -8,6 +8,151 @@ WIFI_KIT_KNOWN_FILE="${WIFI_KIT_STATE_ROOT}/known_networks.txt"
 ui() { printf '%s\n' "$*"; }
 ui_header() { printf '\n[wifi-kit] %s\n' "$*"; }
 
+tool_state() {
+  if command -v "$1" >/dev/null 2>&1; then
+    ui "  - $1: present"
+    return 0
+  fi
+
+  ui "  - $1: missing"
+  return 1
+}
+
+os_field() {
+  field="$1"
+  if [ -r /etc/os-release ]; then
+    (
+      . /etc/os-release
+      eval "printf '%s\n' \"\${$field:-}\""
+    )
+  fi
+}
+
+detect_wifi_interfaces() {
+  found=0
+
+  for wireless_dir in /sys/class/net/*/wireless; do
+    [ -d "$wireless_dir" ] || continue
+    iface=${wireless_dir%/wireless}
+    iface=${iface##*/}
+    ui "$iface"
+    found=1
+  done
+
+  if [ "$found" -eq 0 ] && command -v iw >/dev/null 2>&1; then
+    iw dev 2>/dev/null | awk '/^[[:space:]]*Interface / { print $2 }'
+  fi
+}
+
+cmd_backend_detect() {
+  ui_header "backend-detect (read-only)"
+  ui "safety: read-only, no connection, no network writes, no secrets"
+
+  os_id="$(os_field ID || true)"
+  os_name="$(os_field NAME || true)"
+  os_like="$(os_field ID_LIKE || true)"
+
+  ui "os:"
+  ui "  - id: ${os_id:-unknown}"
+  ui "  - name: ${os_name:-unknown}"
+  ui "  - like: ${os_like:-unknown}"
+
+  ui "tools:"
+  tool_state iw || true
+  tool_state ip || true
+  tool_state wpa_cli || true
+  tool_state wpa_supplicant || true
+  tool_state dhcpcd || true
+  tool_state dhclient || true
+  tool_state busybox || true
+
+  recommended="generic-readonly"
+  case "$os_id $os_name $os_like" in
+    *raspbian*|*raspberry*|*debian*)
+      if command -v wpa_supplicant >/dev/null 2>&1 || command -v wpa_cli >/dev/null 2>&1; then
+        recommended="rpios-wpa"
+      fi
+      ;;
+  esac
+
+  ui "recommended_backend=$recommended"
+}
+
+cmd_status_real() {
+  ui_header "status-real (read-only)"
+  ui "safety: read-only, no connection, no network writes, no secrets"
+
+  interfaces="$(detect_wifi_interfaces || true)"
+  if [ -z "$interfaces" ]; then
+    ui "wifi_interfaces: none detected"
+  else
+    ui "wifi_interfaces:"
+    printf '%s\n' "$interfaces" | while IFS= read -r iface; do
+      [ -n "$iface" ] || continue
+      ui "  - $iface"
+      if command -v ip >/dev/null 2>&1; then
+        ip -o addr show dev "$iface" 2>/dev/null | awk '{ print "    addr: "$3" "$4 }' || true
+      else
+        ui "    addr: unavailable (ip missing)"
+      fi
+    done
+  fi
+
+  ui "default_routes:"
+  if command -v ip >/dev/null 2>&1; then
+    ip route show default 2>/dev/null | sed 's/^/  - /' || ui "  - unavailable"
+  else
+    ui "  - unavailable (ip missing)"
+  fi
+}
+
+cmd_scan_real() {
+  ui_header "scan-real (read-only)"
+  ui "safety: read-only, no connection, no network writes, no secrets"
+
+  if ! command -v iw >/dev/null 2>&1; then
+    ui "scan-real unavailable: iw is missing"
+    return 0
+  fi
+
+  iface="${1:-}"
+  if [ -z "$iface" ]; then
+    iface="$(detect_wifi_interfaces | sed -n '1p')"
+  fi
+
+  if [ -z "$iface" ]; then
+    ui "scan-real unavailable: no Wi-Fi interface detected"
+    return 0
+  fi
+
+  tmp="${TMPDIR:-/tmp}/wifi-kit-iw-scan.$$"
+  err="${TMPDIR:-/tmp}/wifi-kit-iw-scan-err.$$"
+
+  if iw dev "$iface" scan > "$tmp" 2> "$err"; then
+    ui "interface=$iface"
+    awk '
+      /^[[:space:]]*signal:/ {
+        signal=$2 " " $3
+      }
+      /^[[:space:]]*SSID:/ {
+        ssid=$0
+        sub(/^[[:space:]]*SSID:[[:space:]]*/, "", ssid)
+        if (ssid != "") {
+          printf "  - ssid=%s signal=%s\n", ssid, signal
+        }
+      }
+    ' "$tmp"
+  else
+    ui "scan-real unavailable on $iface: iw scan failed"
+    ui "hint: this may require root/CAP_NET_ADMIN or an idle Wi-Fi interface"
+    if [ -s "$err" ]; then
+      sed -n '1,3p' "$err" | sed 's/^/  detail: /'
+    fi
+  fi
+
+  rm -f "$tmp" "$err"
+}
+
 init_state_root() {
   mkdir -p "$WIFI_KIT_STATE_ROOT"
   # shell-safe simulation: local writable path by default
@@ -230,6 +375,9 @@ Usage:
   sh prototype/wifi-kit.sh save-known-network <SSID>
   sh prototype/wifi-kit.sh reconnect-plan
   sh prototype/wifi-kit.sh recovery-plan
+  sh prototype/wifi-kit.sh backend-detect
+  sh prototype/wifi-kit.sh status-real
+  sh prototype/wifi-kit.sh scan-real [IFACE]
 
 This is a SAFE prototype. No hostapd/dnsmasq/NetworkManager actions are executed.
 EOF
@@ -253,6 +401,9 @@ main() {
     save-known-network) shift; cmd_save_known_network "${1-}" ;;
     reconnect-plan) cmd_reconnect_plan ;;
     recovery-plan) cmd_recovery_plan ;;
+    backend-detect) cmd_backend_detect ;;
+    status-real) cmd_status_real ;;
+    scan-real) shift; cmd_scan_real "${1:-}" ;;
     *) usage ;;
   esac
 }
