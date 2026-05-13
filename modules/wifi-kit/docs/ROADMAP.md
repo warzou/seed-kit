@@ -56,6 +56,12 @@ Contraintes:
 
 `scan-real` utilise `iw dev <iface> scan` quand possible et ne remonte que SSID + signal.
 
+## Prochaine etape
+
+- Valider le prototype read-only reel sur Raspberry Pi avec `docs/REAL-READONLY-TEST.md`.
+- Collecter les resultats terrain: OS, outils, interfaces, IP, route par defaut, scan SSID ou erreur propre.
+- Concevoir ensuite seulement le `connect-safe` design, sans implementation reseau reelle tant que les garde-fous ne sont pas valides.
+
 ## V2 - mode reel controle
 
 - Ecriture controlee via `wpa_supplicant` quand les garde-fous seront documentes.
