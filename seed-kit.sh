@@ -3,9 +3,19 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+RUNTIME_UI="$ROOT_DIR/lib/ui.sh"
+RUNTIME_OS="$ROOT_DIR/lib/os.sh"
 
-. "$ROOT_DIR/lib/os.sh"
-. "$ROOT_DIR/lib/ui.sh"
+if [ ! -f "$RUNTIME_OS" ] || [ ! -f "$RUNTIME_UI" ]; then
+  echo "runtime files not found"
+  echo "bootstrap mode"
+  echo "Seed-Kit is running as a single-file shell snapshot."
+  echo "copy full repo for dev/test, or future bootstrap will fetch runtime"
+  exit 0
+fi
+
+. "$RUNTIME_OS"
+. "$RUNTIME_UI"
 
 MODULES="git docker tailscale homepage"
 

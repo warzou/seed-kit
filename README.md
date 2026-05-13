@@ -9,8 +9,11 @@ Le contexte et les limites du projet sont dans [CONTEXT.md](CONTEXT.md).
 
 ## Installation
 
+Target flow: copy `seed-kit.sh`, run `sh seed-kit.sh`.
+Bootstrap runtime fetch is not implemented yet.
+
 ```sh
-sh install.sh --plan
+sh seed-kit.sh
 ```
 
 ## Test rapide
