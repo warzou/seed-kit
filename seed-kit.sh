@@ -164,6 +164,17 @@ module_homepage_plan() {
 }
 EOF
   fi
+
+  if [ ! -f "$ROOT_DIR/modules/homer.sh" ]; then
+    cat > "$ROOT_DIR/modules/homer.sh" <<'EOF'
+#!/bin/sh
+module_homer_plan() {
+  echo "- runtime bootstrap placeholder"
+  echo "- full homer plan requires repository runtime"
+  echo "- plan-only: no static files, no service, no web server config"
+}
+EOF
+  fi
 }
 
 bootstrap_runtime_ready() {
@@ -201,7 +212,7 @@ if ! bootstrap_runtime_ready; then
   . "$RUNTIME_OS"
 fi
 
-MODULES="git docker tailscale cloudflared caddy homepage wifi-kit"
+MODULES="git docker tailscale cloudflared caddy homer homepage wifi-kit"
 
 load_backend() {
   case "$SEED_OS_ID" in
@@ -1037,6 +1048,9 @@ run_apply_modules() {
         ;;
       caddy)
         apply_module_caddy
+        ;;
+      homer)
+        run_module_apply "$module"
         ;;
       homepage)
         ui_line "[homepage] not implemented in V0"
