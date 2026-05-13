@@ -423,6 +423,7 @@ seed_kit_usage() {
   echo "  --modules        list available modules"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --detect         show OS detection details"
+  echo "  --uninstall-runtime [--yes|-y]  remove local Seed-Kit runtime directories (lib/modules/backends)"
 }
 
 parse_apply_modules() {
@@ -479,6 +480,78 @@ parse_apply_options() {
   done
 
   parse_apply_modules "$APPLY_MODULES_FILTER"
+}
+
+parse_uninstall_runtime_options() {
+  UNINSTALL_AUTO=0
+  for arg in "$@"; do
+    case "$arg" in
+      -y|--yes)
+        UNINSTALL_AUTO=1
+        ;;
+      *)
+        echo "unknown option: $arg" >&2
+        return 2
+        ;;
+    esac
+  done
+}
+
+uninstall_runtime_path() {
+  item=$1
+  target="$ROOT_DIR/$item"
+
+  case "$target" in
+    "$ROOT_DIR/lib" | "$ROOT_DIR/modules" | "$ROOT_DIR/backends")
+      ;;
+    *)
+      echo "unsafe target rejected: $item" >&2
+      return 2
+      ;;
+  esac
+
+  if [ ! -e "$target" ]; then
+    ui_line "$item: not present"
+    return 0
+  fi
+
+  if [ ! -d "$target" ]; then
+    echo "unsafe target type for $item: expected directory" >&2
+    return 2
+  fi
+
+  rm -rf "$target"
+  ui_line "removed $item"
+}
+
+uninstall_seed_runtime() {
+  if [ "$UNINSTALL_AUTO" -eq 0 ]; then
+    ui_line "This only removes Seed-Kit local runtime files."
+    ui_line "It does not uninstall system packages or remove seed-kit.sh."
+    ui_line "Targets:"
+    ui_line "  lib/"
+    ui_line "  modules/"
+    ui_line "  backends/"
+    ui_prompt "Remove Seed-Kit local runtime? [y/N]:"
+    IFS= read -r uninstall_answer || uninstall_answer=
+
+    case "$uninstall_answer" in
+      y|Y)
+        ;;
+      *)
+        ui_line "aborted."
+        return 0
+        ;;
+    esac
+  else
+    ui_line "auto-confirm mode requested"
+  fi
+
+  for item in lib modules backends; do
+    if ! uninstall_runtime_path "$item"; then
+      exit 1
+    fi
+  done
 }
 
 show_apply_preview() {
@@ -610,6 +683,13 @@ case "${1:-}" in
     ;;
   --ui-demo)
     show_ui_demo
+    ;;
+  --uninstall-runtime)
+    shift
+    if ! parse_uninstall_runtime_options "$@"; then
+      exit 2
+    fi
+    uninstall_seed_runtime
     ;;
   -h|--help)
     seed_kit_usage
