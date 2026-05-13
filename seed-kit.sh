@@ -171,7 +171,8 @@ EOF
 module_homer_plan() {
   echo "- runtime bootstrap placeholder"
   echo "- full homer plan requires repository runtime"
-  echo "- plan-only: no static files, no service, no web server config"
+  echo "- static placeholder path: /srv/seed-kit/homer"
+  echo "- no Caddy config, no DNS, no certificates, no Docker"
 }
 EOF
   fi

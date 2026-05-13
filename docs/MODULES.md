@@ -65,7 +65,7 @@ Cloudflared apply scope is install-only: no Cloudflare login, no tunnel creation
 
 Caddy apply scope is install-only: no site config, no reverse proxy automation, no DNS automation, no firewall changes, and no certificate provisioning.
 
-Homer scope is plan-only for now. It is the lightweight static dashboard path for minimal resilient nodes, without Docker, Homepage, Caddy automation, DNS changes, or certificate provisioning.
+Homer V1 creates a local static placeholder at `/srv/seed-kit/homer/index.html`. It does not install upstream Homer yet, and it does not configure Docker, Homepage, Caddy, DNS, firewall rules, or certificates.
 
 ## Dependencies and profiles
 

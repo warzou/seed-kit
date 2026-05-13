@@ -63,7 +63,7 @@ Tailscale is host-level. It must not depend on Docker.
 
 `homer` is the recommended lightweight dashboard for low-RAM and rescue-style nodes. `homepage` stays optional and is likely tied to Docker or a heavier services stack.
 
-Homer starts as a plan-only module until the static directory and serving method are explicit. Seed-Kit should not quietly create a web service or Caddy configuration for it.
+Homer V1 uses `/srv/seed-kit/homer` for a local static placeholder. Seed-Kit should not quietly create a web service or Caddy configuration for it.
 
 ## Runtime
 

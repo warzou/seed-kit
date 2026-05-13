@@ -51,7 +51,7 @@ Each real apply path should:
 | `tailscale` | installed status, official apt install plan, auth note | install-only | yes | yes | no |
 | `cloudflared` | installed status, official apt install plan, tunnel note | install-only | yes | yes | no |
 | `caddy` | installed status, official apt install plan, service note | install-only | yes | yes | no |
-| `homer` | lightweight dashboard plan, static files/service note | plan-only | no | no | no |
+| `homer` | lightweight dashboard plan, static placeholder path | static placeholder | no | yes | no |
 | `docker` | installed status, package source plan, daemon note | later | yes | yes | no |
 | `homepage` | config/deploy plan, dependency note | later | maybe | maybe | no |
 
@@ -106,7 +106,7 @@ Seed-Kit should treat Homer as the lightweight dashboard path for Raspberry Pi Z
 
 Homer should not require Docker in the minimal resilient node path. It can be served by a minimal host-level web service when that path is defined.
 
-Current scope: plan-only. Seed-Kit does not deploy static files, configure Caddy, create a service, edit DNS, open firewalls, or request certificates for Homer yet.
+Current V1 scope: create `/srv/seed-kit/homer/index.html` as a local static placeholder. Seed-Kit does not install upstream Homer yet, configure Caddy, create a service, edit DNS, open firewalls, or request certificates for Homer.
 
 ### docker
 
