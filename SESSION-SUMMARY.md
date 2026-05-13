@@ -4,7 +4,6 @@
 
 Seed-Kit is a V0 shell toolkit with:
 
-* plan-only `install.sh`
 * `seed-kit.sh` entrypoint
 * OS detection + lightweight backends
 * CLI with `--plan`, `--detect`, `--modules`, `--apply` and `-y`

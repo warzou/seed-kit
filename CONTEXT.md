@@ -21,7 +21,6 @@ Everything else is secondary.
 
 ## Current V0
 
-* `install.sh` plan-only installer
 * `seed-kit.sh` entrypoint
 * simple OS detection
 * simple backends: `debian`, `raspberrypi`, `openwrt`
