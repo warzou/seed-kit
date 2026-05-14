@@ -1125,6 +1125,7 @@ seed_kit_usage() {
   echo "Planned CLI shape:"
   echo "  --plan           show the full execution plan"
   echo "  --profile=<name> --plan  show recommended modules for one profile"
+  echo "  --profile=<name> --apply  preview profile apply order without running modules"
   echo "  --modules        list available modules"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --fetch-module=wifi-kit [--yes|-y]  fetch one repo-backed module with git sparse checkout"
@@ -1222,6 +1223,24 @@ show_profile_plan() {
   done
   ui_line ""
   ui_line "profile apply is not implemented"
+}
+
+show_profile_apply_preview() {
+  profile=$1
+
+  if ! modules=$(profile_modules "$profile"); then
+    echo "unknown profile: $profile" >&2
+    echo "known profiles: rpi0-pocket rpi0-pocket-node rpi3-edge rpi3-edge-node minimal-resilient-node edge-services-node" >&2
+    return 2
+  fi
+
+  ui_header "profile apply preview" "$profile"
+  ui_line "would apply:"
+  for module in $modules; do
+    ui_line "  $module"
+  done
+  ui_line ""
+  ui_line "profile apply automation is not implemented yet"
 }
 
 parse_fetch_options() {
@@ -1671,9 +1690,13 @@ case "${1:-}" in
       --plan)
         show_profile_plan "$profile"
         ;;
+      --apply)
+        show_profile_apply_preview "$profile"
+        ;;
       *)
-        echo "profiles support --plan only" >&2
+        echo "profiles support --plan and --apply preview only" >&2
         echo "usage: sh seed-kit.sh --profile=<name> --plan" >&2
+        echo "       sh seed-kit.sh --profile=<name> --apply" >&2
         exit 2
         ;;
     esac
