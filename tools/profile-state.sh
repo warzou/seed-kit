@@ -380,6 +380,7 @@ verify_tar_paths_safe() {
 package_verify() {
   input_tar="$1"
   errors=0
+  verify_tmp_dir=""
 
   if [ -z "$input_tar" ]; then
     echo "missing --input <tar>" >&2
@@ -398,6 +399,12 @@ package_verify() {
   tar -tf "$input_tar"
   echo
 
+  path_errors=0
+  if ! verify_tar_paths_safe "$input_tar"; then
+    path_errors=1
+    errors=$((errors + 1))
+  fi
+
   for entry in MANIFEST.txt SHA256SUMS inventory manual excluded; do
     if tar_contains_entry "$input_tar" "$entry"; then
       echo "present: $entry"
@@ -407,10 +414,61 @@ package_verify() {
     fi
   done
 
-  if verify_tar_paths_safe "$input_tar"; then
+  if [ "$path_errors" -eq 0 ]; then
     echo "path safety: OK"
   else
+    echo "path safety: ERROR"
+  fi
+
+  if ! command -v mktemp >/dev/null 2>&1; then
+    echo "temporary verify directory unavailable: mktemp missing" >&2
     errors=$((errors + 1))
+  elif [ "$errors" -eq 0 ]; then
+    verify_tmp_dir="$(TMPDIR=/tmp mktemp -d -t profile-state-verify.XXXXXX)"
+    case "$verify_tmp_dir" in
+      /tmp/*)
+        ;;
+      *)
+        echo "temporary verify directory unsafe: $verify_tmp_dir" >&2
+        errors=$((errors + 1))
+        ;;
+    esac
+
+    if [ -z "$verify_tmp_dir" ] || [ ! -d "$verify_tmp_dir" ]; then
+      echo "temporary verify directory unavailable" >&2
+      errors=$((errors + 1))
+    fi
+
+    trap 'rm -rf "$verify_tmp_dir"' EXIT HUP INT TERM
+
+    if [ "$errors" -eq 0 ] && (
+      cd "$verify_tmp_dir"
+      tar -xf "$input_tar"
+    ); then
+      echo "extraction: OK"
+    elif [ "$errors" -eq 0 ]; then
+      echo "extraction: ERROR"
+      errors=$((errors + 1))
+    fi
+
+    if [ "$errors" -eq 0 ]; then
+      if [ ! -f "$verify_tmp_dir/SHA256SUMS" ]; then
+        echo "checksum: ERROR missing SHA256SUMS"
+        errors=$((errors + 1))
+      elif command -v sha256sum >/dev/null 2>&1; then
+        if (
+          cd "$verify_tmp_dir"
+          sha256sum -c SHA256SUMS
+        ); then
+          echo "checksum: OK"
+        else
+          echo "checksum: ERROR"
+          errors=$((errors + 1))
+        fi
+      else
+        echo "checksum: WARNING sha256sum unavailable, skipped"
+      fi
+    fi
   fi
 
   echo
