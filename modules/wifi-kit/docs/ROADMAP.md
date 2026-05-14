@@ -63,7 +63,8 @@ Le helper local `prototype/helpers.sh` garde la detection des outils reseau dans
 - Valider le prototype read-only reel sur Raspberry Pi avec `docs/REAL-READONLY-TEST.md`.
 - Collecter les resultats terrain: OS, outils, interfaces, IP, route par defaut, scan SSID ou erreur propre.
 - Valider la stabilite Wi-Fi current-boot avec `docs/WIFI-STABILITY.md`.
-- Concevoir ensuite seulement le `connect-safe` design, sans implementation reseau reelle tant que les garde-fous ne sont pas valides.
+- Formaliser `connect-safe` avec `docs/CONNECT-SAFE.md`.
+- Garder l'implementation reelle interdite tant que l'architecture, le rollback, les timeouts et le chemin recovery ne sont pas valides.
 
 ## V2 - mode reel controle
 
