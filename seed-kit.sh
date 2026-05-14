@@ -1287,13 +1287,39 @@ run_profile_apply() {
   set -- $modules
   total=$#
   index=1
+  completed_modules=""
 
   for module do
     ui_line "[profile $index/$total] $module"
     APPLY_MODULES=$module
-    run_apply_modules
+    if ! run_apply_modules; then
+      ui_line ""
+      ui_line "profile apply failed"
+      if [ -n "$completed_modules" ]; then
+        ui_line ""
+        for completed_module in $completed_modules; do
+          ui_line "[OK] $completed_module"
+        done
+      fi
+      ui_line "[FAIL] $module"
+      return 1
+    fi
+    completed_modules="$completed_modules $module"
     index=$((index + 1))
   done
+
+  ui_line ""
+  ui_line "profile apply completed"
+  ui_line ""
+  for completed_module in $completed_modules; do
+    ui_line "[OK] $completed_module"
+  done
+  ui_line ""
+  ui_line "manual steps remaining:"
+  ui_line ""
+  ui_line "* sudo tailscale up"
+  ui_line "* configure cloudflared tunnel"
+  ui_line "* configure caddy sites"
 }
 
 parse_fetch_options() {
