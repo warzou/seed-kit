@@ -9,30 +9,37 @@ if [ -z "${NO_COLOR:-}" ] && [ -t 1 ] && [ "${TERM:-}" != "dumb" ]; then
   COLOR_RESET=$(printf '\033[0m')
   COLOR_LABEL=$(printf '\033[1m')
   COLOR_DIM=$(printf '\033[2m')
+  COLOR_SECTION=$(printf '\033[36m')
   COLOR_GOOD=$(printf '\033[32m')
   COLOR_WARN=$(printf '\033[33m')
+  COLOR_BAD=$(printf '\033[31m')
   COLOR_MUTED=$(printf '\033[37m')
 else
   COLOR_RESET=""
   COLOR_LABEL=""
   COLOR_DIM=""
+  COLOR_SECTION=""
   COLOR_GOOD=""
   COLOR_WARN=""
+  COLOR_BAD=""
   COLOR_MUTED=""
 fi
 
 ui_line() { printf '%s\n' "$*"; }
 ui_header() {
-  printf '\n%s%s%s\n' "$COLOR_LABEL" "$1" "$COLOR_RESET"
+  printf '\n%s%s%s\n' "$COLOR_SECTION" "$1" "$COLOR_RESET"
   if [ -n "${2:-}" ]; then
     printf '%s%s%s\n' "$COLOR_DIM" "$2" "$COLOR_RESET"
   fi
 }
-ui_section() { printf '\n%s%s%s\n' "$COLOR_LABEL" "$1" "$COLOR_RESET"; }
+ui_section() { printf '\n%s%s%s\n' "$COLOR_SECTION" "$1" "$COLOR_RESET"; }
 ui_separator() { ui_line "$1"; }
 ui_kv() { printf '  %-12s %s\n' "$1:" "$2"; }
 ui_status() { printf '  %-12s %s\n' "$1:" "$2"; }
 ui_whisper() { printf '%s%s%s\n' "$COLOR_MUTED" "$*" "$COLOR_RESET"; }
+ui_success() { printf '%s%s%s\n' "$COLOR_GOOD" "$*" "$COLOR_RESET"; }
+ui_warning() { printf '%s%s%s\n' "$COLOR_WARN" "$*" "$COLOR_RESET"; }
+ui_failure() { printf '%s%s%s\n' "$COLOR_BAD" "$*" "$COLOR_RESET"; }
 ui_prompt() { printf '%s ' "$1"; }
 ui_masthead() { ui_header "$1" "$2"; }
 ui_focus() { ui_kv "$1" "$2"; [ -n "${3:-}" ] && printf '%s\n' "$3"; }
@@ -445,7 +452,7 @@ apply_step() {
 }
 
 apply_skip() {
-  ui_line "[skip] $*"
+  ui_warning "[skip] $*"
 }
 
 require_network_for_apply() {
@@ -1298,10 +1305,10 @@ run_profile_apply() {
       if [ -n "$completed_modules" ]; then
         ui_line ""
         for completed_module in $completed_modules; do
-          ui_line "[OK] $completed_module"
+          ui_success "[OK] $completed_module"
         done
       fi
-      ui_line "[FAIL] $module"
+      ui_failure "[FAIL] $module"
       return 1
     fi
     completed_modules="$completed_modules $module"
@@ -1312,10 +1319,10 @@ run_profile_apply() {
   ui_line "profile apply completed"
   ui_line ""
   for completed_module in $completed_modules; do
-    ui_line "[OK] $completed_module"
+    ui_success "[OK] $completed_module"
   done
   ui_line ""
-  ui_line "manual steps remaining:"
+  ui_warning "manual steps remaining:"
   ui_line ""
   ui_line "* sudo tailscale up"
   ui_line "* configure cloudflared tunnel"
