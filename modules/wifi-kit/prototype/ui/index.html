@@ -8,8 +8,8 @@
     :root {
       --bg: #07111c;
       --bg-2: #0d1927;
-      --surface: rgba(18, 30, 45, 0.74);
-      --surface-strong: rgba(23, 37, 55, 0.92);
+      --surface: rgba(14, 24, 36, 0.72);
+      --surface-strong: rgba(24, 37, 57, 0.96);
       --surface-soft: rgba(255, 255, 255, 0.055);
       --ink: #f7f9ff;
       --muted: #a9b5c8;
@@ -23,8 +23,8 @@
       --orange: #ffb13d;
       --red: #ff554d;
       --code: #050b12;
-      --shadow: 0 22px 64px rgba(0, 0, 0, 0.42);
-      --glow: 0 18px 48px rgba(45, 149, 255, 0.22);
+      --shadow: 0 22px 46px rgba(0, 0, 0, 0.45);
+      --glow: 0 14px 34px rgba(45, 149, 255, 0.22);
       --radius-xl: 28px;
       --radius-lg: 22px;
       --radius-md: 16px;
@@ -49,18 +49,18 @@
     .shell {
       width: min(720px, 100%);
       margin: 0 auto;
-      padding: 18px 14px 30px;
+      padding: 16px 12px 26px;
     }
 
     .app {
       display: grid;
-      gap: 14px;
+      gap: 12px;
     }
 
     .hero {
       display: grid;
-      gap: 13px;
-      padding: 4px 4px 2px;
+      gap: 10px;
+      padding: 2px 2px 4px;
     }
 
     .hero-top {
@@ -91,8 +91,8 @@
     }
 
     .icon-svg {
-      width: 1.18em;
-      height: 1.18em;
+      width: 1.2em;
+      height: 1.2em;
       display: block;
       fill: none;
       stroke: currentColor;
@@ -103,13 +103,13 @@
 
     .orb .icon-svg,
     .network-orb .icon-svg {
-      width: 27px;
-      height: 27px;
+      width: 28px;
+      height: 28px;
       stroke-width: 2.35;
     }
 
     .orb {
-      width: 46px;
+      width: 48px;
       height: 46px;
       background: linear-gradient(145deg, #4d8dff, #6558f5);
       box-shadow: 0 14px 34px rgba(45, 149, 255, 0.28);
@@ -127,7 +127,7 @@
 
     h1 {
       margin: 0;
-      font-size: clamp(2.15rem, 12vw, 3.4rem);
+      font-size: clamp(2rem, 11vw, 2.9rem);
       line-height: 0.92;
       letter-spacing: -0.075em;
     }
@@ -179,12 +179,12 @@
       backdrop-filter: blur(18px);
     }
 
-    .panel { padding: 14px; }
+    .panel { padding: 12px; }
 
     .overview {
       display: grid;
-      gap: 10px;
-      padding: 12px;
+      gap: 8px;
+      padding: 10px 11px;
     }
 
     .overview-grid {
@@ -195,7 +195,7 @@
 
     .overview-safe {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 6px;
       border-top: 1px solid var(--line);
       padding-top: 9px;
@@ -206,16 +206,19 @@
     .metric {
       min-width: 0;
       border: 1px solid var(--line);
-      border-radius: var(--radius-md);
-      background: rgba(255, 255, 255, 0.045);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.03);
       padding: 8px;
     }
 
     .status-mini {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
+      display: flex;
+      gap: 9px;
+      align-items: center;
+      min-width: 0;
       gap: 7px;
       align-items: center;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.028));
     }
 
     .safe-mini {
@@ -228,8 +231,8 @@
 
     .status-icon,
     .safe-icon {
-      width: 30px;
-      height: 30px;
+      width: 32px;
+      height: 32px;
       background: rgba(45, 149, 255, 0.13);
       color: var(--blue);
       font-size: 0.84rem;
@@ -245,7 +248,7 @@
     .safe-mini span {
       display: block;
       color: var(--dim);
-      font-size: 0.66rem;
+      font-size: 0.63rem;
       font-weight: 950;
       letter-spacing: 0.08em;
       text-transform: uppercase;
@@ -257,17 +260,17 @@
       display: block;
       overflow-wrap: anywhere;
       color: var(--ink);
-      font-size: 0.86rem;
+      font-size: 0.82rem;
     }
 
     .safe-mini strong { font-size: 0.78rem; }
 
     .section-head {
       display: flex;
-      gap: 12px;
+      gap: 10px;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
 
     .section-copy,
@@ -317,17 +320,17 @@
 
     .network-list {
       display: grid;
-      gap: 10px;
+      gap: 8px;
     }
 
     .network {
       display: grid;
-      gap: 10px;
+      gap: 9px;
       width: 100%;
       border: 1px solid var(--line);
-      border-radius: 22px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.035));
-      padding: 12px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.056), rgba(255, 255, 255, 0.028));
+      padding: 10px 11px 11px;
       text-align: left;
       transition: border-color 190ms ease, background 190ms ease, transform 190ms ease, box-shadow 190ms ease;
     }
@@ -345,16 +348,16 @@
 
     .network-main {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
-      gap: 12px;
+      grid-template-columns: 44px minmax(0, 1fr) auto;
+      gap: 10px;
       align-items: center;
     }
 
     .network-orb {
-      width: 50px;
-      height: 50px;
+      width: 44px;
+      height: 44px;
       background: linear-gradient(145deg, var(--blue), #0e65d8);
-      box-shadow: 0 14px 28px rgba(45, 149, 255, 0.22);
+      box-shadow: 0 12px 22px rgba(45, 149, 255, 0.18);
       font-size: 0.98rem;
     }
 
@@ -370,7 +373,7 @@
       flex-wrap: wrap;
       gap: 6px;
       align-items: center;
-      margin-top: 7px;
+      margin-top: 4px;
     }
 
     .badge {
@@ -379,7 +382,8 @@
       background: rgba(255, 255, 255, 0.055);
       color: var(--ink);
       padding: 4px 8px;
-      font-size: 0.71rem;
+      font-size: 0.67rem;
+      border-radius: 9px;
     }
 
     .badge.quality { color: var(--quality-color, var(--blue)); border-color: rgba(255, 255, 255, 0.16); }
@@ -392,6 +396,7 @@
       border: 2px solid rgba(255, 255, 255, 0.16);
       border-radius: 999px;
       color: transparent;
+      background: rgba(255, 255, 255, 0.05);
       font-size: 0.68rem;
       font-weight: 950;
     }
@@ -436,16 +441,16 @@
 
     .signal-quality {
       color: var(--signal-color, var(--blue));
-      font-size: 0.78rem;
+      font-size: 0.74rem;
       font-weight: 900;
       white-space: nowrap;
     }
 
     .network-prep {
       display: grid;
-      gap: 10px;
+      gap: 8px;
       border-top: 1px solid rgba(255, 255, 255, 0.1);
-      padding-top: 12px;
+      padding-top: 10px;
     }
 
     .field-label {
@@ -524,6 +529,19 @@
       margin-top: 10px;
     }
 
+    .node-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .node-copy {
+      margin: 0;
+      color: var(--dim);
+      font-size: 0.82rem;
+    }
+
     details {
       box-shadow: none;
       opacity: 0.76;
@@ -555,10 +573,15 @@
     }
 
     @media (min-width: 760px) {
-      .shell { padding: 24px 18px 42px; }
+      .shell { padding: 18px 16px 30px; }
       .app { grid-template-columns: 0.9fr 1.1fr; align-items: start; }
       .hero, .advanced { grid-column: 1 / -1; }
-      .overview-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .overview-safe { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .network-orb {
+        width: 46px;
+        height: 46px;
+      }
     }
   </style>
 </head>
@@ -637,10 +660,11 @@
     </header>
 
     <section class="panel overview" aria-labelledby="state-title">
-      <div>
+      <div class="node-header">
         <h2 id="state-title">Apercu du node</h2>
-        <p class="section-copy">Informations sans interaction. Aucun changement systeme.</p>
+        <span class="chip">Read-only</span>
       </div>
+      <p class="node-copy">Informations en lecture seule — votre session Raspberry Pi ne bouge pas.</p>
       <div class="overview-grid" aria-label="Etat actuel du node">
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Interface</span><strong id="status-interface">...</strong></div></div>
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-location"></use></svg></span><div><span>Adresse IP</span><strong id="status-ip">...</strong></div></div>
@@ -662,7 +686,7 @@
           <p class="section-copy" id="scan-source">Source de scan: inconnue</p>
           <p id="scan-status" class="scan-status">Scan passif pret.</p>
         </div>
-        <button id="refresh" type="button" class="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-refresh"></use></svg>Scan</button>
+        <button id="refresh" type="button" class="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-refresh"></use></svg>Actualiser</button>
       </div>
       <div id="scan-message" class="callout" hidden></div>
       <div id="network-list" class="network-list"></div>
