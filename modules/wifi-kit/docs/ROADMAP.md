@@ -56,6 +56,8 @@ Contraintes:
 
 `scan-real` utilise `iw dev <iface> scan` quand possible et ne remonte que SSID + signal.
 
+Le helper local `prototype/helpers.sh` garde la detection des outils reseau dans `wifi-kit` sans ajouter de couche globale au core Seed-Kit.
+
 ## Prochaine etape
 
 - Valider le prototype read-only reel sur Raspberry Pi avec `docs/REAL-READONLY-TEST.md`.

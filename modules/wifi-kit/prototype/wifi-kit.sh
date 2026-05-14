@@ -4,13 +4,18 @@ set -eu
 WIFI_KIT_STATE_ROOT="${WIFI_KIT_STATE_ROOT:-/tmp/wifi-kit-sim-state}"
 WIFI_KIT_STATE_FILE="${WIFI_KIT_STATE_ROOT}/state.conf"
 WIFI_KIT_KNOWN_FILE="${WIFI_KIT_STATE_ROOT}/known_networks.txt"
+WIFI_KIT_SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+# shellcheck source=helpers.sh
+. "$WIFI_KIT_SCRIPT_DIR/helpers.sh"
 
 ui() { printf '%s\n' "$*"; }
 ui_header() { printf '\n[wifi-kit] %s\n' "$*"; }
 
 tool_state() {
-  if command -v "$1" >/dev/null 2>&1; then
-    ui "  - $1: present"
+  tool_path="$(find_tool "$1" 2>/dev/null || true)"
+  if [ -n "$tool_path" ]; then
+    ui "  - $1: present ($tool_path)"
     return 0
   fi
 
@@ -39,8 +44,9 @@ detect_wifi_interfaces() {
     found=1
   done
 
-  if [ "$found" -eq 0 ] && command -v iw >/dev/null 2>&1; then
-    iw dev 2>/dev/null | awk '/^[[:space:]]*Interface / { print $2 }'
+  iw_bin="$(find_tool iw 2>/dev/null || true)"
+  if [ "$found" -eq 0 ] && [ -n "$iw_bin" ]; then
+    "$iw_bin" dev 2>/dev/null | awk '/^[[:space:]]*Interface / { print $2 }'
   fi
 }
 
@@ -85,7 +91,7 @@ cmd_backend_detect() {
   recommended="generic-readonly"
   case "$os_id $os_name $os_like" in
     *raspbian*|*raspberry*|*debian*)
-      if command -v wpa_supplicant >/dev/null 2>&1 || command -v wpa_cli >/dev/null 2>&1; then
+      if has_tool wpa_supplicant || has_tool wpa_cli; then
         recommended="rpios-wpa"
       fi
       ;;
@@ -106,8 +112,9 @@ cmd_status_real() {
     printf '%s\n' "$interfaces" | while IFS= read -r iface; do
       [ -n "$iface" ] || continue
       ui "  - $iface"
-      if command -v ip >/dev/null 2>&1; then
-        ip -o addr show dev "$iface" 2>/dev/null | awk '{ print "    addr: "$3" "$4 }' || true
+      ip_bin="$(find_tool ip 2>/dev/null || true)"
+      if [ -n "$ip_bin" ]; then
+        "$ip_bin" -o addr show dev "$iface" 2>/dev/null | awk '{ print "    addr: "$3" "$4 }' || true
       else
         ui "    addr: unavailable (ip missing)"
       fi
@@ -115,8 +122,9 @@ cmd_status_real() {
   fi
 
   ui "default_routes:"
-  if command -v ip >/dev/null 2>&1; then
-    ip route show default 2>/dev/null | sed 's/^/  - /' || ui "  - unavailable"
+  ip_bin="$(find_tool ip 2>/dev/null || true)"
+  if [ -n "$ip_bin" ]; then
+    "$ip_bin" route show default 2>/dev/null | sed 's/^/  - /' || ui "  - unavailable"
   else
     ui "  - unavailable (ip missing)"
   fi
@@ -126,7 +134,8 @@ cmd_scan_real() {
   ui_header "scan-real (read-only)"
   ui "safety: read-only, no connection, no network writes, no secrets"
 
-  if ! command -v iw >/dev/null 2>&1; then
+  iw_bin="$(find_tool iw 2>/dev/null || true)"
+  if [ -z "$iw_bin" ]; then
     ui "scan-real unavailable: iw is missing"
     return 0
   fi
@@ -144,7 +153,7 @@ cmd_scan_real() {
   tmp="${TMPDIR:-/tmp}/wifi-kit-iw-scan.$$"
   err="${TMPDIR:-/tmp}/wifi-kit-iw-scan-err.$$"
 
-  if iw dev "$iface" scan > "$tmp" 2> "$err"; then
+  if "$iw_bin" dev "$iface" scan > "$tmp" 2> "$err"; then
     ui "interface=$iface"
     awk '
       /^[[:space:]]*signal:/ {
@@ -173,7 +182,8 @@ cmd_stability_status() {
   ui_header "stability-status (read-only)"
   ui "safety: read-only, no connection, no network writes, no secrets"
 
-  if ! command -v iw >/dev/null 2>&1; then
+  iw_bin="$(find_tool iw 2>/dev/null || true)"
+  if [ -z "$iw_bin" ]; then
     ui "stability-status unavailable: iw is missing"
     return 1
   fi
@@ -186,7 +196,7 @@ cmd_stability_status() {
 
   printf '%s\n' "$interfaces" | while IFS= read -r iface; do
     [ -n "$iface" ] || continue
-    power_save="$(iw dev "$iface" get power_save 2>/dev/null || true)"
+    power_save="$("$iw_bin" dev "$iface" get power_save 2>/dev/null || true)"
     if [ -z "$power_save" ]; then
       power_save="power_save: unavailable"
     fi
@@ -210,7 +220,8 @@ cmd_stability_apply_current_boot() {
   ui "safety: current-boot only; no persistence, no config writes, no services"
   ui "no secrets, no hostapd, no dnsmasq, no NetworkManager apply, no SSID/connection changes"
 
-  if ! command -v iw >/dev/null 2>&1; then
+  iw_bin="$(find_tool iw 2>/dev/null || true)"
+  if [ -z "$iw_bin" ]; then
     ui "refusing: iw is missing"
     return 1
   fi
@@ -231,8 +242,8 @@ cmd_stability_apply_current_boot() {
     return 1
   fi
 
-  ui "about to run: iw dev $iface set power_save off"
-  if iw dev "$iface" set power_save off; then
+  ui "about to run: $iw_bin dev $iface set power_save off"
+  if "$iw_bin" dev "$iface" set power_save off; then
     ui "applied: power_save off for $iface (current boot only)"
     ui "rollback: reboot, or run: iw dev $iface set power_save on"
     return 0

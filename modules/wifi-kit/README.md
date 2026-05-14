@@ -65,6 +65,8 @@ sh modules/wifi-kit/prototype/wifi-kit.sh scan-real
 
 Elles ne lancent aucune connexion Wi-Fi, n'ecrivent pas dans `wpa_supplicant`, ne lisent pas de secret, et ne demarrent aucun service.
 
+Le prototype utilise un helper local (`prototype/helpers.sh`) pour retrouver les outils reseau dans `PATH`, puis dans `/usr/sbin`, `/sbin`, `/usr/bin` et `/bin`. Ce helper reste strictement local a `wifi-kit`.
+
 ## Stabilite Wi-Fi terrain
 
 Sur Raspberry Pi Zero 2 W, un retour terrain a montre que `wlan0 power_save=on` peut rendre le Wi-Fi instable en idle.
