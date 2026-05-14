@@ -66,7 +66,7 @@ Tailscale is host-level. It must not depend on Docker.
 
 Homer V1 uses `/srv/seed-kit/homer` for a local static placeholder. Seed-Kit should not quietly create a web service or Caddy configuration for it.
 
-On Raspberry Pi nodes with Wi-Fi, `wifi-stability` is a host-level guard before Wi-Fi onboarding work. V1 can disable `wlan0` power save for the current boot after SAFE confirmation; reboot persistence remains a later decision.
+On Raspberry Pi nodes with Wi-Fi, `wifi-stability` is a host-level guard before Wi-Fi onboarding work. V1 can disable `wlan0` power save for the current boot after SAFE confirmation and persist it with a small systemd oneshot service. It does not reboot or restart networking.
 
 ## Runtime
 

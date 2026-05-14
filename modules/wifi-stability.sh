@@ -17,7 +17,15 @@ module_wifi_stability_plan() {
   if [ -d /sys/class/net/wlan0 ]; then
     echo "- wlan0: present"
     if command -v iw >/dev/null 2>&1; then
-      state=$(iw dev wlan0 get power_save 2>/dev/null || true)
+      iw_cmd=$(command -v iw)
+      state=$("$iw_cmd" dev wlan0 get power_save 2>/dev/null || true)
+      if [ -n "$state" ]; then
+        echo "- wlan0 power_save: $state"
+      else
+        echo "- wlan0 power_save: unreadable"
+      fi
+    elif [ -x /usr/sbin/iw ]; then
+      state=$(/usr/sbin/iw dev wlan0 get power_save 2>/dev/null || true)
       if [ -n "$state" ]; then
         echo "- wlan0 power_save: $state"
       else
@@ -32,5 +40,8 @@ module_wifi_stability_plan() {
 
   echo "- risk: Wi-Fi power save can make idle Raspberry Pi nodes unreachable"
   echo "- apply V1: sudo iw dev wlan0 set power_save off"
-  echo "- persistence after reboot: TODO, no systemd unit yet"
+  echo "- persistence V1: systemd oneshot service"
+  echo "- service: /etc/systemd/system/seed-kit-wifi-stability.service"
+  echo "- no reboot and no network service restart"
+  echo "- rollback: disable and remove the seed-kit-wifi-stability service"
 }

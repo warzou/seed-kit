@@ -583,8 +583,28 @@ is_raspberry_pi() {
   return 1
 }
 
+wifi_stability_iw_cmd() {
+  if command -v iw >/dev/null 2>&1; then
+    command -v iw
+    return 0
+  fi
+
+  if [ -x /usr/sbin/iw ]; then
+    echo "/usr/sbin/iw"
+    return 0
+  fi
+
+  return 1
+}
+
 wifi_stability_power_save_state() {
-  iw dev wlan0 get power_save 2>/dev/null || return 1
+  iw_cmd=$(wifi_stability_iw_cmd) || return 1
+  "$iw_cmd" dev wlan0 get power_save 2>/dev/null || return 1
+}
+
+wifi_stability_service_enabled() {
+  command -v systemctl >/dev/null 2>&1 &&
+    systemctl is-enabled seed-kit-wifi-stability.service >/dev/null 2>&1
 }
 
 apply_module_wifi_stability() {
@@ -600,7 +620,8 @@ apply_module_wifi_stability() {
     return 0
   fi
 
-  if ! command -v iw >/dev/null 2>&1; then
+  iw_cmd=$(wifi_stability_iw_cmd || true)
+  if [ -z "$iw_cmd" ]; then
     echo "[wifi-stability] iw is required to inspect or change Wi-Fi power save." >&2
     return 2
   fi
@@ -614,10 +635,10 @@ apply_module_wifi_stability() {
   ui_line "[wifi-stability] current: $current_state"
   case "$current_state" in
     *": off"|*" off")
-      apply_skip "wlan0 power_save already off"
-      return 0
+      apply_skip "wlan0 power_save already off for current boot"
       ;;
     *": on"|*" on")
+      needs_current_boot_change=1
       ;;
     *)
       echo "[wifi-stability] unknown power_save state: $current_state" >&2
@@ -625,9 +646,20 @@ apply_module_wifi_stability() {
       ;;
   esac
 
+  if [ "${needs_current_boot_change:-0}" -eq 0 ] && wifi_stability_service_enabled; then
+    apply_skip "wifi-stability systemd service already enabled"
+    return 0
+  fi
+
+  if ! command -v systemctl >/dev/null 2>&1; then
+    echo "[wifi-stability] systemctl is required for persistent V1 service." >&2
+    return 2
+  fi
+
   ui_line "Wi-Fi power save may make idle Raspberry Pi nodes unreachable."
-  ui_line "This V1 action disables wlan0 power_save for the current boot only."
-  ui_line "Persistence after reboot is TODO."
+  ui_line "This action disables wlan0 power_save now when needed."
+  ui_line "It also installs a small systemd oneshot for persistence after reboot."
+  ui_line "No reboot or network restart will be performed."
 
   if ! apply_safe_confirm; then
     return 2
@@ -643,10 +675,12 @@ apply_module_wifi_stability() {
     SUDO=sudo
   fi
 
-  apply_step "wifi-stability: disable wlan0 power_save"
-  if ! $SUDO iw dev wlan0 set power_save off; then
-    echo "[wifi-stability] failed to disable wlan0 power_save" >&2
-    return 3
+  if [ "${needs_current_boot_change:-0}" -eq 1 ]; then
+    apply_step "wifi-stability: disable wlan0 power_save for current boot"
+    if ! $SUDO "$iw_cmd" dev wlan0 set power_save off; then
+      echo "[wifi-stability] failed to disable wlan0 power_save" >&2
+      return 3
+    fi
   fi
 
   verify_state=$(wifi_stability_power_save_state || true)
@@ -654,14 +688,61 @@ apply_module_wifi_stability() {
   case "$verify_state" in
     *": off"|*" off")
       apply_step "wifi-stability: wlan0 power_save off"
-      ui_line "Persistence after reboot is not configured yet."
-      return 0
       ;;
     *)
       echo "[wifi-stability] verification failed: wlan0 power_save is not off" >&2
       return 4
       ;;
   esac
+
+  service_tmp="${TMPDIR:-/tmp}/seed-kit-wifi-stability.service.$$"
+  cat > "$service_tmp" <<'EOF'
+[Unit]
+Description=Seed-Kit Wi-Fi stability guard
+Wants=sys-subsystem-net-devices-wlan0.device
+After=sys-subsystem-net-devices-wlan0.device
+ConditionPathExists=/sys/class/net/wlan0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/iw dev wlan0 set power_save off
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  apply_step "wifi-stability: install systemd oneshot service"
+  if ! $SUDO cp "$service_tmp" /etc/systemd/system/seed-kit-wifi-stability.service; then
+    rm -f "$service_tmp"
+    echo "[wifi-stability] failed to install systemd service" >&2
+    return 5
+  fi
+  rm -f "$service_tmp"
+
+  apply_step "wifi-stability: reload systemd"
+  if ! $SUDO systemctl daemon-reload; then
+    echo "[wifi-stability] systemctl daemon-reload failed" >&2
+    return 6
+  fi
+
+  apply_step "wifi-stability: enable service for next boot"
+  if ! $SUDO systemctl enable seed-kit-wifi-stability.service; then
+    echo "[wifi-stability] failed to enable systemd service" >&2
+    return 7
+  fi
+
+  if wifi_stability_service_enabled; then
+    apply_step "wifi-stability: persistent service enabled"
+    ui_line "Rollback:"
+    ui_line "  sudo systemctl disable seed-kit-wifi-stability.service"
+    ui_line "  sudo rm /etc/systemd/system/seed-kit-wifi-stability.service"
+    ui_line "  sudo systemctl daemon-reload"
+    return 0
+  fi
+
+  echo "[wifi-stability] service enable verification failed" >&2
+  return 8
 }
 
 tailscale_repo_distro() {

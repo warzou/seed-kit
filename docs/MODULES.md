@@ -63,7 +63,17 @@ Docker is optional. Tailscale, Wi-Fi stability, Cloudflared, Caddy, and Homer ar
 
 Tailscale apply scope is install-only: no `tailscale up`, no auth keys, no stored secrets, and no automatic tailnet join.
 
-Wi-Fi stability V1 is Raspberry Pi only. It can disable `wlan0` power save for the current boot with `sudo iw dev wlan0 set power_save off` after SAFE confirmation. Reboot persistence is TODO.
+Wi-Fi stability V1 is Raspberry Pi only. It can disable `wlan0` power save for the current boot with `sudo iw dev wlan0 set power_save off` after SAFE confirmation.
+
+It can also persist that setting with a small systemd oneshot service at `/etc/systemd/system/seed-kit-wifi-stability.service`. It does not reboot, restart NetworkManager, restart dhcpcd, or restart networking.
+
+Manual rollback:
+
+```sh
+sudo systemctl disable seed-kit-wifi-stability.service
+sudo rm /etc/systemd/system/seed-kit-wifi-stability.service
+sudo systemctl daemon-reload
+```
 
 Cloudflared apply scope is install-only: no Cloudflare login, no tunnel creation, no tunnel service install, no token, and no stored credentials.
 
