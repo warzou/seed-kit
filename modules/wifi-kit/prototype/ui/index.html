@@ -6,46 +6,73 @@
   <title>wifi-kit - assistant Wi-Fi SAFE</title>
   <style>
     :root {
-      --bg: #f4f0e8;
-      --ink: #192019;
-      --muted: #667064;
-      --line: #d9d0c1;
+      --bg: #f3efe5;
+      --ink: #172018;
+      --muted: #687263;
+      --line: #ded3bf;
       --panel: #fffdf8;
+      --panel-2: #f9f4ea;
       --safe: #146c43;
+      --safe-deep: #0f4f32;
       --safe-2: #dff3e5;
+      --safe-3: #effaf2;
       --warn-2: #fff3d5;
-      --disabled: #eef0ea;
+      --disabled: #edf0e7;
       --code: #111713;
-      --shadow: 0 18px 50px rgba(51, 44, 32, 0.13);
+      --shadow: 0 20px 60px rgba(51, 44, 32, 0.14);
+      --shadow-soft: 0 10px 30px rgba(51, 44, 32, 0.09);
+      --radius-xl: 30px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
     }
 
     * { box-sizing: border-box; }
 
     body {
+      min-height: 100vh;
       margin: 0;
-      background: radial-gradient(circle at top left, rgba(20, 108, 67, 0.14), transparent 30rem), linear-gradient(180deg, #fbf8f1 0%, var(--bg) 100%);
+      background:
+        radial-gradient(circle at 12% 4%, rgba(20, 108, 67, 0.22), transparent 18rem),
+        radial-gradient(circle at 92% 0%, rgba(224, 188, 116, 0.28), transparent 20rem),
+        linear-gradient(180deg, #fffaf0 0%, var(--bg) 52%, #ebe4d5 100%);
       color: var(--ink);
-      font-family: ui-sans-serif, "Segoe UI", Verdana, sans-serif;
+      font-family: "Trebuchet MS", "Segoe UI", Verdana, sans-serif;
       line-height: 1.45;
     }
 
     button, input { font: inherit; }
 
     .shell {
-      width: min(980px, 100%);
+      width: min(1040px, 100%);
       margin: 0 auto;
-      padding: 18px 14px 34px;
+      padding: 16px 12px 34px;
     }
 
     .hero {
+      position: relative;
       display: grid;
       gap: 18px;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
+      overflow: hidden;
       border: 1px solid rgba(20, 108, 67, 0.18);
-      border-radius: 28px;
-      background: rgba(255, 253, 248, 0.86);
+      border-radius: var(--radius-xl);
+      background:
+        linear-gradient(135deg, rgba(255, 253, 248, 0.94), rgba(239, 250, 242, 0.9)),
+        radial-gradient(circle at top right, rgba(20, 108, 67, 0.18), transparent 18rem);
       box-shadow: var(--shadow);
-      padding: 22px;
+      padding: 24px;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -54px;
+      top: -54px;
+      width: 150px;
+      height: 150px;
+      border-radius: 999px;
+      background: rgba(20, 108, 67, 0.1);
+      pointer-events: none;
     }
 
     .eyebrow {
@@ -60,10 +87,11 @@
     h1, h2, h3, p { margin-top: 0; }
 
     h1 {
-      margin-bottom: 10px;
-      font-size: clamp(2rem, 10vw, 4.8rem);
-      line-height: 0.92;
-      letter-spacing: -0.07em;
+      margin-bottom: 12px;
+      max-width: 8ch;
+      font-size: clamp(2.4rem, 13vw, 5.2rem);
+      line-height: 0.86;
+      letter-spacing: -0.08em;
     }
 
     h2 {
@@ -81,8 +109,22 @@
     .lead {
       margin-bottom: 0;
       color: var(--muted);
-      max-width: 58ch;
-      font-size: 1.02rem;
+      max-width: 56ch;
+      font-size: 1.04rem;
+    }
+
+    .hero-note {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      margin-bottom: 16px;
+      border: 1px solid rgba(20, 108, 67, 0.18);
+      border-radius: 999px;
+      background: rgba(255, 253, 248, 0.8);
+      padding: 7px 11px;
+      color: var(--safe-deep);
+      font-size: 0.86rem;
+      font-weight: 900;
     }
 
     .hero-actions, .network-meta {
@@ -112,18 +154,26 @@
     }
 
     .button {
-      min-height: 42px;
+      min-height: 44px;
       border: 1px solid var(--safe);
       border-radius: 999px;
-      background: var(--safe);
+      background: linear-gradient(180deg, #1b7d4f, var(--safe-deep));
+      box-shadow: 0 10px 20px rgba(20, 108, 67, 0.2);
       color: #fff;
-      padding: 8px 16px;
-      font-weight: 800;
+      padding: 9px 17px;
+      font-weight: 900;
       cursor: pointer;
+      transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+    }
+
+    .button:not(:disabled):hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 26px rgba(20, 108, 67, 0.24);
     }
 
     .button.secondary {
       background: #fffdf8;
+      box-shadow: none;
       color: var(--safe);
     }
 
@@ -136,10 +186,17 @@
 
     .status-card, section, details {
       border: 1px solid var(--line);
-      border-radius: 22px;
-      background: var(--panel);
-      padding: 16px;
+      border-radius: var(--radius-lg);
+      background: rgba(255, 253, 248, 0.92);
+      box-shadow: var(--shadow-soft);
+      padding: 17px;
       min-width: 0;
+    }
+
+    .status-card {
+      position: relative;
+      z-index: 1;
+      background: linear-gradient(180deg, #fffdf8, #f3faef);
     }
 
     .status-line {
@@ -158,23 +215,27 @@
       gap: 14px;
     }
 
-    .main-card { border-color: rgba(20, 108, 67, 0.28); }
+    .main-card {
+      border-color: rgba(20, 108, 67, 0.28);
+      background: linear-gradient(180deg, #fffdf8, #fff8ed);
+    }
 
     .network-list {
       display: grid;
-      gap: 10px;
+      gap: 12px;
     }
 
     .network {
+      position: relative;
       display: grid;
       grid-template-columns: minmax(0, 1fr);
       gap: 12px;
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: #fffaf2;
-      padding: 14px;
+      border: 1px solid rgba(222, 211, 191, 0.9);
+      border-radius: 22px;
+      background: linear-gradient(180deg, #fffdf8, #fff7eb);
+      padding: 15px;
       text-align: left;
-      transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+      transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, background 160ms ease;
     }
 
     .network.selectable {
@@ -184,12 +245,43 @@
     .network.selectable:hover,
     .network.selected {
       border-color: rgba(20, 108, 67, 0.72);
-      box-shadow: 0 10px 24px rgba(20, 108, 67, 0.12);
+      box-shadow: 0 14px 32px rgba(20, 108, 67, 0.16);
       transform: translateY(-1px);
     }
 
     .network.selected {
-      background: #f2fbf0;
+      background: linear-gradient(180deg, #f2fbf0, #fffdf8);
+    }
+
+    .network-heading {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+
+    .network-title-wrap {
+      min-width: 0;
+    }
+
+    .choice-dot {
+      display: inline-grid;
+      flex: 0 0 auto;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border: 2px solid #c7d3c2;
+      border-radius: 999px;
+      background: #fffdf8;
+      color: transparent;
+      font-size: 0.82rem;
+      font-weight: 900;
+    }
+
+    .network.selected .choice-dot {
+      border-color: var(--safe);
+      background: var(--safe);
+      color: #fff;
     }
 
     .network-meta { margin-top: 8px; }
@@ -211,9 +303,10 @@
 
     .signal-bars span {
       display: block;
-      width: 7px;
+      width: 8px;
       border-radius: 999px;
-      background: #d8d0c0;
+      background: #ddd5c7;
+      box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.06);
     }
 
     .signal-bars span:nth-child(1) { height: 8px; }
@@ -225,7 +318,7 @@
     .signal-bars[data-level="2"] span:nth-child(-n+2),
     .signal-bars[data-level="3"] span:nth-child(-n+3),
     .signal-bars[data-level="4"] span:nth-child(-n+4) {
-      background: var(--safe);
+      background: linear-gradient(180deg, #43b773, var(--safe));
     }
 
     .signal-quality {
@@ -245,6 +338,7 @@
     .network-action {
       display: grid;
       gap: 8px;
+      align-content: center;
     }
 
     .password-mock,
@@ -262,6 +356,13 @@
       border-style: solid;
       background: #fffdf8;
       color: var(--ink);
+      outline: none;
+      transition: border-color 140ms ease, box-shadow 140ms ease;
+    }
+
+    .password-local:not(:disabled):focus {
+      border-color: var(--safe);
+      box-shadow: 0 0 0 4px rgba(20, 108, 67, 0.12);
     }
 
     .field-label {
@@ -275,6 +376,7 @@
 
     .prepare-card {
       border-color: rgba(20, 108, 67, 0.28);
+      background: linear-gradient(180deg, #f7fcf5, #fffdf8);
     }
 
     .selected-summary {
@@ -287,9 +389,9 @@
       gap: 8px;
       margin-top: 12px;
       border: 1px solid #a7d7b4;
-      border-radius: 18px;
-      background: var(--safe-2);
-      padding: 13px;
+      border-radius: 20px;
+      background: linear-gradient(180deg, var(--safe-2), #f7fff8);
+      padding: 14px;
     }
 
     .prepare-plan[hidden] { display: none; }
@@ -355,7 +457,11 @@
       font-size: 0.95rem;
     }
 
-    details { background: #fbf9f4; }
+    details {
+      background: rgba(251, 249, 244, 0.72);
+      box-shadow: none;
+      opacity: 0.88;
+    }
 
     summary {
       cursor: pointer;
@@ -399,9 +505,10 @@
   <main class="shell">
     <header class="hero">
       <div>
+        <p class="hero-note">Prototype terrain valide - lecture seule</p>
         <p class="eyebrow">Assistant Wi-Fi SAFE</p>
         <h1>Choisir un Wi-Fi</h1>
-        <p class="lead">Cette page aide &agrave; pr&eacute;parer une connexion sans rien changer. Aucun mot de passe n'est envoy&eacute;, aucun r&eacute;seau n'est modifi&eacute;.</p>
+        <p class="lead">Selectionne un reseau, prepare le plan, garde le node joignable. Aucun mot de passe n'est envoye, aucun reseau n'est modifie.</p>
       </div>
       <div class="status-card" aria-labelledby="connection-title">
         <p class="eyebrow">Connexion actuelle</p>
@@ -448,7 +555,7 @@
           <div class="metric"><span>Secrets</span><strong id="secret-policy">non collectes</strong></div>
           <div class="metric"><span>Action</span><strong>aucune</strong></div>
         </div>
-        <p class="empty" style="margin-top: 12px;">Le bouton de connexion reste volontairement desactive tant que connect-safe reel n'est pas valide.</p>
+        <p class="empty" style="margin-top: 12px;">Ici, tout est volontairement inoffensif: on prepare un plan, on ne touche pas au Wi-Fi.</p>
       </section>
 
       <details class="advanced">
@@ -742,9 +849,16 @@
         row.className = 'network selectable';
 
         const text = document.createElement('div');
+        const heading = document.createElement('div');
+        const titleWrap = document.createElement('div');
         const title = document.createElement('h3');
+        const dot = document.createElement('span');
         const meta = document.createElement('div');
         const ssid = displaySsid(network);
+        heading.className = 'network-heading';
+        titleWrap.className = 'network-title-wrap';
+        dot.className = 'choice-dot';
+        dot.textContent = 'OK';
         title.textContent = ssid;
         meta.className = 'network-meta';
         [
@@ -756,7 +870,9 @@
           badge.textContent = label;
           meta.appendChild(badge);
         });
-        text.append(title, signalWidget(network.signal), meta);
+        titleWrap.append(title, signalWidget(network.signal));
+        heading.append(titleWrap, dot);
+        text.append(heading, meta);
 
         const actionWrap = document.createElement('div');
         actionWrap.className = 'network-action';
