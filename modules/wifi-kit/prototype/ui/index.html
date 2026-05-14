@@ -6,27 +6,25 @@
   <title>Wifi-Kit - Seed-Kit</title>
   <style>
     :root {
-      --bg: #07101a;
-      --bg-soft: #0d1825;
-      --panel: rgba(18, 29, 43, 0.82);
-      --panel-strong: rgba(24, 38, 56, 0.92);
-      --card: rgba(21, 34, 49, 0.86);
-      --card-soft: rgba(255, 255, 255, 0.055);
+      --bg: #07111c;
+      --bg-2: #0d1927;
+      --surface: rgba(18, 30, 45, 0.74);
+      --surface-strong: rgba(23, 37, 55, 0.92);
+      --surface-soft: rgba(255, 255, 255, 0.055);
       --ink: #f7f9ff;
-      --muted: #a8b4c7;
-      --dim: #738199;
+      --muted: #a9b5c8;
+      --dim: #74839b;
       --line: rgba(213, 229, 255, 0.12);
-      --line-strong: rgba(61, 154, 255, 0.62);
-      --blue: #2f91ff;
-      --cyan: #45d4e8;
-      --violet: #8d7dff;
-      --green: #57dd5b;
-      --orange: #ffb33d;
-      --red: #ff5148;
-      --safe: #60e793;
+      --line-hot: rgba(48, 151, 255, 0.72);
+      --blue: #2d95ff;
+      --cyan: #44d4e6;
+      --violet: #8274ff;
+      --green: #53dc62;
+      --orange: #ffb13d;
+      --red: #ff554d;
       --code: #050b12;
-      --shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
-      --glow-blue: 0 16px 48px rgba(47, 145, 255, 0.22);
+      --shadow: 0 22px 64px rgba(0, 0, 0, 0.42);
+      --glow: 0 18px 48px rgba(45, 149, 255, 0.22);
       --radius-xl: 28px;
       --radius-lg: 22px;
       --radius-md: 16px;
@@ -38,8 +36,8 @@
       min-height: 100vh;
       margin: 0;
       background:
-        radial-gradient(circle at 16% -8%, rgba(47, 145, 255, 0.22), transparent 17rem),
-        radial-gradient(circle at 92% 2%, rgba(69, 212, 232, 0.13), transparent 18rem),
+        radial-gradient(circle at 12% -6%, rgba(45, 149, 255, 0.24), transparent 16rem),
+        radial-gradient(circle at 92% 4%, rgba(68, 212, 230, 0.12), transparent 18rem),
         linear-gradient(180deg, #050b12 0%, var(--bg) 58%, #0b1420 100%);
       color: var(--ink);
       font-family: "Aptos", "Segoe UI", Verdana, sans-serif;
@@ -51,34 +49,23 @@
     .shell {
       width: min(720px, 100%);
       margin: 0 auto;
-      padding: 16px 14px 30px;
+      padding: 18px 14px 30px;
     }
 
     .app {
       display: grid;
-      gap: 13px;
-    }
-
-    .hero,
-    .panel,
-    details {
-      border: 1px solid var(--line);
-      border-radius: var(--radius-xl);
-      background:
-        linear-gradient(180deg, var(--panel-strong), rgba(11, 20, 32, 0.9)),
-        radial-gradient(circle at top left, rgba(47, 145, 255, 0.12), transparent 16rem);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(18px);
+      gap: 14px;
     }
 
     .hero {
-      overflow: hidden;
-      padding: 18px;
+      display: grid;
+      gap: 13px;
+      padding: 4px 4px 2px;
     }
 
     .hero-top {
       display: flex;
-      gap: 14px;
+      gap: 12px;
       align-items: center;
       justify-content: space-between;
     }
@@ -90,33 +77,33 @@
       min-width: 0;
     }
 
-    .wifi-mark,
-    .wifi-orb {
+    .orb,
+    .network-orb,
+    .status-icon,
+    .safe-icon {
       display: grid;
       place-items: center;
       flex: 0 0 auto;
       border-radius: 999px;
       color: #fff;
       font-weight: 950;
+      letter-spacing: -0.08em;
     }
 
-    .wifi-mark {
-      width: 44px;
-      height: 44px;
-      background: linear-gradient(145deg, var(--blue), #0f63d8);
-      box-shadow: 0 14px 34px rgba(47, 145, 255, 0.34);
-      font-size: 1.2rem;
+    .orb {
+      width: 46px;
+      height: 46px;
+      background: linear-gradient(145deg, #4d8dff, #6558f5);
+      box-shadow: 0 14px 34px rgba(45, 149, 255, 0.28);
+      font-size: 1.05rem;
     }
 
-    .wifi-mark::before,
-    .wifi-orb::before {
-      content: "Wi";
-      letter-spacing: -0.12em;
-    }
+    .orb::before,
+    .network-orb::before { content: "Wi"; }
 
     .crumb {
-      margin: 0 0 3px;
-      color: var(--muted);
+      margin: 0 0 2px;
+      color: #7eb9ff;
       font-size: 0.82rem;
       font-weight: 800;
     }
@@ -125,14 +112,14 @@
 
     h1 {
       margin: 0;
-      font-size: clamp(2rem, 12vw, 3.3rem);
-      line-height: 0.94;
-      letter-spacing: -0.07em;
+      font-size: clamp(2.15rem, 12vw, 3.4rem);
+      line-height: 0.92;
+      letter-spacing: -0.075em;
     }
 
     h2 {
-      margin-bottom: 8px;
-      font-size: 1rem;
+      margin-bottom: 4px;
+      font-size: 1.03rem;
       letter-spacing: -0.02em;
     }
 
@@ -140,68 +127,66 @@
       margin: 0;
       overflow-wrap: anywhere;
       font-size: 1.08rem;
-      line-height: 1.15;
+      line-height: 1.16;
     }
 
     .lead {
-      margin: 12px 0 0;
+      margin: 0;
       max-width: 40ch;
       color: var(--muted);
-      font-size: 0.94rem;
+      font-size: 0.96rem;
     }
 
-    .read-only-chip,
+    .chip,
     .badge {
       display: inline-flex;
       align-items: center;
       width: fit-content;
-      min-height: 28px;
-      border: 1px solid rgba(69, 212, 232, 0.24);
+      min-height: 26px;
+      border: 1px solid rgba(68, 212, 230, 0.24);
       border-radius: 999px;
-      background: rgba(69, 212, 232, 0.08);
+      background: rgba(68, 212, 230, 0.08);
       color: #bdefff;
-      padding: 5px 10px;
-      font-size: 0.74rem;
+      padding: 4px 10px;
+      font-size: 0.73rem;
       font-weight: 900;
       white-space: nowrap;
     }
 
-    .button {
-      min-height: 44px;
-      border: 1px solid rgba(111, 205, 255, 0.42);
-      border-radius: 16px;
-      background: linear-gradient(135deg, #4d72ff, #39d3c9);
-      box-shadow: 0 16px 32px rgba(47, 145, 255, 0.24);
-      color: #f8fbff;
-      padding: 10px 16px;
-      font-weight: 950;
-      cursor: pointer;
-      transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
-    }
-
-    .button:not(:disabled):hover {
-      transform: translateY(-1px);
-      box-shadow: 0 20px 40px rgba(47, 145, 255, 0.28);
-    }
-
-    .button:disabled {
-      border-color: rgba(255, 255, 255, 0.1);
-      background: rgba(255, 255, 255, 0.08);
-      box-shadow: none;
-      color: var(--dim);
-      cursor: default;
-    }
-
     .panel,
-    details { padding: 14px; }
+    details {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      background:
+        linear-gradient(180deg, var(--surface-strong), rgba(11, 20, 32, 0.88)),
+        radial-gradient(circle at top left, rgba(45, 149, 255, 0.1), transparent 15rem);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
 
-    .info-grid {
+    .panel { padding: 14px; }
+
+    .overview {
+      display: grid;
+      gap: 12px;
+    }
+
+    .overview-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
     }
 
-    .info-card,
+    .overview-safe {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+
+    .status-mini,
+    .safe-mini,
     .metric {
       min-width: 0;
       border: 1px solid var(--line);
@@ -210,10 +195,38 @@
       padding: 10px;
     }
 
-    .info-card span,
-    .metric span {
+    .status-mini {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+    }
+
+    .safe-mini {
+      display: grid;
+      justify-items: center;
+      gap: 6px;
+      text-align: center;
+    }
+
+    .status-icon,
+    .safe-icon {
+      width: 32px;
+      height: 32px;
+      background: rgba(45, 149, 255, 0.13);
+      color: var(--blue);
+      font-size: 0.75rem;
+    }
+
+    .safe-icon.safe { background: rgba(83, 220, 98, 0.12); color: var(--green); }
+    .safe-icon.lock { background: rgba(255, 177, 61, 0.12); color: var(--orange); }
+    .safe-icon.mute { background: rgba(130, 116, 255, 0.13); color: var(--violet); }
+    .safe-icon.gear { background: rgba(68, 212, 230, 0.11); color: var(--cyan); }
+
+    .status-mini span,
+    .metric span,
+    .safe-mini span {
       display: block;
-      margin-bottom: 4px;
       color: var(--dim);
       font-size: 0.66rem;
       font-weight: 950;
@@ -221,13 +234,16 @@
       text-transform: uppercase;
     }
 
-    .info-card strong,
-    .metric strong {
+    .status-mini strong,
+    .metric strong,
+    .safe-mini strong {
       display: block;
       overflow-wrap: anywhere;
       color: var(--ink);
-      font-size: 0.9rem;
+      font-size: 0.86rem;
     }
+
+    .safe-mini strong { font-size: 0.78rem; }
 
     .section-head {
       display: flex;
@@ -246,9 +262,32 @@
       font-size: 0.9rem;
     }
 
-    .scan-status {
-      margin-top: 4px;
-      color: #c9d4e5;
+    .scan-status { margin-top: 4px; color: #cbd7e8; }
+
+    .button {
+      min-height: 42px;
+      border: 1px solid rgba(111, 205, 255, 0.42);
+      border-radius: 16px;
+      background: linear-gradient(135deg, #4f72ff, #38d0c8);
+      box-shadow: 0 16px 32px rgba(45, 149, 255, 0.22);
+      color: #f8fbff;
+      padding: 9px 15px;
+      font-weight: 950;
+      cursor: pointer;
+      transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+    }
+
+    .button:not(:disabled):hover {
+      transform: translateY(-1px);
+      box-shadow: 0 20px 40px rgba(45, 149, 255, 0.28);
+    }
+
+    .button:disabled {
+      border-color: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: none;
+      color: var(--dim);
+      cursor: default;
     }
 
     .network-list {
@@ -262,9 +301,8 @@
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 22px;
-      background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.068), rgba(255, 255, 255, 0.038));
-      padding: 13px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.035));
+      padding: 12px;
       text-align: left;
       transition: border-color 190ms ease, background 190ms ease, transform 190ms ease, box-shadow 190ms ease;
     }
@@ -273,15 +311,12 @@
 
     .network.selectable:hover,
     .network.selected {
-      border-color: var(--line-strong);
-      background:
-        linear-gradient(180deg, rgba(60, 135, 255, 0.14), rgba(30, 48, 72, 0.72));
+      border-color: var(--line-hot);
+      background: linear-gradient(180deg, rgba(45, 149, 255, 0.14), rgba(19, 35, 53, 0.78));
       transform: translateY(-1px);
     }
 
-    .network.selected {
-      box-shadow: inset 0 0 0 1px rgba(57, 159, 255, 0.38), var(--glow-blue);
-    }
+    .network.selected { box-shadow: inset 0 0 0 1px rgba(45, 149, 255, 0.36), var(--glow); }
 
     .network-main {
       display: grid;
@@ -290,18 +325,18 @@
       align-items: center;
     }
 
-    .wifi-orb {
-      width: 52px;
-      height: 52px;
+    .network-orb {
+      width: 50px;
+      height: 50px;
       background: linear-gradient(145deg, var(--blue), #0e65d8);
-      box-shadow: 0 14px 28px rgba(47, 145, 255, 0.22);
-      font-size: 1rem;
+      box-shadow: 0 14px 28px rgba(45, 149, 255, 0.22);
+      font-size: 0.98rem;
     }
 
-    .wifi-orb.good { background: linear-gradient(145deg, #54ca55, #218b30); }
-    .wifi-orb.mid { background: linear-gradient(145deg, #ffbc42, #d88413); }
-    .wifi-orb.low { background: linear-gradient(145deg, #2c9af1, #205fba); }
-    .wifi-orb.bad { background: linear-gradient(145deg, #8e6cff, #5941c6); }
+    .network-orb.good { background: linear-gradient(145deg, #58cd55, #218a2f); }
+    .network-orb.mid { background: linear-gradient(145deg, #ffbc42, #d88613); }
+    .network-orb.low { background: linear-gradient(145deg, #2c9af1, #205fba); }
+    .network-orb.bad { background: linear-gradient(145deg, #e3443e, #922523); }
 
     .network-text { min-width: 0; }
 
@@ -317,10 +352,12 @@
       min-height: 23px;
       border-color: rgba(255, 255, 255, 0.1);
       background: rgba(255, 255, 255, 0.055);
-      color: var(--soft);
+      color: var(--ink);
       padding: 4px 8px;
       font-size: 0.71rem;
     }
+
+    .badge.quality { color: var(--quality-color, var(--blue)); border-color: rgba(255, 255, 255, 0.16); }
 
     .choice-dot {
       display: inline-grid;
@@ -337,19 +374,13 @@
     .network.selected .choice-dot {
       border-color: var(--cyan);
       background: linear-gradient(180deg, var(--cyan), var(--blue));
-      color: #07101a;
+      color: #07111c;
     }
 
     .signal-cluster {
       display: grid;
       gap: 5px;
       justify-items: end;
-    }
-
-    .signal-row {
-      display: flex;
-      gap: 7px;
-      align-items: center;
     }
 
     .signal-bars {
@@ -395,10 +426,12 @@
     .field-label {
       display: grid;
       gap: 7px;
-      color: var(--soft);
-      font-size: 0.86rem;
+      color: var(--ink);
+      font-size: 0.92rem;
       font-weight: 900;
     }
+
+    .field-hint { color: var(--muted); font-weight: 500; }
 
     .password-local {
       width: 100%;
@@ -415,29 +448,39 @@
     .password-local::placeholder { color: rgba(245, 247, 251, 0.42); }
 
     .password-local:not(:disabled):focus {
-      border-color: rgba(69, 212, 232, 0.72);
-      box-shadow: 0 0 0 4px rgba(69, 212, 232, 0.12);
+      border-color: rgba(68, 212, 230, 0.72);
+      box-shadow: 0 0 0 4px rgba(68, 212, 230, 0.12);
     }
 
     .prepare-plan {
       display: grid;
       gap: 8px;
-      border: 1px solid rgba(69, 212, 232, 0.22);
+      border: 1px solid rgba(68, 212, 230, 0.22);
       border-radius: 18px;
-      background: rgba(69, 212, 232, 0.075);
+      background: rgba(68, 212, 230, 0.075);
       padding: 12px;
     }
 
     .prepare-plan[hidden] { display: none; }
 
-    .prepare-plan ul {
+    .safe-lines {
+      display: grid;
+      gap: 8px;
       margin: 0;
-      padding-left: 18px;
+      padding: 0;
+      list-style: none;
+    }
+
+    .safe-lines li {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
       color: var(--soft);
       font-size: 0.88rem;
     }
 
-    .prepare-plan li + li { margin-top: 4px; }
+    .check { color: var(--green); font-weight: 950; }
 
     .callout {
       margin-top: 10px;
@@ -458,7 +501,8 @@
 
     details {
       box-shadow: none;
-      opacity: 0.78;
+      opacity: 0.76;
+      padding: 14px;
     }
 
     summary {
@@ -489,7 +533,7 @@
       .shell { padding: 24px 18px 42px; }
       .app { grid-template-columns: 0.9fr 1.1fr; align-items: start; }
       .hero, .advanced { grid-column: 1 / -1; }
-      .info-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .overview-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     }
   </style>
 </head>
@@ -498,33 +542,33 @@
     <header class="hero">
       <div class="hero-top">
         <div class="brand-row">
-          <span class="wifi-mark" aria-hidden="true"></span>
+          <span class="orb" aria-hidden="true"></span>
           <div>
             <p class="crumb">Seed-Kit &gt; Wifi-Kit</p>
             <h1>Wifi-Kit</h1>
           </div>
         </div>
-        <span class="read-only-chip">Read-only</span>
+        <span class="chip">Read-only</span>
       </div>
       <p class="lead">Pr&eacute;pare une connexion Wi-Fi sans modifier le Raspberry Pi.</p>
     </header>
 
-    <section class="panel" aria-labelledby="state-title">
-      <div class="section-head">
-        <div>
-          <h2 id="state-title">Etat actuel</h2>
-          <p class="section-copy">Informations sans interaction. Rien n'est modifi&eacute;.</p>
-        </div>
+    <section class="panel overview" aria-labelledby="state-title">
+      <div>
+        <h2 id="state-title">Apercu du node</h2>
+        <p class="section-copy">Informations sans interaction. Aucun changement systeme.</p>
       </div>
-      <div class="info-grid" aria-label="Etat actuel du node">
-        <div class="info-card"><span>Interface</span><strong id="status-interface">...</strong></div>
-        <div class="info-card"><span>Adresse IP</span><strong id="status-ip">...</strong></div>
-        <div class="info-card"><span>Reseau actuel</span><strong id="status-ssid">...</strong></div>
-        <div class="info-card"><span>Scan</span><strong id="status-backend">...</strong></div>
+      <div class="overview-grid" aria-label="Etat actuel du node">
+        <div class="status-mini"><span class="status-icon">IF</span><div><span>Interface</span><strong id="status-interface">...</strong></div></div>
+        <div class="status-mini"><span class="status-icon">IP</span><div><span>Adresse IP</span><strong id="status-ip">...</strong></div></div>
+        <div class="status-mini"><span class="status-icon">BK</span><div><span>Backend</span><strong id="status-backend">...</strong></div></div>
+        <div class="status-mini"><span class="status-icon">NW</span><div><span>Reseau actuel</span><strong id="status-ssid">...</strong></div></div>
       </div>
-      <div class="mini-grid">
-        <div class="metric"><span>Connexion reelle</span><strong id="real-apply">desactivee</strong></div>
-        <div class="metric"><span>Secrets</span><strong id="secret-policy">non collectes</strong></div>
+      <div class="overview-safe">
+        <div class="safe-mini"><span class="safe-icon safe">SH</span><strong>SAFE</strong><span>Lecture seule</span></div>
+        <div class="safe-mini"><span class="safe-icon lock">LK</span><strong>Secrets</strong><span id="secret-policy">non collectes</span></div>
+        <div class="safe-mini"><span class="safe-icon mute">NW</span><strong>Reseau</strong><span id="real-apply">desactive</span></div>
+        <div class="safe-mini"><span class="safe-icon gear">SY</span><strong>Systeme</strong><span>Aucun impact</span></div>
       </div>
     </section>
 
@@ -628,14 +672,14 @@
     }
 
     function describeConnection() {
-      const ssid = value(data.diagnose, 'current_ssid_state');
       const ip = value(data.diagnose, 'current_ip');
       const iface = value(data.diagnose, 'interface');
+      const ssid = value(data.diagnose, 'current_ssid_state');
       const backend = data.scan?.backend || value(data.diagnose, 'backend');
       document.getElementById('status-interface').textContent = iface;
       document.getElementById('status-ip').textContent = ip;
-      document.getElementById('status-ssid').textContent = ssid === 'unknown' || ssid === 'inconnu' ? 'non determine' : ssid;
       document.getElementById('status-backend').textContent = backend || 'inconnu';
+      document.getElementById('status-ssid').textContent = ssid;
     }
 
     function describeScanBackend(scan) {
@@ -706,13 +750,9 @@
       const prep = document.createElement('div');
       prep.className = 'network-prep';
 
-      const summary = document.createElement('p');
-      summary.className = 'prep-summary';
-      summary.textContent = 'Mot de passe local uniquement. Aucun envoi serveur.';
-
       const passwordLabel = document.createElement('label');
       passwordLabel.className = 'field-label';
-      passwordLabel.textContent = 'Preparer la connexion';
+      passwordLabel.innerHTML = 'Preparer la connexion <span class="field-hint">(local uniquement)</span>';
       const password = document.createElement('input');
       password.className = 'password-local';
       password.type = 'password';
@@ -725,6 +765,10 @@
       button.className = 'button';
       button.textContent = 'Preparer';
 
+      const summary = document.createElement('p');
+      summary.className = 'prep-summary';
+      summary.textContent = 'Aucune connexion reelle. Simulation locale SAFE.';
+
       const plan = document.createElement('div');
       plan.className = 'prepare-plan';
       plan.hidden = true;
@@ -736,7 +780,7 @@
       password.addEventListener('click', (event) => event.stopPropagation());
       password.addEventListener('keydown', (event) => event.stopPropagation());
 
-      prep.append(summary, passwordLabel, button, plan);
+      prep.append(passwordLabel, button, summary, plan);
       return prep;
     }
 
@@ -745,16 +789,21 @@
       const title = document.createElement('strong');
       title.textContent = 'Plan SAFE';
       const list = document.createElement('ul');
+      list.className = 'safe-lines';
       [
-        'snapshot actuel requis',
-        `reseau cible prepare: ${displaySsid(network)}`,
-        'mot de passe non envoye au serveur',
-        'tentative future controlee par connect-safe',
-        'rollback automatique prevu',
-        'validation SSH obligatoire'
-      ].forEach((item) => {
+        ['SH', 'Votre systeme reste intact'],
+        ['LK', 'Aucun secret transmis'],
+        ['NW', `Reseau cible prepare: ${displaySsid(network)}`],
+        ['SY', 'Rollback et validation SSH requis']
+      ].forEach(([icon, text]) => {
         const li = document.createElement('li');
-        li.textContent = item;
+        const badge = document.createElement('span');
+        const check = document.createElement('span');
+        badge.className = 'safe-icon safe';
+        badge.textContent = icon;
+        check.className = 'check';
+        check.textContent = 'OK';
+        li.append(badge, document.createTextNode(text), check);
         list.appendChild(li);
       });
       plan.append(title, list);
@@ -814,24 +863,26 @@
         const ssid = displaySsid(network);
 
         main.className = 'network-main';
-        orb.className = `wifi-orb ${quality.tone}`;
+        orb.className = `network-orb ${quality.tone}`;
         text.className = 'network-text';
         title.textContent = ssid;
         meta.className = 'network-sub';
         signal.className = 'signal-cluster';
         signalLabel.className = 'signal-quality';
         signalLabel.textContent = quality.dbm;
+        signalLabel.style.setProperty('--signal-color', quality.color);
         dot.className = 'choice-dot';
         dot.textContent = 'OK';
 
         [
-          network.security || 'securite inconnue',
-          `Canal ${network.channel || 'inconnu'}`,
-          quality.label
-        ].forEach((label) => {
+          [network.security || 'securite inconnue', ''],
+          [`Canal ${network.channel || 'inconnu'}`, ''],
+          [quality.label, 'quality']
+        ].forEach(([label, className]) => {
           const badge = document.createElement('span');
-          badge.className = 'badge';
+          badge.className = `badge ${className}`.trim();
           badge.textContent = label;
+          if (className) badge.style.setProperty('--quality-color', quality.color);
           meta.appendChild(badge);
         });
 
