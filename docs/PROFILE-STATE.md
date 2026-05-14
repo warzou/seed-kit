@@ -18,6 +18,23 @@ sh tools/profile-state.sh backup --dry-run
 
 V0 does not create archives, read secret contents, restore files, upload to cloud storage, or require sudo. It only explains the future boundary and lists candidate paths by existence.
 
+## Field test note: rpi-edge
+
+`profile-state inventory` was tested against the real `rpi-edge` shape.
+
+Observed and expected detections:
+
+- `~/git/rpi-edge-vps` is the main public project candidate.
+- `~/git/rpi-edge-vps/compose/docker-compose.yml` is the real Compose file.
+- `~/git/rpi-edge-vps/.env` is detected as sensitive.
+- Caddy Docker volumes are treated as encrypted backup candidates.
+- `/etc/machine-id` and host SSH keys are listed as `do-not-clone`.
+- no secret content is read.
+- no real backup archive is created.
+
+Tailscale remains manual: reconnect or re-authenticate deliberately on the
+replacement node instead of cloning full Tailscale identity.
+
 ## 1. Objectives
 
 - capture private reconstruction state that does not belong in public Git
