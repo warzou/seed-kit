@@ -277,6 +277,7 @@
     }
 
     .network.selected {
+      gap: 12px;
       box-shadow: inset 0 0 0 1px rgba(112, 224, 153, 0.35);
     }
 
@@ -397,8 +398,17 @@
       box-shadow: 0 0 0 4px rgba(112, 224, 153, 0.13);
     }
 
-    .prepare-card[hidden] {
-      display: none;
+    .network-prep {
+      display: grid;
+      gap: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 12px;
+    }
+
+    .prep-summary {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.88rem;
     }
 
     .prepare-plan {
@@ -513,18 +523,6 @@
       <div id="network-list" class="network-list"></div>
     </section>
 
-    <section id="prepare-card" class="panel prepare-card" aria-labelledby="prepare-title" hidden>
-      <p class="eyebrow">Etape 2</p>
-      <h2 id="prepare-title">Preparer la connexion</h2>
-      <p id="selected-summary" class="selected-summary">Choisis un reseau pour preparer un plan SAFE.</p>
-      <div id="selected-details" class="mini-grid"></div>
-      <label class="field-label" for="wifi-password-local">
-        Mot de passe Wi-Fi (local uniquement)
-        <input id="wifi-password-local" class="password-local" type="password" autocomplete="new-password" placeholder="Jamais envoye au serveur" disabled>
-      </label>
-      <button id="prepare-connection" type="button" class="button" disabled>Preparer la connexion</button>
-      <div id="prepare-plan" class="prepare-plan" hidden></div>
-    </section>
 
     <section class="panel" aria-labelledby="safe-title">
       <p class="eyebrow">Garanties</p>
@@ -719,53 +717,57 @@
       return network?.ssid_hidden ? 'Reseau masque' : (network?.ssid || 'Reseau masque');
     }
 
-    function selectNetwork(network, row) {
+    function selectNetwork(network) {
       selectedNetwork = network;
-      document.querySelectorAll('.network.selected').forEach((item) => item.classList.remove('selected'));
-      row?.classList.add('selected');
-      renderConnectionPrep(false);
+      renderNetworks();
     }
 
-    function renderConnectionPrep(showPlan) {
-      const card = document.getElementById('prepare-card');
-      const summary = document.getElementById('selected-summary');
-      const details = document.getElementById('selected-details');
-      const password = document.getElementById('wifi-password-local');
-      const button = document.getElementById('prepare-connection');
-      const plan = document.getElementById('prepare-plan');
-      details.replaceChildren();
+    function buildPrepPanel(network) {
+      const prep = document.createElement('div');
+      prep.className = 'network-prep';
+
+      const summary = document.createElement('p');
+      summary.className = 'prep-summary';
+      summary.textContent = `${displaySsid(network)} est selectionne. Le mot de passe reste dans ce navigateur.`;
+
+      const passwordLabel = document.createElement('label');
+      passwordLabel.className = 'field-label';
+      passwordLabel.textContent = 'Mot de passe Wi-Fi (local uniquement)';
+      const password = document.createElement('input');
+      password.className = 'password-local';
+      password.type = 'password';
+      password.autocomplete = 'new-password';
+      password.placeholder = 'Jamais envoye au serveur';
+      passwordLabel.appendChild(password);
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'button';
+      button.textContent = 'Preparer';
+
+      const plan = document.createElement('div');
+      plan.className = 'prepare-plan';
       plan.hidden = true;
+
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        renderInlinePlan(network, plan);
+      });
+      password.addEventListener('click', (event) => event.stopPropagation());
+      password.addEventListener('keydown', (event) => event.stopPropagation());
+
+      prep.append(summary, passwordLabel, button, plan);
+      return prep;
+    }
+
+    function renderInlinePlan(network, plan) {
       plan.replaceChildren();
-
-      if (!selectedNetwork) {
-        card.hidden = true;
-        summary.textContent = 'Choisis un reseau pour preparer un plan SAFE.';
-        password.value = '';
-        password.disabled = true;
-        button.disabled = true;
-        return;
-      }
-
-      card.hidden = false;
-      const quality = signalQuality(selectedNetwork.signal);
-      summary.textContent = `${displaySsid(selectedNetwork)} est selectionne. Le mot de passe reste dans ce navigateur.`;
-      details.replaceChildren(
-        metric('Signal', `${quality.label} (${quality.dbm})`),
-        metric('Securite', selectedNetwork.security || 'inconnue'),
-        metric('Canal', selectedNetwork.channel || 'inconnu'),
-        metric('Mode', 'simulation')
-      );
-      password.disabled = false;
-      button.disabled = false;
-
-      if (!showPlan) return;
-
       const title = document.createElement('strong');
       title.textContent = 'Plan SAFE simule';
       const list = document.createElement('ul');
       [
         'snapshot actuel requis',
-        `reseau cible prepare: ${displaySsid(selectedNetwork)}`,
+        `reseau cible prepare: ${displaySsid(network)}`,
         'mot de passe non envoye au serveur',
         'tentative future controlee par connect-safe',
         'timeout court prevu',
@@ -800,8 +802,6 @@
       document.getElementById('scan-source').textContent = describeScanBackend(scan);
       document.getElementById('scan-status').textContent = describeScanStatus(scan);
       target.innerHTML = '';
-
-      renderConnectionPrep(false);
 
       if (networks.length === 0) {
         message.hidden = false;
@@ -847,7 +847,12 @@
         main.append(titleWrap, dot);
         row.append(main, meta);
 
-        row.addEventListener('click', () => selectNetwork(network, row));
+        if (selectedNetwork === network) {
+          row.classList.add('selected');
+          row.appendChild(buildPrepPanel(network));
+        }
+
+        row.addEventListener('click', () => selectNetwork(network));
         target.append(row);
       });
     }
@@ -895,7 +900,6 @@
     }
 
     document.getElementById('refresh').addEventListener('click', refreshScanFromServer);
-    document.getElementById('prepare-connection').addEventListener('click', () => renderConnectionPrep(true));
     renderAll();
   </script>
 </body>
