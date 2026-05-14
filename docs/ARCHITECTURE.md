@@ -38,6 +38,35 @@ The default path is SAFE:
 
 Keep the core small. Avoid heavy frameworks, YAML manifests, dependency engines, plugin systems, and abstractions before real module pressure proves they are needed.
 
+## Seed-Kit Core V1
+
+Status: Core V1 is usable and field-tested.
+
+Validated commands:
+
+```sh
+sh seed-kit.sh --self-check
+sh seed-kit.sh --profile=minimal-resilient-node --plan
+sh seed-kit.sh --profile=minimal-resilient-node --apply
+sh seed-kit.sh --apply-module=homer
+sh seed-kit.sh --install-module=wifi-kit
+```
+
+Field-tested behavior:
+
+- `wifi-stability` can disable Raspberry Pi Wi-Fi power save and persist it with a systemd oneshot service.
+- `minimal-resilient-node` profile apply runs modules sequentially, stops on first failure, and reports a compact summary.
+- `--apply-module=homer` can retest a single module and skip cleanly when the Homer placeholder already exists.
+- `--install-module=wifi-kit` can fetch the repo-backed `wifi-kit` flow without making the full repository a core dependency.
+
+Still intentionally out of scope:
+
+- automatic rollback
+- dependency resolution
+- YAML manifests
+- plugin engine
+- persistent state engine
+
 ## Profiles
 
 Profiles are named module compositions for common node shapes. They are public planning aids, not secret stores or restore bundles.
