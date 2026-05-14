@@ -1222,7 +1222,7 @@ show_profile_plan() {
     ui_line "  $module"
   done
   ui_line ""
-  ui_line "profile apply is not implemented"
+  ui_line "profile apply V1 is available for minimal-resilient-node only"
 }
 
 show_profile_apply_preview() {
@@ -1241,6 +1241,52 @@ show_profile_apply_preview() {
   done
   ui_line ""
   ui_line "profile apply automation is not implemented yet"
+}
+
+run_profile_apply() {
+  profile=$1
+
+  if ! modules=$(profile_modules "$profile"); then
+    echo "unknown profile: $profile" >&2
+    echo "known profiles: rpi0-pocket rpi0-pocket-node rpi3-edge rpi3-edge-node minimal-resilient-node edge-services-node" >&2
+    return 2
+  fi
+
+  case "$profile" in
+    minimal-resilient-node)
+      ;;
+    *)
+      show_profile_apply_preview "$profile"
+      ui_line "real profile apply V1 is limited to minimal-resilient-node"
+      return 0
+      ;;
+  esac
+
+  ui_header "profile apply" "$profile"
+  ui_line "modules in order:"
+  for module in $modules; do
+    ui_line "  $module"
+  done
+  ui_line ""
+  ui_line "This applies modules sequentially and stops on first failure."
+  ui_line "No rollback automation is implemented."
+
+  APPLY_AUTO=0
+  if ! apply_safe_confirm; then
+    return 2
+  fi
+
+  APPLY_AUTO=1
+  set -- $modules
+  total=$#
+  index=1
+
+  for module do
+    ui_line "[profile $index/$total] $module"
+    APPLY_MODULES=$module
+    run_apply_modules
+    index=$((index + 1))
+  done
 }
 
 parse_fetch_options() {
@@ -1691,10 +1737,10 @@ case "${1:-}" in
         show_profile_plan "$profile"
         ;;
       --apply)
-        show_profile_apply_preview "$profile"
+        run_profile_apply "$profile"
         ;;
       *)
-        echo "profiles support --plan and --apply preview only" >&2
+        echo "profiles support --plan and limited --apply V1" >&2
         echo "usage: sh seed-kit.sh --profile=<name> --plan" >&2
         echo "       sh seed-kit.sh --profile=<name> --apply" >&2
         exit 2
