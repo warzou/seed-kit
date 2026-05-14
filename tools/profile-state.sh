@@ -35,6 +35,7 @@ usage() {
   echo "  sh tools/profile-state.sh plan"
   echo "  sh tools/profile-state.sh inventory"
   echo "  sh tools/profile-state.sh backup --dry-run"
+  echo "  sh tools/profile-state.sh backup --local --dry-run"
 }
 
 show_plan() {
@@ -61,6 +62,55 @@ show_plan() {
 path_size() {
   path="$1"
   du -sh "$path" 2>/dev/null | awk '{print $1}' || echo "unknown"
+}
+
+path_size_kb() {
+  path="$1"
+  du -sk "$path" 2>/dev/null | awk '{print $1}' || echo 0
+}
+
+print_archive_path() {
+  category="$1"
+  path="$2"
+  note="$3"
+  include_policy="$4"
+
+  if [ -e "$path" ]; then
+    status="present"
+    size="$(path_size "$path")"
+  else
+    status="missing"
+    size="0"
+  fi
+
+  echo "  - path: $path"
+  echo "    category: $category"
+  echo "    status: $status"
+  echo "    size: $size"
+  echo "    note: $note"
+  echo "    policy: $include_policy"
+}
+
+print_archive_paths() {
+  category="$1"
+  paths="$2"
+  note="$3"
+  include_policy="$4"
+
+  printf '%s\n' "$paths" | while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    print_archive_path "$category" "$path" "$note" "$include_policy"
+  done
+}
+
+sum_existing_kb() {
+  paths="$1"
+  printf '%s\n' "$paths" | while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    if [ -e "$path" ]; then
+      path_size_kb "$path"
+    fi
+  done | awk '{total += $1} END {print total + 0}'
 }
 
 show_path() {
@@ -135,26 +185,40 @@ list_inventory() {
 }
 
 backup_dry_run() {
-  echo "profile-state backup dry-run"
+  echo "profile-state backup local dry-run"
   echo
-  echo "would include public project paths if present:"
-  show_paths "public-project" "$public_project_paths" "include after operator review"
-  echo
-  echo "would include manual-restore paths if present:"
-  show_paths "manual-restore" "$manual_restore_paths" "include as restore inputs, not auto-applied"
-  echo
-  echo "would require encryption before include:"
-  show_paths "sensitive" "$sensitive_candidate_paths" "private state; encrypted archive required"
-  echo
-  echo "would treat Docker volumes as encrypted candidates:"
-  show_docker_volumes
-  echo
-  echo "would always exclude:"
-  show_paths "do-not-clone" "$do_not_clone_paths" "unique per-node identity; regenerate or reconnect manually"
-  echo
+  echo "archive plan only"
   echo "no archive created"
   echo "no secret content read"
-  echo "encryption required before real backup"
+  echo
+  echo "would include:"
+  echo
+  echo "public-project:"
+  print_archive_paths "public-project" "$public_project_paths" "repo-backed project files; review before backup" "include if present"
+  echo
+  echo "manual-restore:"
+  print_archive_paths "manual-restore" "$manual_restore_paths" "restore inputs only; not auto-applied" "include if present"
+  echo
+  echo "sensitive:"
+  print_archive_paths "sensitive" "$sensitive_candidate_paths" "private state; do not print contents" "include only in encrypted archive"
+  echo
+  echo "docker-volume:"
+  show_docker_volumes
+  echo
+  echo "would NOT be included:"
+  print_archive_paths "do-not-clone" "$do_not_clone_paths" "unique per-node identity; regenerate or reconnect manually" "exclude always"
+  echo
+  public_kb="$(sum_existing_kb "$public_project_paths")"
+  manual_kb="$(sum_existing_kb "$manual_restore_paths")"
+  sensitive_kb="$(sum_existing_kb "$sensitive_candidate_paths")"
+  total_kb=$((public_kb + manual_kb + sensitive_kb))
+  echo "summary:"
+  echo "  estimated local file size: ${total_kb}K"
+  echo "  would require encryption: yes"
+  echo "  archive created: no"
+  echo "  restore performed: no"
+  echo "  cloud upload: no"
+  echo "  rclone used: no"
 }
 
 case "${1:-}" in
@@ -165,13 +229,23 @@ case "${1:-}" in
     list_inventory
     ;;
   backup)
-    case "${2:-}" in
+    case "${2:-} ${3:-}" in
+      "--local --dry-run")
+        backup_dry_run
+        ;;
+      "--dry-run ")
+        backup_dry_run
+        ;;
+      *)
+        case "${2:-}" in
       --dry-run)
         backup_dry_run
         ;;
       *)
         usage >&2
         exit 2
+        ;;
+        esac
         ;;
     esac
     ;;
