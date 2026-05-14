@@ -585,6 +585,44 @@ cmd_ssh_safety_simulate() {
   esac
 }
 
+cmd_connect_safe_timeout_simulate() {
+  scenario="${1:-}"
+
+  ui_header "connect-safe-timeout-simulate"
+  ui "safety: simulation only; no Wi-Fi connection, no network writes, no secrets"
+
+  case "$scenario" in
+    "")
+      ui "state=connecting"
+      ui "timeout=waiting-ip"
+      ui "action=rollback"
+      ui "state=rollback-started"
+      ui "state=rollback-complete"
+      ui "result=simulated timeout rollback"
+      ;;
+    --validation-timeout)
+      ui "state=validating"
+      ui "timeout=validation"
+      ui "action=rollback"
+      ui "state=rollback-started"
+      ui "state=rollback-complete"
+      ui "result=simulated validation timeout rollback"
+      ;;
+    --rollback-timeout)
+      ui "state=rollback-started"
+      ui "timeout=rollback"
+      ui "action=stop"
+      ui "state=recovery-required"
+      ui "result=simulated rollback timeout recovery"
+      ;;
+    *)
+      ui "unknown option: $scenario"
+      ui "supported options: --validation-timeout, --rollback-timeout"
+      return 1
+      ;;
+  esac
+}
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -604,6 +642,7 @@ Usage:
   sh prototype/wifi-kit.sh snapshot-simulate
   sh prototype/wifi-kit.sh restore-simulate [--fail]
   sh prototype/wifi-kit.sh ssh-safety-simulate [--safe|--danger]
+  sh prototype/wifi-kit.sh connect-safe-timeout-simulate [--validation-timeout|--rollback-timeout]
 
 This is a SAFE prototype. No hostapd/dnsmasq/NetworkManager actions are executed.
 EOF
@@ -637,6 +676,7 @@ main() {
     snapshot-simulate) cmd_snapshot_simulate ;;
     restore-simulate) shift; cmd_restore_simulate "${1:-}" ;;
     ssh-safety-simulate) shift; cmd_ssh_safety_simulate "${1:-}" ;;
+    connect-safe-timeout-simulate) shift; cmd_connect_safe_timeout_simulate "${1:-}" ;;
     *) usage ;;
   esac
 }

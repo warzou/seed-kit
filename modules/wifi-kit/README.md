@@ -79,6 +79,14 @@ sh modules/wifi-kit/prototype/wifi-kit.sh ssh-safety-simulate --safe
 sh modules/wifi-kit/prototype/wifi-kit.sh ssh-safety-simulate --danger
 ```
 
+Timeouts connect-safe simules:
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit.sh connect-safe-timeout-simulate
+sh modules/wifi-kit/prototype/wifi-kit.sh connect-safe-timeout-simulate --validation-timeout
+sh modules/wifi-kit/prototype/wifi-kit.sh connect-safe-timeout-simulate --rollback-timeout
+```
+
 ## Utilisation read-only reelle
 
 Ces commandes observent l'hote local sans modifier le reseau:
