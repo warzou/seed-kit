@@ -70,6 +70,29 @@ Optional later, not part of the V1 plan-only profile:
 - no automatic rollback
 - no dependency engine beyond explicit module order
 
+## Field Test Lessons
+
+`rpi3-edge-audit` is a validated reconstruction candidate.
+
+Field test notes:
+
+- tested on a fresh sacrificial machine as normal user `codex`
+- Git was absent, which is acceptable for the copied single-file flow
+- `minimal-resilient-node` reconstruction completed successfully
+- `wlan0` was DOWN, but `wifi-stability` still disabled Wi-Fi power save and enabled persistence
+
+Package side effects observed:
+
+- `tailscaled` was enabled by the Tailscale package
+- `caddy` was enabled by the Caddy package
+
+Manual steps that should remain manual:
+
+- `tailscale up`
+- Cloudflare authentication and tunnel selection
+- DNS failover or production cutover
+- secret placement and private restore decisions
+
 ## SAFE workflow
 
 1. Prepare a fresh SD card or fresh test node.
