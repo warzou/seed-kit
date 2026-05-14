@@ -54,7 +54,10 @@ The snapshot must not contain PSK values in `wifi-kit` business files or logs.
 ## Proposed transactional states
 
 - `readonly`: observe current state and build a plan.
+- `preflight`: verify tools, Wi-Fi stability, SSH safety, and rollback path.
 - `snapshot-created`: previous state and affected files are captured.
+- `plan-created`: candidate change is represented without writing network config.
+- `confirmation-required`: operator must explicitly accept future risk before apply.
 - `connecting`: candidate Wi-Fi configuration is being tried.
 - `waiting-ip`: waiting for DHCP/static IP result.
 - `validating`: checking route and reachability.
@@ -103,6 +106,15 @@ Minimal rollback:
 - otherwise enter `recovery-required`.
 
 If rollback cannot prove that access is safe again, automation must stop.
+
+The `connect-safe --simulate` prototype marks rollback points before any future write:
+
+- after `snapshot-current-state`,
+- before `future-controlled-attempt`,
+- after any timeout,
+- after any validation failure.
+
+No rollback step is allowed to continue into random retry loops. Failed rollback becomes `recovery-required`.
 
 ## Recovery-required
 

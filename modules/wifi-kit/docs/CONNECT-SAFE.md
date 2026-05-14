@@ -90,6 +90,39 @@ else:
 
 Timeouts must be explicit at each phase. A hung DHCP attempt or blocked Wi-Fi operation must not leave the node in an unknown state.
 
+## Transactional V1 simulation flow
+
+The prototype command is:
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit.sh connect-safe --simulate
+```
+
+It is simulation-only and must not ask for a real SSID, PSK, or secret.
+
+The documented transaction order is:
+
+1. `preflight`: confirm tools, stability, SSH safety, and rollback path.
+2. `detect-interface`: identify the target Wi-Fi interface and backend.
+3. `snapshot-current-state`: capture SSID metadata, IP, route, power-save, backend, `wpa_supplicant` state, and timestamp.
+4. `build-change-plan`: prepare a metadata-only plan without writing config.
+5. `strong-confirmation`: require explicit operator acceptance before any future real apply.
+6. `future-controlled-attempt`: perform a bounded attempt only in a future implementation.
+7. `validation`: require IP, route, minimal reachability, and SSH safety.
+8. `commit-or-rollback`: commit only after validation, otherwise rollback.
+9. `state-journal`: record non-secret state transitions for review.
+
+Abort conditions include:
+
+- SSH appears to use the target Wi-Fi interface,
+- rollback path is missing,
+- IP timeout,
+- route validation failure,
+- reachability failure,
+- rollback cannot be proven.
+
+In V1, this remains a planning model. It does not perform the future controlled attempt.
+
 ## SSH-aware behavior
 
 Before any real apply, `connect-safe` must detect whether SSH is currently routed through the interface being changed.

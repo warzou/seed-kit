@@ -77,6 +77,7 @@ Le helper local `prototype/helpers.sh` garde la detection des outils reseau dans
 - Prototype `restore`: premiere version disponible via `restore-simulate`.
 - Prototype `timeout`: premiere version disponible via `connect-safe-timeout-simulate`.
 - Prototype `ssh-awareness`: premiere version disponible via `ssh-safety-simulate`.
+- Prototype `connect-safe --simulate`: flow transactionnel lisible, sans secret et sans apply reel.
 - Prototype `rollback-plan`.
 - Toujours sans apply reseau reel.
 

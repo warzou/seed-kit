@@ -100,6 +100,14 @@ Simple ideas:
 
 This is still design only. No detection or enforcement is implemented here.
 
+In the transaction simulation, SSH safety is evaluated during `preflight` and again during `validation`.
+
+The safe default is:
+
+- refuse future real apply when SSH appears routed through the target Wi-Fi interface,
+- require manual review when SSH route cannot be determined,
+- continue only in simulation until rollback and recovery are validated.
+
 ## Recovery-required
 
 `recovery-required` is the point where automation must stop.

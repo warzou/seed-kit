@@ -746,6 +746,85 @@ cmd_connect_safe_timeout_simulate() {
   esac
 }
 
+cmd_connect_safe() {
+  mode="${1:-}"
+
+  case "$mode" in
+    --simulate)
+      ;;
+    "")
+      ui "connect-safe requires --simulate in this prototype"
+      ui "real connect-safe is intentionally not implemented"
+      return 1
+      ;;
+    *)
+      ui "unknown connect-safe option: $mode"
+      ui "supported option: --simulate"
+      return 1
+      ;;
+  esac
+
+  ui_header "connect-safe --simulate"
+  ui "safety: simulation only; no Wi-Fi connection, no network writes, no secrets"
+  ui "real_apply_allowed=false"
+  ui "requires_strong_confirmation=true"
+
+  ui ""
+  ui "phase=1 preflight"
+  ui "  check=wifi-stability-installed"
+  ui "  check=tools-present"
+  ui "  check=no-active-unsafe-ssh-path"
+  ui "  abort_if=ssh-over-target-wifi-interface"
+  ui "  abort_if=missing-rollback-path"
+
+  ui "phase=2 detect-interface"
+  ui "  interface=wlan0 (example)"
+  ui "  backend=rpios-wpa (example)"
+  ui "  note=real implementation must detect, not assume"
+
+  ui "phase=3 snapshot-current-state"
+  ui "  snapshot=current-ssid,current-ip,default-route,power-save,backend,wpa-state,timestamp"
+  ui "  secret_policy=no-psk-in-wifi-kit-state"
+  ui "  rollback_point=snapshot-created"
+
+  ui "phase=4 build-change-plan"
+  ui "  plan=candidate-ssid-metadata-only"
+  ui "  no_psk_prompt=true"
+  ui "  no_wpa_supplicant_write=true"
+
+  ui "phase=5 strong-confirmation"
+  ui "  required=true"
+  ui "  warning=headless-node-may-become-unreachable"
+  ui "  abort_condition=operator-declines"
+
+  ui "phase=6 future-controlled-attempt"
+  ui "  state=connecting"
+  ui "  timeout=waiting-ip"
+  ui "  rollback_on=auth-failure,ip-timeout,interface-down,route-missing"
+  ui "  simulated_only=true"
+
+  ui "phase=7 validation"
+  ui "  validate=ip-present"
+  ui "  validate=default-route-present"
+  ui "  validate=minimal-reachability"
+  ui "  validate=ssh-session-still-safe"
+  ui "  rollback_on=validation-failed"
+
+  ui "phase=8 commit-or-rollback"
+  ui "  commit_if=all-validation-passed"
+  ui "  rollback_if=any-validation-failed"
+  ui "  recovery_if=rollback-cannot-be-proven"
+
+  ui "phase=9 state-journal"
+  ui "  journal=preflight,snapshot,attempt,validation,commit-or-rollback"
+  ui "  storage=future-runtime-state"
+  ui "  secret_policy=no-secrets"
+
+  ui ""
+  ui "decision=simulation-only"
+  ui "next_safe_step=review-plan-or-run-read-only-diagnostics"
+}
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -766,6 +845,7 @@ Usage:
   sh prototype/wifi-kit.sh restore-simulate [--fail]
   sh prototype/wifi-kit.sh ssh-safety-simulate [--safe|--danger]
   sh prototype/wifi-kit.sh connect-safe-timeout-simulate [--validation-timeout|--rollback-timeout]
+  sh prototype/wifi-kit.sh connect-safe --simulate
 
 This is a SAFE prototype. No hostapd/dnsmasq/NetworkManager actions are executed.
 EOF
@@ -800,6 +880,7 @@ main() {
     restore-simulate) shift; cmd_restore_simulate "${1:-}" ;;
     ssh-safety-simulate) shift; cmd_ssh_safety_simulate "${1:-}" ;;
     connect-safe-timeout-simulate) shift; cmd_connect_safe_timeout_simulate "${1:-}" ;;
+    connect-safe) shift; cmd_connect_safe "${1:-}" ;;
     *) usage ;;
   esac
 }
