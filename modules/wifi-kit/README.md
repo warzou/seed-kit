@@ -71,6 +71,14 @@ sh modules/wifi-kit/prototype/wifi-kit.sh restore-simulate
 sh modules/wifi-kit/prototype/wifi-kit.sh restore-simulate --fail
 ```
 
+SSH safety simulee, sans inspection de session SSH reelle et sans analyse reseau:
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit.sh ssh-safety-simulate
+sh modules/wifi-kit/prototype/wifi-kit.sh ssh-safety-simulate --safe
+sh modules/wifi-kit/prototype/wifi-kit.sh ssh-safety-simulate --danger
+```
+
 ## Utilisation read-only reelle
 
 Ces commandes observent l'hote local sans modifier le reseau:

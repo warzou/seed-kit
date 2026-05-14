@@ -551,6 +551,40 @@ cmd_restore_simulate() {
   esac
 }
 
+cmd_ssh_safety_simulate() {
+  scenario="${1:-}"
+
+  ui_header "ssh-safety-simulate"
+  ui "safety: simulation only; no SSH session inspection, no route changes, no network writes"
+
+  case "$scenario" in
+    "")
+      ui "ssh_client=unknown"
+      ui "ssh_route_interface=unknown"
+      ui "risk=unknown"
+      ui "decision=manual-review-required"
+      ;;
+    --safe)
+      ui "ssh_client=100.x.x.x"
+      ui "ssh_route_interface=tailscale0"
+      ui "risk=low"
+      ui "decision=connect-safe-allowed"
+      ;;
+    --danger)
+      ui "ssh_client=192.168.x.x"
+      ui "ssh_route_interface=wlan0"
+      ui "risk=high"
+      ui "reason=SSH appears to use wlan0"
+      ui "decision=refuse-by-default"
+      ;;
+    *)
+      ui "unknown option: $scenario"
+      ui "supported options: --safe, --danger"
+      return 1
+      ;;
+  esac
+}
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -569,6 +603,7 @@ Usage:
   sh prototype/wifi-kit.sh connect-safe-simulate [--fail-ip|--fail-validation]
   sh prototype/wifi-kit.sh snapshot-simulate
   sh prototype/wifi-kit.sh restore-simulate [--fail]
+  sh prototype/wifi-kit.sh ssh-safety-simulate [--safe|--danger]
 
 This is a SAFE prototype. No hostapd/dnsmasq/NetworkManager actions are executed.
 EOF
@@ -601,6 +636,7 @@ main() {
     connect-safe-simulate) shift; cmd_connect_safe_simulate "${1:-}" ;;
     snapshot-simulate) cmd_snapshot_simulate ;;
     restore-simulate) shift; cmd_restore_simulate "${1:-}" ;;
+    ssh-safety-simulate) shift; cmd_ssh_safety_simulate "${1:-}" ;;
     *) usage ;;
   esac
 }
