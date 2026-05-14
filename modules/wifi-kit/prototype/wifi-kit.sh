@@ -506,6 +506,51 @@ cmd_connect_safe_simulate() {
   esac
 }
 
+cmd_snapshot_simulate() {
+  ui_header "snapshot-simulate"
+  ui "safety: simulation only; no system reads required, no network writes, no secrets"
+  ui "note: no persistent snapshot file is created"
+  ui "mode=readonly"
+  ui "interface=wlan0"
+  ui "ssid=current-network"
+  ui "ip=192.168.x.x"
+  ui "route=default via 192.168.x.1"
+  ui "power_save=off"
+  ui "backend=rpios-wpa"
+  ui "timestamp=demo-2026-05-14T00:00:00Z"
+}
+
+cmd_restore_simulate() {
+  failure="${1:-}"
+
+  ui_header "restore-simulate"
+  ui "safety: simulation only; no Wi-Fi connection, no network writes, no secrets"
+  ui "note: no persistent snapshot file is read or written"
+
+  case "$failure" in
+    "")
+      ui "restoring previous snapshot"
+      ui "reconnect previous ssid"
+      ui "state=waiting-ip"
+      ui "state=validation"
+      ui "state=rollback-complete"
+      ui "result: simulated restore success"
+      ;;
+    --fail)
+      ui "restoring previous snapshot"
+      ui "state=rollback-started"
+      ui "event: simulated restore failure"
+      ui "state=recovery-required"
+      ui "result: simulated restore failed, recovery required"
+      ;;
+    *)
+      ui "unknown option: $failure"
+      ui "supported option: --fail"
+      return 1
+      ;;
+  esac
+}
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -522,6 +567,8 @@ Usage:
   sh prototype/wifi-kit.sh stability-plan
   sh prototype/wifi-kit.sh stability-apply-current-boot [IFACE]
   sh prototype/wifi-kit.sh connect-safe-simulate [--fail-ip|--fail-validation]
+  sh prototype/wifi-kit.sh snapshot-simulate
+  sh prototype/wifi-kit.sh restore-simulate [--fail]
 
 This is a SAFE prototype. No hostapd/dnsmasq/NetworkManager actions are executed.
 EOF
@@ -552,6 +599,8 @@ main() {
     stability-plan) cmd_stability_plan ;;
     stability-apply-current-boot) shift; cmd_stability_apply_current_boot "${1:-}" ;;
     connect-safe-simulate) shift; cmd_connect_safe_simulate "${1:-}" ;;
+    snapshot-simulate) cmd_snapshot_simulate ;;
+    restore-simulate) shift; cmd_restore_simulate "${1:-}" ;;
     *) usage ;;
   esac
 }

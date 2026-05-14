@@ -63,6 +63,14 @@ sh modules/wifi-kit/prototype/wifi-kit.sh connect-safe-simulate --fail-ip
 sh modules/wifi-kit/prototype/wifi-kit.sh connect-safe-simulate --fail-validation
 ```
 
+Snapshot / restore simules, sans fichier persistant et sans lecture reseau obligatoire:
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit.sh snapshot-simulate
+sh modules/wifi-kit/prototype/wifi-kit.sh restore-simulate
+sh modules/wifi-kit/prototype/wifi-kit.sh restore-simulate --fail
+```
+
 ## Utilisation read-only reelle
 
 Ces commandes observent l'hote local sans modifier le reseau:
