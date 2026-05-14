@@ -102,7 +102,16 @@ Elles ne lancent aucune connexion Wi-Fi, n'ecrivent pas dans `wpa_supplicant`, n
 
 Le prototype utilise un helper local (`prototype/helpers.sh`) pour retrouver les outils reseau dans `PATH`, puis dans `/usr/sbin`, `/sbin`, `/usr/bin` et `/bin`. Ce helper reste strictement local a `wifi-kit`.
 
-`scan-real` est la base du futur backend read-only du portail. Le mode texte affiche `ssid`, `signal`, `channel` et `security`. Le mode `--json` expose un format stable pour une future UI locale, sans connexion, sans cache persistant et sans mutation reseau.
+`scan-real` est la base du futur backend read-only du portail. Le mode texte affiche `ssid`, `signal`, `channel` et `security`. Le mode `--json` expose un format stable pour une future UI locale, y compris quand `iw` manque ou que le scan est indisponible, sans connexion, sans cache persistant et sans mutation reseau.
+
+Diagnostic SAFE unique:
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit.sh safe-diagnose
+sh modules/wifi-kit/prototype/wifi-kit.sh safe-diagnose --json
+```
+
+`safe-diagnose` regroupe uniquement des lectures et simulations: backend, runtime-state, snapshot preview, scan read-only et simulation `connect-safe`. Il sert de preflight avant tout futur `connect-safe` reel et ne modifie rien.
 
 ## Stabilite Wi-Fi terrain
 

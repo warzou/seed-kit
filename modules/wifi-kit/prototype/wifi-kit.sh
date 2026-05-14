@@ -291,10 +291,32 @@ cmd_runtime_state_show() {
   done
 }
 
-cmd_scan_real() {
-  ui_header "scan-real (read-only)"
-  ui "safety: read-only, no connection, no network writes, no secrets"
+emit_scan_json_unavailable() {
+  reason="$1"
+  iface="${2:-unknown}"
+  timestamp="$(timestamp_utc)"
 
+  awk -v iface="${iface:-unknown}" -v timestamp="$timestamp" -v reason="$reason" '
+    function json_escape(value, escaped) {
+      escaped=value
+      gsub(/\\/, "\\\\", escaped)
+      gsub(/"/, "\\\"", escaped)
+      return escaped
+    }
+    BEGIN {
+      printf "{\n"
+      printf "  \"backend\":\"iw\",\n"
+      printf "  \"interface\":\"%s\",\n", json_escape(iface)
+      printf "  \"timestamp\":\"%s\",\n", json_escape(timestamp)
+      printf "  \"status\":\"unavailable\",\n"
+      printf "  \"reason\":\"%s\",\n", json_escape(reason)
+      printf "  \"networks\":[]\n"
+      printf "}\n"
+    }
+  '
+}
+
+cmd_scan_real() {
   output_json=0
   iface=""
   while [ "$#" -gt 0 ]; do
@@ -314,8 +336,17 @@ cmd_scan_real() {
     shift
   done
 
+  if [ "$output_json" -eq 0 ]; then
+    ui_header "scan-real (read-only)"
+    ui "safety: read-only, no connection, no network writes, no secrets"
+  fi
+
   iw_bin="$(find_tool iw 2>/dev/null || true)"
   if [ -z "$iw_bin" ]; then
+    if [ "$output_json" -eq 1 ]; then
+      emit_scan_json_unavailable "iw-missing" "unknown"
+      return 0
+    fi
     ui "scan-real unavailable: iw is missing"
     return 0
   fi
@@ -325,6 +356,10 @@ cmd_scan_real() {
   fi
 
   if [ -z "$iface" ]; then
+    if [ "$output_json" -eq 1 ]; then
+      emit_scan_json_unavailable "no-wifi-interface" "unknown"
+      return 0
+    fi
     ui "scan-real unavailable: no Wi-Fi interface detected"
     return 0
   fi
@@ -453,6 +488,11 @@ cmd_scan_real() {
       ' "$tmp"
     fi
   else
+    if [ "$output_json" -eq 1 ]; then
+      emit_scan_json_unavailable "iw-scan-failed" "$iface"
+      rm -f "$tmp" "$err"
+      return 0
+    fi
     ui "scan-real unavailable on $iface: iw scan failed"
     ui "hint: this may require root/CAP_NET_ADMIN or an idle Wi-Fi interface"
     if [ -s "$err" ]; then
@@ -1086,6 +1126,119 @@ cmd_state_snapshot() {
   ui "persistence=none"
 }
 
+cmd_safe_diagnose() {
+  output_json=0
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --json)
+        output_json=1
+        ;;
+      *)
+        ui "unknown safe-diagnose option: $1"
+        ui "supported option: --json"
+        return 1
+        ;;
+    esac
+    shift
+  done
+
+  iface="$(first_wifi_interface || true)"
+  backend="$(recommended_backend)"
+  timestamp="$(timestamp_utc)"
+  default_route="$(default_route_line || true)"
+  ssh_client="$(ssh_client_address)"
+  ssh_iface="$(ssh_route_interface || true)"
+  current_ip=""
+  current_ssid_state="unknown"
+  power_save=""
+
+  if [ -n "$iface" ]; then
+    current_ip="$(current_ip_for_iface "$iface" || true)"
+    current_ssid_probe="$(current_ssid_for_iface "$iface" || true)"
+    if [ -n "$current_ssid_probe" ]; then
+      current_ssid_state="present"
+    fi
+    power_save="$(power_save_for_iface "$iface" || true)"
+  fi
+
+  iw_bin="$(find_tool iw 2>/dev/null || true)"
+  scan_status="available"
+  if [ -z "$iw_bin" ]; then
+    scan_status="iw-missing"
+  elif [ -z "$iface" ]; then
+    scan_status="no-wifi-interface"
+  fi
+
+  if [ "$output_json" -eq 1 ]; then
+    awk -v timestamp="$timestamp" \
+        -v backend="${backend:-unknown}" \
+        -v iface="${iface:-unknown}" \
+        -v current_ip="${current_ip:-unknown}" \
+        -v default_route="${default_route:-unknown}" \
+        -v power_save="${power_save:-unknown}" \
+        -v current_ssid_state="${current_ssid_state:-unknown}" \
+        -v ssh_client="${ssh_client:-unknown}" \
+        -v ssh_iface="${ssh_iface:-unknown}" \
+        -v scan_status="$scan_status" '
+      function json_escape(value, escaped) {
+        escaped=value
+        gsub(/\\/, "\\\\", escaped)
+        gsub(/"/, "\\\"", escaped)
+        return escaped
+      }
+      BEGIN {
+        printf "{\n"
+        printf "  \"mode\":\"safe-diagnose\",\n"
+        printf "  \"timestamp\":\"%s\",\n", json_escape(timestamp)
+        printf "  \"dry_run_only\":true,\n"
+        printf "  \"real_apply_allowed\":false,\n"
+        printf "  \"backend\":\"%s\",\n", json_escape(backend)
+        printf "  \"interface\":\"%s\",\n", json_escape(iface)
+        printf "  \"current_ssid_state\":\"%s\",\n", json_escape(current_ssid_state)
+        printf "  \"current_ip\":\"%s\",\n", json_escape(current_ip)
+        printf "  \"default_route\":\"%s\",\n", json_escape(default_route)
+        printf "  \"power_save\":\"%s\",\n", json_escape(power_save)
+        printf "  \"ssh_client\":\"%s\",\n", json_escape(ssh_client)
+        printf "  \"ssh_route_interface\":\"%s\",\n", json_escape(ssh_iface)
+        printf "  \"scan_status\":\"%s\",\n", json_escape(scan_status)
+        printf "  \"connect_safe\":\"simulation-only\",\n"
+        printf "  \"secret_policy\":\"no-secrets\",\n"
+        printf "  \"network_writes\":false,\n"
+        printf "  \"services_started\":false\n"
+        printf "}\n"
+      }
+    '
+    return 0
+  fi
+
+  ui_header "safe-diagnose"
+  ui "safety: read-only/simulation only; no network writes, no secrets, no services"
+  ui "dry_run_only=true"
+  ui "real_apply_allowed=false"
+
+  ui ""
+  ui "section=backend"
+  ui "backend=$backend"
+  ui "interface=${iface:-unknown}"
+
+  ui ""
+  ui "section=runtime-state"
+  cmd_runtime_state_show
+
+  ui ""
+  ui "section=snapshot-preview"
+  cmd_state_snapshot --simulate
+
+  ui ""
+  ui "section=scan"
+  cmd_scan_real
+
+  ui ""
+  ui "section=connect-safe-simulation"
+  cmd_connect_safe --simulate
+}
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -1109,6 +1262,7 @@ Usage:
   sh prototype/wifi-kit.sh connect-safe-timeout-simulate [--validation-timeout|--rollback-timeout]
   sh prototype/wifi-kit.sh connect-safe --simulate
   sh prototype/wifi-kit.sh state-snapshot --simulate [--json]
+  sh prototype/wifi-kit.sh safe-diagnose [--json]
 
 This is a SAFE prototype. No hostapd/dnsmasq/NetworkManager actions are executed.
 EOF
@@ -1141,7 +1295,7 @@ main() {
         *) usage; exit 2 ;;
       esac
       ;;
-    scan-real) shift; cmd_scan_real "${1:-}" ;;
+    scan-real) shift; cmd_scan_real "$@" ;;
     stability-status) cmd_stability_status ;;
     stability-plan) cmd_stability_plan ;;
     stability-apply-current-boot) shift; cmd_stability_apply_current_boot "${1:-}" ;;
@@ -1152,6 +1306,7 @@ main() {
     connect-safe-timeout-simulate) shift; cmd_connect_safe_timeout_simulate "${1:-}" ;;
     connect-safe) shift; cmd_connect_safe "${1:-}" ;;
     state-snapshot) shift; cmd_state_snapshot "$@" ;;
+    safe-diagnose) shift; cmd_safe_diagnose "$@" ;;
     *) usage ;;
   esac
 }

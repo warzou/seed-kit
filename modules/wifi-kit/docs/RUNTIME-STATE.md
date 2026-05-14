@@ -33,10 +33,16 @@ Read-only prototype commands:
 sh modules/wifi-kit/prototype/wifi-kit.sh runtime-state show
 sh modules/wifi-kit/prototype/wifi-kit.sh state-snapshot --simulate
 sh modules/wifi-kit/prototype/wifi-kit.sh state-snapshot --simulate --json
+sh modules/wifi-kit/prototype/wifi-kit.sh safe-diagnose
+sh modules/wifi-kit/prototype/wifi-kit.sh safe-diagnose --json
 ```
 
 These commands are observability only.
 They do not create a persistent state database.
+
+`safe-diagnose` is the combined preflight surface. It groups read-only runtime
+state, snapshot preview, scan readiness, and `connect-safe` simulation without
+turning any of those checks into a real apply.
 
 ## Minimal fields
 
