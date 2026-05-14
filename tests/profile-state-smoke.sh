@@ -115,6 +115,21 @@ pass "missing input refused"
 run_fail sh "$profile_state" package --verify --input "$tmp_root/missing.tar"
 pass "missing file refused"
 
+empty_input="$tmp_root/empty-input.tar"
+: > "$empty_input"
+run_fail sh "$profile_state" package --verify --input "$empty_input"
+pass "empty non-tar input refused"
+
+text_input="$tmp_root/text-input.tar"
+printf '%s\n' "not a tar archive" > "$text_input"
+run_fail sh "$profile_state" package --verify --input "$text_input"
+pass "text non-tar input refused"
+
+directory_input="$tmp_root/directory-input"
+mkdir -p "$directory_input"
+run_fail sh "$profile_state" package --verify --input "$directory_input"
+pass "directory input refused"
+
 unsafe_dir="$tmp_root/unsafe-env"
 mkdir -p "$unsafe_dir"
 printf '%s\n' "secret-placeholder" > "$unsafe_dir/.env"
