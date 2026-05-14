@@ -56,6 +56,16 @@ Backend order:
 
 The prototype intentionally does not call `wpa_cli scan`, `select_network`, `enable_network`, `save_config`, or `reconfigure`.
 
+`wpa_cli scan` is reserved for an explicit refresh command only:
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit.sh scan-real --refresh --json
+```
+
+That mode is opt-in, uses a short timeout, then returns to `scan_results`.
+If the refresh fails, the prototype should prefer existing cached results over a
+hard failure. The phone UI must not trigger this refresh automatically.
+
 Common reasons:
 
 - `iw` is missing,

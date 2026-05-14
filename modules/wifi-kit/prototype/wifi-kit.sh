@@ -12,6 +12,11 @@ WIFI_KIT_SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ui() { printf '%s\n' "$*"; }
 ui_header() { printf '\n[wifi-kit] %s\n' "$*"; }
 
+SCAN_REFRESH_ATTEMPTED="false"
+SCAN_REFRESH_STATUS="not-requested"
+SCAN_REFRESH_BACKEND=""
+SCAN_REFRESH_ERROR=""
+
 tool_state() {
   tool_path="$(find_tool "$1" 2>/dev/null || true)"
   if [ -n "$tool_path" ]; then
@@ -297,7 +302,14 @@ emit_scan_json_unavailable() {
   backend="${3:-wpa_cli}"
   timestamp="$(timestamp_utc)"
 
-  awk -v iface="${iface:-unknown}" -v timestamp="$timestamp" -v reason="$reason" -v backend="$backend" '
+  awk -v iface="${iface:-unknown}" \
+      -v timestamp="$timestamp" \
+      -v reason="$reason" \
+      -v backend="$backend" \
+      -v refresh_attempted="$SCAN_REFRESH_ATTEMPTED" \
+      -v refresh_status="$SCAN_REFRESH_STATUS" \
+      -v refresh_backend="$SCAN_REFRESH_BACKEND" \
+      -v refresh_error="$SCAN_REFRESH_ERROR" '
     function json_escape(value, escaped) {
       escaped=value
       gsub(/\\/, "\\\\", escaped)
@@ -311,6 +323,10 @@ emit_scan_json_unavailable() {
       printf "  \"timestamp\":\"%s\",\n", json_escape(timestamp)
       printf "  \"status\":\"unavailable\",\n"
       printf "  \"reason\":\"%s\",\n", json_escape(reason)
+      printf "  \"refresh_attempted\":%s,\n", refresh_attempted
+      printf "  \"refresh_status\":\"%s\",\n", json_escape(refresh_status)
+      printf "  \"refresh_backend\":\"%s\",\n", json_escape(refresh_backend)
+      printf "  \"refresh_error\":\"%s\",\n", json_escape(refresh_error)
       printf "  \"networks\":[]\n"
       printf "}\n"
     }
@@ -324,7 +340,12 @@ emit_scan_from_wpa_cli() {
 
   if [ "$output_json" -eq 1 ]; then
     timestamp="$(timestamp_utc)"
-    awk -v iface="$iface" -v timestamp="$timestamp" '
+    awk -v iface="$iface" \
+        -v timestamp="$timestamp" \
+        -v refresh_attempted="$SCAN_REFRESH_ATTEMPTED" \
+        -v refresh_status="$SCAN_REFRESH_STATUS" \
+        -v refresh_backend="$SCAN_REFRESH_BACKEND" \
+        -v refresh_error="$SCAN_REFRESH_ERROR" '
       function json_escape(value, escaped) {
         escaped=value
         gsub(/\\/, "\\\\", escaped)
@@ -351,6 +372,10 @@ emit_scan_from_wpa_cli() {
         printf "  \"interface\":\"%s\",\n", json_escape(iface)
         printf "  \"timestamp\":\"%s\",\n", json_escape(timestamp)
         printf "  \"status\":\"ok\",\n"
+        printf "  \"refresh_attempted\":%s,\n", refresh_attempted
+        printf "  \"refresh_status\":\"%s\",\n", json_escape(refresh_status)
+        printf "  \"refresh_backend\":\"%s\",\n", json_escape(refresh_backend)
+        printf "  \"refresh_error\":\"%s\",\n", json_escape(refresh_error)
         printf "  \"networks\":[\n"
       }
       NR == 1 { next }
@@ -410,6 +435,62 @@ emit_scan_from_wpa_cli() {
   ' "$scan_file"
 }
 
+wpa_cli_scan_results_to_file() {
+  iface="$1"
+  output_file="$2"
+  wpa_cli_bin="$(find_tool wpa_cli 2>/dev/null || true)"
+  [ -n "$wpa_cli_bin" ] || return 2
+  "$wpa_cli_bin" -i "$iface" scan_results > "$output_file" 2>/dev/null
+}
+
+wpa_cli_scan_results_count() {
+  scan_file="$1"
+  awk 'NR > 1 && NF >= 4 { count++ } END { print count + 0 }' "$scan_file" 2>/dev/null || echo 0
+}
+
+try_scan_refresh_wpa_cli_json() {
+  iface="$1"
+  before_file="$2"
+  after_file="$3"
+  err_file="$4"
+
+  SCAN_REFRESH_ATTEMPTED="true"
+  SCAN_REFRESH_BACKEND="wpa_cli"
+  SCAN_REFRESH_ERROR=""
+
+  wpa_cli_bin="$(find_tool wpa_cli 2>/dev/null || true)"
+  if [ -z "$wpa_cli_bin" ]; then
+    SCAN_REFRESH_STATUS="wpa-cli-missing"
+    SCAN_REFRESH_ERROR="wpa_cli not found"
+    return 2
+  fi
+
+  wpa_cli_scan_results_to_file "$iface" "$before_file" || true
+
+  timeout_bin="$(find_tool timeout 2>/dev/null || true)"
+  if [ -z "$timeout_bin" ]; then
+    SCAN_REFRESH_STATUS="timeout-tool-missing"
+    SCAN_REFRESH_ERROR="timeout command not found; refusing unbounded wpa_cli scan"
+    return 3
+  fi
+
+  if "$timeout_bin" 3 "$wpa_cli_bin" -i "$iface" scan > "$err_file" 2>&1; then
+    sleep 1
+    if wpa_cli_scan_results_to_file "$iface" "$after_file"; then
+      SCAN_REFRESH_STATUS="ok"
+      return 0
+    fi
+    SCAN_REFRESH_STATUS="scan-results-after-refresh-failed"
+    SCAN_REFRESH_ERROR="wpa_cli scan succeeded but scan_results failed"
+    return 1
+  fi
+
+  SCAN_REFRESH_STATUS="scan-command-failed"
+  SCAN_REFRESH_ERROR="$(sed -n '1p' "$err_file" 2>/dev/null || true)"
+  [ -n "$SCAN_REFRESH_ERROR" ] || SCAN_REFRESH_ERROR="wpa_cli scan failed or timed out"
+  return 1
+}
+
 try_scan_real_wpa_cli() {
   iface="$1"
   output_json="$2"
@@ -442,7 +523,12 @@ try_scan_real_iw() {
   if "$iw_bin" dev "$iface" scan > "$tmp" 2> "$err"; then
     if [ "$output_json" -eq 1 ]; then
       timestamp="$(timestamp_utc)"
-      awk -v iface="$iface" -v timestamp="$timestamp" '
+      awk -v iface="$iface" \
+          -v timestamp="$timestamp" \
+          -v refresh_attempted="$SCAN_REFRESH_ATTEMPTED" \
+          -v refresh_status="$SCAN_REFRESH_STATUS" \
+          -v refresh_backend="$SCAN_REFRESH_BACKEND" \
+          -v refresh_error="$SCAN_REFRESH_ERROR" '
         function json_escape(value, escaped) {
           escaped=value
           gsub(/\\/, "\\\\", escaped)
@@ -477,6 +563,10 @@ try_scan_real_iw() {
           printf "  \"interface\":\"%s\",\n", json_escape(iface)
           printf "  \"timestamp\":\"%s\",\n", json_escape(timestamp)
           printf "  \"status\":\"ok\",\n"
+          printf "  \"refresh_attempted\":%s,\n", refresh_attempted
+          printf "  \"refresh_status\":\"%s\",\n", json_escape(refresh_status)
+          printf "  \"refresh_backend\":\"%s\",\n", json_escape(refresh_backend)
+          printf "  \"refresh_error\":\"%s\",\n", json_escape(refresh_error)
           printf "  \"networks\":[\n"
         }
         /^BSS / {
@@ -579,12 +669,21 @@ try_scan_real_iw() {
 }
 
 cmd_scan_real() {
+  SCAN_REFRESH_ATTEMPTED="false"
+  SCAN_REFRESH_STATUS="not-requested"
+  SCAN_REFRESH_BACKEND=""
+  SCAN_REFRESH_ERROR=""
+
   output_json=0
+  refresh=0
   iface=""
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --json)
         output_json=1
+        ;;
+      --refresh)
+        refresh=1
         ;;
       *)
         if [ -z "$iface" ]; then
@@ -602,6 +701,10 @@ cmd_scan_real() {
     ui_header "scan-real (read-only)"
     ui "safety: read-only, no connection, no network writes, no secrets"
     ui "backend_order=wpa_cli,iw"
+    if [ "$refresh" -eq 1 ]; then
+      ui "refresh=opt-in"
+      ui "refresh_safety=bounded wpa_cli scan only; no config writes"
+    fi
   fi
 
   if [ -z "$iface" ]; then
@@ -614,6 +717,43 @@ cmd_scan_real() {
       return 0
     fi
     ui "scan-real unavailable: no Wi-Fi interface detected"
+    return 0
+  fi
+
+  if [ "$refresh" -eq 1 ]; then
+    if [ "$output_json" -ne 1 ]; then
+      ui "scan-real --refresh currently requires --json"
+      ui "reason: refresh metadata is part of the stable JSON contract"
+      return 2
+    fi
+
+    before="${TMPDIR:-/tmp}/wifi-kit-wpa-cli-scan-before.$$"
+    after="${TMPDIR:-/tmp}/wifi-kit-wpa-cli-scan-after.$$"
+    err="${TMPDIR:-/tmp}/wifi-kit-wpa-cli-refresh-err.$$"
+
+    if try_scan_refresh_wpa_cli_json "$iface" "$before" "$after" "$err"; then
+      emit_scan_from_wpa_cli "$after" "$iface" "$output_json"
+      rm -f "$before" "$after" "$err"
+      return 0
+    fi
+
+    if [ -s "$before" ] && [ "$(wpa_cli_scan_results_count "$before")" -gt 0 ]; then
+      case "$SCAN_REFRESH_STATUS" in
+        ok) ;;
+        *) SCAN_REFRESH_STATUS="failed-used-existing-results" ;;
+      esac
+      emit_scan_from_wpa_cli "$before" "$iface" "$output_json"
+      rm -f "$before" "$after" "$err"
+      return 0
+    fi
+
+    reason="refresh-failed-no-results"
+    case "$SCAN_REFRESH_STATUS" in
+      timeout-tool-missing) reason="refresh-timeout-tool-missing" ;;
+      wpa-cli-missing) reason="wpa-cli-missing" ;;
+    esac
+    emit_scan_json_unavailable "$reason" "$iface" "wpa_cli"
+    rm -f "$before" "$after" "$err"
     return 0
   fi
 
@@ -1386,7 +1526,7 @@ Usage:
   sh prototype/wifi-kit.sh backend-detect
   sh prototype/wifi-kit.sh status-real
   sh prototype/wifi-kit.sh runtime-state show
-  sh prototype/wifi-kit.sh scan-real [--json] [IFACE]
+  sh prototype/wifi-kit.sh scan-real [--json] [--refresh] [IFACE]
   sh prototype/wifi-kit.sh stability-status
   sh prototype/wifi-kit.sh stability-plan
   sh prototype/wifi-kit.sh stability-apply-current-boot [IFACE]

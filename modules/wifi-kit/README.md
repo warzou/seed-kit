@@ -106,6 +106,14 @@ Le prototype utilise un helper local (`prototype/helpers.sh`) pour retrouver les
 
 `scan-real` est la base du futur backend read-only du portail. Il privilegie `wpa_cli -i <iface> scan_results`, strictement lecture seule, afin de mieux fonctionner sur un Raspberry Pi deja connecte. `iw dev <iface> scan` reste un fallback read-only. Le mode texte affiche `ssid`, `signal`, `channel` et `security`. Le mode `--json` expose un format stable pour une future UI locale, y compris quand les outils manquent ou que le scan est indisponible, sans connexion, sans cache persistant et sans mutation reseau.
 
+Refresh radio opt-in, borne par timeout et toujours sans ecriture de config:
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit.sh scan-real --refresh --json
+```
+
+Ce mode lit d'abord `scan_results`, tente seulement alors `wpa_cli scan`, relit `scan_results`, puis garde un JSON stable avec `refresh_attempted` et `refresh_status`. Il n'est pas declenche automatiquement par `safe-diagnose` ni par l'UI.
+
 Diagnostic SAFE unique:
 
 ```sh
