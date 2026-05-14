@@ -24,6 +24,9 @@ run_test() {
 echo "Seed-Kit smoke tests"
 echo
 
+run_test "seed-kit syntax" "cd '$repo_dir' && sh -n seed-kit.sh"
+run_test "profile-state syntax" "cd '$repo_dir' && sh -n tools/profile-state.sh"
+run_test "profile-state smoke syntax" "cd '$repo_dir' && sh -n tests/profile-state-smoke.sh"
 run_test "profile-state" "cd '$repo_dir' && sh tests/profile-state-smoke.sh"
 
 echo "summary:"
