@@ -54,9 +54,9 @@ Contraintes:
 
 `status-real` affiche les interfaces Wi-Fi, les adresses IP visibles et la route par defaut si disponible.
 
-`scan-real` utilise `iw dev <iface> scan` quand possible et ne remonte que SSID + signal.
+`scan-real` privilegie maintenant `wpa_cli -i <iface> scan_results` en lecture seule, puis utilise `iw dev <iface> scan` comme fallback seulement.
 
-`scan-real --json` prepare le futur backend read-only du portail avec un format stable: backend, interface, timestamp, SSID, SSID cache, signal, frequence, canal et securite estimee. Cette sortie reste sans connexion, sans ecriture et sans secret.
+`scan-real --json` prepare le futur backend read-only du portail avec un format stable: backend, interface, timestamp, SSID, SSID cache, signal, frequence, canal et securite estimee. Cette sortie reste sans connexion, sans `wpa_cli scan`, sans ecriture et sans secret.
 
 Le helper local `prototype/helpers.sh` garde la detection des outils reseau dans `wifi-kit` sans ajouter de couche globale au core Seed-Kit.
 

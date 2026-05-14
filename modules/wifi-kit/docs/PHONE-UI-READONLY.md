@@ -49,6 +49,13 @@ real connection is not implemented yet.
 `scan-real --json` can return `status=unavailable`.
 This is expected in some SAFE/read-only contexts.
 
+Backend order:
+
+- `wpa_cli -i <iface> scan_results` first, because it reads cached supplicant scan results without requesting a connection change,
+- `iw dev <iface> scan` as fallback only.
+
+The prototype intentionally does not call `wpa_cli scan`, `select_network`, `enable_network`, `save_config`, or `reconfigure`.
+
 Common reasons:
 
 - `iw` is missing,
@@ -60,8 +67,10 @@ The UI must explain these cases without suggesting a network restart or
 reconnection. The current link is more important than showing a perfect network
 list.
 
-The user-facing message should avoid raw reasons like `iw-scan-failed` on the
-main screen. Raw reasons can remain visible in advanced diagnostics.
+The user-facing message should avoid raw reasons like `iw-scan-failed` or
+`scan-readonly-failed` on the main screen. Raw reasons can remain visible in
+advanced diagnostics. The main screen should show which backend produced the
+result, for example `wpa_cli scan_results` or `iw fallback`.
 
 ## Backend inputs
 

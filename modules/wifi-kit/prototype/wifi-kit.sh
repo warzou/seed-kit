@@ -294,9 +294,10 @@ cmd_runtime_state_show() {
 emit_scan_json_unavailable() {
   reason="$1"
   iface="${2:-unknown}"
+  backend="${3:-wpa_cli}"
   timestamp="$(timestamp_utc)"
 
-  awk -v iface="${iface:-unknown}" -v timestamp="$timestamp" -v reason="$reason" '
+  awk -v iface="${iface:-unknown}" -v timestamp="$timestamp" -v reason="$reason" -v backend="$backend" '
     function json_escape(value, escaped) {
       escaped=value
       gsub(/\\/, "\\\\", escaped)
@@ -305,7 +306,7 @@ emit_scan_json_unavailable() {
     }
     BEGIN {
       printf "{\n"
-      printf "  \"backend\":\"iw\",\n"
+      printf "  \"backend\":\"%s\",\n", json_escape(backend)
       printf "  \"interface\":\"%s\",\n", json_escape(iface)
       printf "  \"timestamp\":\"%s\",\n", json_escape(timestamp)
       printf "  \"status\":\"unavailable\",\n"
@@ -316,53 +317,124 @@ emit_scan_json_unavailable() {
   '
 }
 
-cmd_scan_real() {
-  output_json=0
-  iface=""
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --json)
-        output_json=1
-        ;;
-      *)
-        if [ -z "$iface" ]; then
-          iface="$1"
-        else
-          ui "scan-real unknown argument: $1"
-          return 1
-        fi
-        ;;
-    esac
-    shift
-  done
+emit_scan_from_wpa_cli() {
+  scan_file="$1"
+  iface="$2"
+  output_json="$3"
 
-  if [ "$output_json" -eq 0 ]; then
-    ui_header "scan-real (read-only)"
-    ui "safety: read-only, no connection, no network writes, no secrets"
+  if [ "$output_json" -eq 1 ]; then
+    timestamp="$(timestamp_utc)"
+    awk -v iface="$iface" -v timestamp="$timestamp" '
+      function json_escape(value, escaped) {
+        escaped=value
+        gsub(/\\/, "\\\\", escaped)
+        gsub(/"/, "\\\"", escaped)
+        return escaped
+      }
+      function channel_from_freq(freq) {
+        if (freq == 2484) return 14
+        if (freq >= 2412 && freq <= 2472) return int((freq - 2407) / 5)
+        if (freq >= 5000 && freq <= 5900) return int((freq - 5000) / 5)
+        return ""
+      }
+      function security_from_flags(flags) {
+        if (flags ~ /SAE/ || flags ~ /WPA3/) return "WPA3"
+        if (flags ~ /WPA2/ && flags ~ /WPA-/) return "WPA/WPA2"
+        if (flags ~ /WPA2/ || flags ~ /RSN/) return "WPA2"
+        if (flags ~ /WPA-/ || flags ~ /WPA\]/) return "WPA"
+        if (flags ~ /WEP/) return "WEP"
+        return "open"
+      }
+      BEGIN {
+        printf "{\n"
+        printf "  \"backend\":\"wpa_cli\",\n"
+        printf "  \"interface\":\"%s\",\n", json_escape(iface)
+        printf "  \"timestamp\":\"%s\",\n", json_escape(timestamp)
+        printf "  \"status\":\"ok\",\n"
+        printf "  \"networks\":[\n"
+      }
+      NR == 1 { next }
+      NF >= 4 {
+        bssid=$1
+        freq=$2
+        signal=$3
+        flags=$4
+        ssid=$0
+        sub(/^[^\t]*\t[^\t]*\t[^\t]*\t[^\t]*\t?/, "", ssid)
+        if (count > 0) printf ",\n"
+        hidden = (ssid == "") ? "true" : "false"
+        channel = channel_from_freq(freq)
+        printf "    {\"ssid\":\"%s\",\"ssid_hidden\":%s,\"signal\":\"%s dBm\",\"freq\":\"%s\",\"channel\":\"%s\",\"security\":\"%s\"}", json_escape(ssid), hidden, json_escape(signal), json_escape(freq), json_escape(channel), json_escape(security_from_flags(flags))
+        count++
+      }
+      END {
+        printf "\n  ]\n"
+        printf "}\n"
+      }
+    ' "$scan_file"
+    return 0
   fi
+
+  ui "backend=wpa_cli"
+  ui "interface=$iface"
+  ui "timestamp=$(timestamp_utc)"
+  awk '
+    function channel_from_freq(freq) {
+      if (freq == 2484) return 14
+      if (freq >= 2412 && freq <= 2472) return int((freq - 2407) / 5)
+      if (freq >= 5000 && freq <= 5900) return int((freq - 5000) / 5)
+      return "unknown"
+    }
+    function security_from_flags(flags) {
+      if (flags ~ /SAE/ || flags ~ /WPA3/) return "WPA3"
+      if (flags ~ /WPA2/ && flags ~ /WPA-/) return "WPA/WPA2"
+      if (flags ~ /WPA2/ || flags ~ /RSN/) return "WPA2"
+      if (flags ~ /WPA-/ || flags ~ /WPA\]/) return "WPA"
+      if (flags ~ /WEP/) return "WEP"
+      return "open"
+    }
+    NR == 1 { next }
+    NF >= 4 {
+      freq=$2
+      signal=$3
+      flags=$4
+      ssid=$0
+      sub(/^[^\t]*\t[^\t]*\t[^\t]*\t[^\t]*\t?/, "", ssid)
+      display_ssid = (ssid == "") ? "<hidden>" : ssid
+      printf "  - ssid=%s signal=%s dBm channel=%s security=%s\n", display_ssid, signal, channel_from_freq(freq), security_from_flags(flags)
+      count++
+    }
+    END {
+      if (count == 0) print "  - no scan results reported by wpa_cli"
+    }
+  ' "$scan_file"
+}
+
+try_scan_real_wpa_cli() {
+  iface="$1"
+  output_json="$2"
+  wpa_cli_bin="$(find_tool wpa_cli 2>/dev/null || true)"
+  [ -n "$wpa_cli_bin" ] || return 2
+
+  tmp="${TMPDIR:-/tmp}/wifi-kit-wpa-cli-scan.$$"
+  err="${TMPDIR:-/tmp}/wifi-kit-wpa-cli-scan-err.$$"
+
+  if "$wpa_cli_bin" -i "$iface" scan_results > "$tmp" 2> "$err"; then
+    emit_scan_from_wpa_cli "$tmp" "$iface" "$output_json"
+    rm -f "$tmp" "$err"
+    return 0
+  fi
+
+  rm -f "$tmp" "$err"
+  return 1
+}
+
+try_scan_real_iw() {
+  iface="$1"
+  output_json="$2"
 
   iw_bin="$(find_tool iw 2>/dev/null || true)"
-  if [ -z "$iw_bin" ]; then
-    if [ "$output_json" -eq 1 ]; then
-      emit_scan_json_unavailable "iw-missing" "unknown"
-      return 0
-    fi
-    ui "scan-real unavailable: iw is missing"
-    return 0
-  fi
-
-  if [ -z "$iface" ]; then
-    iface="$(detect_wifi_interfaces | sed -n '1p')"
-  fi
-
-  if [ -z "$iface" ]; then
-    if [ "$output_json" -eq 1 ]; then
-      emit_scan_json_unavailable "no-wifi-interface" "unknown"
-      return 0
-    fi
-    ui "scan-real unavailable: no Wi-Fi interface detected"
-    return 0
-  fi
+  [ -n "$iw_bin" ] || return 2
 
   tmp="${TMPDIR:-/tmp}/wifi-kit-iw-scan.$$"
   err="${TMPDIR:-/tmp}/wifi-kit-iw-scan-err.$$"
@@ -404,6 +476,7 @@ cmd_scan_real() {
           printf "  \"backend\":\"iw\",\n"
           printf "  \"interface\":\"%s\",\n", json_escape(iface)
           printf "  \"timestamp\":\"%s\",\n", json_escape(timestamp)
+          printf "  \"status\":\"ok\",\n"
           printf "  \"networks\":[\n"
         }
         /^BSS / {
@@ -487,20 +560,82 @@ cmd_scan_real() {
         }
       ' "$tmp"
     fi
-  else
-    if [ "$output_json" -eq 1 ]; then
-      emit_scan_json_unavailable "iw-scan-failed" "$iface"
-      rm -f "$tmp" "$err"
-      return 0
-    fi
-    ui "scan-real unavailable on $iface: iw scan failed"
-    ui "hint: this may require root/CAP_NET_ADMIN or an idle Wi-Fi interface"
-    if [ -s "$err" ]; then
-      sed -n '1,3p' "$err" | sed 's/^/  detail: /'
-    fi
+    rm -f "$tmp" "$err"
+    return 0
   fi
 
+  if [ "$output_json" -eq 1 ]; then
+    rm -f "$tmp" "$err"
+    return 1
+  fi
+
+  ui "scan-real unavailable on $iface: iw scan failed"
+  ui "hint: this may require root/CAP_NET_ADMIN or an idle Wi-Fi interface"
+  if [ -s "$err" ]; then
+    sed -n '1,3p' "$err" | sed 's/^/  detail: /'
+  fi
   rm -f "$tmp" "$err"
+  return 1
+}
+
+cmd_scan_real() {
+  output_json=0
+  iface=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --json)
+        output_json=1
+        ;;
+      *)
+        if [ -z "$iface" ]; then
+          iface="$1"
+        else
+          ui "scan-real unknown argument: $1"
+          return 1
+        fi
+        ;;
+    esac
+    shift
+  done
+
+  if [ "$output_json" -eq 0 ]; then
+    ui_header "scan-real (read-only)"
+    ui "safety: read-only, no connection, no network writes, no secrets"
+    ui "backend_order=wpa_cli,iw"
+  fi
+
+  if [ -z "$iface" ]; then
+    iface="$(detect_wifi_interfaces | sed -n '1p')"
+  fi
+
+  if [ -z "$iface" ]; then
+    if [ "$output_json" -eq 1 ]; then
+      emit_scan_json_unavailable "no-wifi-interface" "unknown" "wpa_cli"
+      return 0
+    fi
+    ui "scan-real unavailable: no Wi-Fi interface detected"
+    return 0
+  fi
+
+  if try_scan_real_wpa_cli "$iface" "$output_json"; then
+    return 0
+  fi
+
+  if try_scan_real_iw "$iface" "$output_json"; then
+    return 0
+  fi
+
+  if [ "$output_json" -eq 1 ]; then
+    if ! has_tool wpa_cli && ! has_tool iw; then
+      emit_scan_json_unavailable "scan-tools-missing" "$iface" "wpa_cli"
+    else
+      emit_scan_json_unavailable "scan-readonly-failed" "$iface" "wpa_cli"
+    fi
+    return 0
+  fi
+
+  ui "scan-real unavailable on $iface: wpa_cli scan_results and iw scan both failed"
+  ui "hint: this command did not trigger a new scan and did not modify Wi-Fi state"
 }
 cmd_stability_status() {
   ui_header "stability-status (read-only)"

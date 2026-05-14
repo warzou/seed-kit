@@ -104,7 +104,7 @@ Elles ne lancent aucune connexion Wi-Fi, n'ecrivent pas dans `wpa_supplicant`, n
 
 Le prototype utilise un helper local (`prototype/helpers.sh`) pour retrouver les outils reseau dans `PATH`, puis dans `/usr/sbin`, `/sbin`, `/usr/bin` et `/bin`. Ce helper reste strictement local a `wifi-kit`.
 
-`scan-real` est la base du futur backend read-only du portail. Le mode texte affiche `ssid`, `signal`, `channel` et `security`. Le mode `--json` expose un format stable pour une future UI locale, y compris quand `iw` manque ou que le scan est indisponible, sans connexion, sans cache persistant et sans mutation reseau.
+`scan-real` est la base du futur backend read-only du portail. Il privilegie `wpa_cli -i <iface> scan_results`, strictement lecture seule, afin de mieux fonctionner sur un Raspberry Pi deja connecte. `iw dev <iface> scan` reste un fallback read-only. Le mode texte affiche `ssid`, `signal`, `channel` et `security`. Le mode `--json` expose un format stable pour une future UI locale, y compris quand les outils manquent ou que le scan est indisponible, sans connexion, sans cache persistant et sans mutation reseau.
 
 Diagnostic SAFE unique:
 

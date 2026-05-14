@@ -11,7 +11,6 @@
       --muted: #667064;
       --line: #d9d0c1;
       --panel: #fffdf8;
-      --soft: #eef5ea;
       --safe: #146c43;
       --safe-2: #dff3e5;
       --warn-2: #fff3d5;
@@ -24,9 +23,7 @@
 
     body {
       margin: 0;
-      background:
-        radial-gradient(circle at top left, rgba(20, 108, 67, 0.14), transparent 30rem),
-        linear-gradient(180deg, #fbf8f1 0%, var(--bg) 100%);
+      background: radial-gradient(circle at top left, rgba(20, 108, 67, 0.14), transparent 30rem), linear-gradient(180deg, #fbf8f1 0%, var(--bg) 100%);
       color: var(--ink);
       font-family: ui-sans-serif, "Segoe UI", Verdana, sans-serif;
       line-height: 1.45;
@@ -88,7 +85,7 @@
       font-size: 1.02rem;
     }
 
-    .hero-actions {
+    .hero-actions, .network-meta {
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
@@ -137,7 +134,7 @@
       cursor: default;
     }
 
-    .status-card, section, détails {
+    .status-card, section, details {
       border: 1px solid var(--line);
       border-radius: 22px;
       background: var(--panel);
@@ -161,9 +158,7 @@
       gap: 14px;
     }
 
-    .main-card {
-      border-color: rgba(20, 108, 67, 0.28);
-    }
+    .main-card { border-color: rgba(20, 108, 67, 0.28); }
 
     .network-list {
       display: grid;
@@ -180,12 +175,7 @@
       padding: 14px;
     }
 
-    .network-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 7px;
-      margin-top: 8px;
-    }
+    .network-meta { margin-top: 8px; }
 
     .network-action {
       display: grid;
@@ -246,9 +236,7 @@
       font-size: 0.95rem;
     }
 
-    détails {
-      background: #fbf9f4;
-    }
+    details { background: #fbf9f4; }
 
     summary {
       cursor: pointer;
@@ -275,20 +263,12 @@
 
     @media (min-width: 760px) {
       .shell { padding: 28px 20px 42px; }
-
       .hero {
         grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.6fr);
         align-items: end;
       }
-
-      .grid {
-        grid-template-columns: 1.45fr 0.55fr;
-      }
-
-      .advanced {
-        grid-column: 1 / -1;
-      }
-
+      .grid { grid-template-columns: 1.45fr 0.55fr; }
+      .advanced { grid-column: 1 / -1; }
       .network {
         grid-template-columns: minmax(0, 1fr) minmax(180px, 0.35fr);
         align-items: center;
@@ -302,7 +282,7 @@
       <div>
         <p class="eyebrow">Assistant Wi-Fi SAFE</p>
         <h1>Choisir un Wi-Fi</h1>
-        <p class="lead">Cette page aide à préparer une connexion sans rien changer. Aucun mot de passe n'est envoyé, aucun réseau n'est modifié.</p>
+        <p class="lead">Cette page aide &agrave; pr&eacute;parer une connexion sans rien changer. Aucun mot de passe n'est envoy&eacute;, aucun r&eacute;seau n'est modifi&eacute;.</p>
       </div>
       <div class="status-card" aria-labelledby="connection-title">
         <p class="eyebrow">Connexion actuelle</p>
@@ -312,15 +292,16 @@
         </div>
         <div class="hero-actions" style="margin-top: 14px;">
           <span class="pill safe">Lecture seule</span>
-          <button id="refresh" type="button" class="button secondary">Rafraîchir</button>
+          <button id="refresh" type="button" class="button secondary">Rafraichir</button>
         </div>
       </div>
     </header>
 
     <div class="grid">
       <section class="main-card" aria-labelledby="network-title">
-        <p class="eyebrow">Étape 1</p>
+        <p class="eyebrow">Etape 1</p>
         <h2 id="network-title">Reseaux disponibles</h2>
+        <p class="empty" id="scan-source">Source de scan: inconnue</p>
         <div id="scan-message" class="callout" hidden></div>
         <div id="network-list" class="network-list"></div>
       </section>
@@ -329,16 +310,16 @@
         <p class="eyebrow">Mode SAFE</p>
         <h2 id="safe-title">Ce prototype ne connecte rien</h2>
         <div class="mini-grid">
-          <div class="metric"><span>Connexion réelle</span><strong id="real-apply">désactivée</strong></div>
-          <div class="metric"><span>Écriture réseau</span><strong id="network-writes">désactivée</strong></div>
-          <div class="metric"><span>Secrets</span><strong id="secret-policy">non collecté</strong></div>
+          <div class="metric"><span>Connexion reelle</span><strong id="real-apply">desactivee</strong></div>
+          <div class="metric"><span>Ecriture reseau</span><strong id="network-writes">desactivee</strong></div>
+          <div class="metric"><span>Secrets</span><strong id="secret-policy">non collectes</strong></div>
           <div class="metric"><span>Action</span><strong>aucune</strong></div>
         </div>
-        <p class="empty" style="margin-top: 12px;">Le bouton de connexion reste volontairement désactivé tant que connect-safe réel n'est pas valide.</p>
+        <p class="empty" style="margin-top: 12px;">Le bouton de connexion reste volontairement desactive tant que connect-safe reel n'est pas valide.</p>
       </section>
 
-      <détails class="advanced">
-        <summary>Afficher les détails techniques</summary>
+      <details class="advanced">
+        <summary>Afficher les details techniques</summary>
         <div class="advanced-grid">
           <section aria-labelledby="node-title">
             <h2 id="node-title">Diagnostic SAFE</h2>
@@ -351,7 +332,7 @@
             <pre id="raw-snapshot"></pre>
           </section>
         </div>
-      </détails>
+      </details>
     </div>
   </main>
 
@@ -359,7 +340,7 @@
 {
   "diagnose": {
     "mode": "safe-diagnose",
-    "timestamp": "démo",
+    "timestamp": "demo",
     "dry_run_only": true,
     "real_apply_allowed": false,
     "backend": "unknown",
@@ -387,16 +368,16 @@
     "ssh_client": "unknown",
     "ssh_route_interface": "unknown",
     "runtime_fingerprint": "unknown",
-    "timestamp": "démo",
+    "timestamp": "demo",
     "secret_policy": "no-secrets",
     "persistence": "none"
   },
   "scan": {
-    "backend": "iw",
+    "backend": "wpa_cli",
     "interface": "unknown",
-    "timestamp": "démo",
+    "timestamp": "demo",
     "status": "unavailable",
-    "reason": "démo-data",
+    "reason": "demo-data",
     "networks": []
   }
 }
@@ -420,7 +401,7 @@
     }
 
     function yesNo(flag) {
-      return flag ? 'activée' : 'désactivée';
+      return flag ? 'activee' : 'desactivee';
     }
 
     function describeConnection() {
@@ -428,24 +409,37 @@
       const ip = value(data.diagnose, 'current_ip');
       const route = value(data.diagnose, 'default_route');
       document.getElementById('current-connection').textContent = ssid === 'unknown' || ssid === 'inconnu'
-        ? 'Connexion Wi-Fi non déterminée'
-        : `Connecté à ${ssid}`;
+        ? 'Connexion Wi-Fi non determinee'
+        : `Connecte a ${ssid}`;
       document.getElementById('current-detail').textContent = `IP ${ip} - route ${route}`;
+    }
+
+    function describeScanBackend(scan) {
+      const backend = scan.backend || 'unknown';
+      if (backend === 'wpa_cli') return 'Source de scan: wpa_cli scan_results (lecture seule)';
+      if (backend === 'iw') return 'Source de scan: iw scan (fallback lecture seule)';
+      return `Source de scan: ${backend}`;
     }
 
     function describeScanReason(scan) {
       const reason = scan.reason || scan.status || 'unknown';
+      if (reason === 'scan-readonly-failed') {
+        return 'Le Raspberry Pi ne peut pas lire les resultats Wi-Fi pour le moment. La connexion actuelle reste preservee.';
+      }
+      if (reason === 'scan-tools-missing') {
+        return "Le scan Wi-Fi n'est pas disponible car wpa_cli et iw sont absents ou introuvables.";
+      }
       if (reason === 'iw-scan-failed') {
-        return 'Le Raspberry Pi ne peut pas scanner les réseaux pour le moment tout en gardant la connexion Wi-Fi actuelle.';
+        return 'Le fallback iw ne peut pas scanner les reseaux pour le moment tout en gardant la connexion Wi-Fi actuelle.';
       }
       if (reason === 'iw-missing') {
         return "Le scan Wi-Fi n'est pas disponible car l'outil iw est absent.";
       }
       if (reason === 'no-wifi-interface') {
-        return "Aucune interface Wi-Fi n'a été détectée.";
+        return "Aucune interface Wi-Fi n'a ete detectee.";
       }
-      if (reason === 'démo-data') {
-        return 'Aucun réseau reel dans la démo. Lance le serveur local read-only pour affichér les données du Raspberry Pi.';
+      if (reason === 'demo-data') {
+        return 'Aucun reseau reel dans la demo. Lance le serveur local read-only pour afficher les donnees du Raspberry Pi.';
       }
       return `Le scan Wi-Fi est indisponible pour le moment (${reason}).`;
     }
@@ -456,7 +450,7 @@
         metric('Interface', value(data.diagnose, 'interface')),
         metric('Adresse IP', value(data.diagnose, 'current_ip')),
         metric('Route', value(data.diagnose, 'default_route')),
-        metric('Économie énergie', value(data.diagnose, 'power_save')),
+        metric('Economie energie', value(data.diagnose, 'power_save')),
         metric('Backend', value(data.diagnose, 'backend')),
         metric('Chemin SSH', value(data.diagnose, 'ssh_route_interface'))
       );
@@ -467,6 +461,7 @@
       const message = document.getElementById('scan-message');
       const scan = data.scan || {};
       const networks = Array.isArray(scan.networks) ? scan.networks : [];
+      document.getElementById('scan-source').textContent = describeScanBackend(scan);
       target.innerHTML = '';
 
       if (networks.length === 0) {
@@ -477,9 +472,9 @@
         const text = document.createElement('div');
         const title = document.createElement('h3');
         const body = document.createElement('p');
-        title.textContent = 'Aucun réseau affiché';
+        title.textContent = 'Aucun reseau affiche';
         body.className = 'empty';
-        body.textContent = 'La connexion actuelle est préservée. Tu peux rafraichir plus tard ou ouvrir les détails techniques.';
+        body.textContent = 'La connexion actuelle est preservee. Tu peux rafraichir plus tard ou ouvrir les details techniques.';
         text.append(title, body);
         const action = document.createElement('button');
         action.type = 'button';
@@ -499,13 +494,13 @@
         const text = document.createElement('div');
         const title = document.createElement('h3');
         const meta = document.createElement('div');
-        const ssid = network.ssid_hidden ? 'Réseau masqué' : (network.ssid || 'Réseau masqué');
+        const ssid = network.ssid_hidden ? 'Reseau masque' : (network.ssid || 'Reseau masque');
         title.textContent = ssid;
         meta.className = 'network-meta';
         [
           `Signal ${network.signal || 'inconnu'}`,
           `Canal ${network.channel || 'inconnu'}`,
-          network.security || 'sécurité inconnue'
+          network.security || 'securite inconnue'
         ].forEach((label) => {
           const badge = document.createElement('span');
           badge.className = 'badge';
@@ -520,7 +515,7 @@
         password.className = 'password-mock';
         password.type = 'password';
         password.disabled = true;
-        password.placeholder = 'Mot de passe - bientôt';
+        password.placeholder = 'Mot de passe - bientot';
         const action = document.createElement('button');
         action.type = 'button';
         action.className = 'button';
@@ -537,7 +532,7 @@
       document.getElementById('real-apply').textContent = yesNo(data.diagnose?.real_apply_allowed);
       document.getElementById('network-writes').textContent = yesNo(data.diagnose?.network_writes);
       document.getElementById('secret-policy').textContent = value(data.diagnose, 'secret_policy') === 'no-secrets'
-        ? 'non collecté'
+        ? 'non collectes'
         : value(data.diagnose, 'secret_policy');
     }
 
