@@ -51,6 +51,25 @@ Minimum snapshot fields:
 
 The snapshot must not contain PSK values in `wifi-kit` business files or logs.
 
+The current SAFE preview for that future snapshot is:
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit.sh state-snapshot --simulate
+sh modules/wifi-kit/prototype/wifi-kit.sh state-snapshot --simulate --json
+```
+
+This preview is read-only and intentionally limited.
+It is a manifest-style runtime snapshot, not a persistent backup engine.
+
+The V0 read-only command for this direction is:
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit.sh runtime-state show
+```
+
+It prints a small runtime snapshot preview with no network writes and no
+secrets. It is intentionally not a backup archive and not a restore format yet.
+
 ## Proposed transactional states
 
 - `readonly`: observe current state and build a plan.

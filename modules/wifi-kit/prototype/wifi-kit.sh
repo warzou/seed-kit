@@ -66,6 +66,75 @@ first_wifi_interface() {
   detect_wifi_interfaces | sed -n '1p'
 }
 
+recommended_backend() {
+  os_id="$(os_field ID || true)"
+  os_name="$(os_field NAME || true)"
+  os_like="$(os_field ID_LIKE || true)"
+
+  backend="generic-readonly"
+  case "$os_id $os_name $os_like" in
+    *raspbian*|*raspberry*|*debian*)
+      if has_tool wpa_supplicant || has_tool wpa_cli; then
+        backend="rpios-wpa"
+      fi
+      ;;
+  esac
+
+  printf '%s\n' "$backend"
+}
+
+current_ip_for_iface() {
+  iface="$1"
+  ip_bin="$(find_tool ip 2>/dev/null || true)"
+  if [ -n "$ip_bin" ]; then
+    "$ip_bin" -o addr show dev "$iface" 2>/dev/null | awk 'NR == 1 { print $4 }'
+  fi
+}
+
+default_route_line() {
+  ip_bin="$(find_tool ip 2>/dev/null || true)"
+  if [ -n "$ip_bin" ]; then
+    "$ip_bin" route show default 2>/dev/null | sed -n '1p'
+  fi
+}
+
+power_save_for_iface() {
+  iface="$1"
+  iw_bin="$(find_tool iw 2>/dev/null || true)"
+  if [ -n "$iw_bin" ]; then
+    "$iw_bin" dev "$iface" get power_save 2>/dev/null
+  fi
+}
+
+current_ssid_for_iface() {
+  iface="$1"
+  iw_bin="$(find_tool iw 2>/dev/null || true)"
+  if [ -n "$iw_bin" ]; then
+    "$iw_bin" dev "$iface" link 2>/dev/null | awk -F'SSID: ' '/SSID:/ { print $2; exit }'
+  fi
+}
+
+ssh_client_address() {
+  printf '%s\n' "${SSH_CLIENT:-}" | awk '{ print $1 }'
+}
+
+ssh_route_interface() {
+  ssh_client="$(ssh_client_address)"
+  ip_bin="$(find_tool ip 2>/dev/null || true)"
+  if [ -n "$ssh_client" ] && [ -n "$ip_bin" ]; then
+    "$ip_bin" route get "$ssh_client" 2>/dev/null | awk '
+      {
+        for (i = 1; i <= NF; i++) {
+          if ($i == "dev" && (i + 1) <= NF) {
+            print $(i + 1)
+            exit
+          }
+        }
+      }
+    '
+  fi
+}
+
 cmd_backend_detect() {
   ui_header "backend-detect (read-only)"
   ui "safety: read-only, no connection, no network writes, no secrets"
@@ -88,16 +157,7 @@ cmd_backend_detect() {
   tool_state dhclient || true
   tool_state busybox || true
 
-  recommended="generic-readonly"
-  case "$os_id $os_name $os_like" in
-    *raspbian*|*raspberry*|*debian*)
-      if has_tool wpa_supplicant || has_tool wpa_cli; then
-        recommended="rpios-wpa"
-      fi
-      ;;
-  esac
-
-  ui "recommended_backend=$recommended"
+  ui "recommended_backend=$(recommended_backend)"
 }
 
 cmd_status_real() {
@@ -128,6 +188,107 @@ cmd_status_real() {
   else
     ui "  - unavailable (ip missing)"
   fi
+}
+
+runtime_tool_state() {
+  tool_name="$1"
+  if has_tool "$tool_name"; then
+    echo "present"
+  else
+    echo "missing"
+  fi
+}
+
+cmd_runtime_state_show() {
+  ui_header "runtime-state show"
+  ui "safety: read-only snapshot preview; no network writes, no secrets"
+
+  ui "timestamp=$(timestamp_utc)"
+  ui "hostname=$(hostname 2>/dev/null || echo unknown)"
+  ui "os_id=$(os_field ID || echo unknown)"
+  ui "os_like=$(os_field ID_LIKE || echo unknown)"
+  ui "backend_hint=$(recommended_backend)"
+
+  ssh_client="unknown"
+  if [ -n "${SSH_CONNECTION:-}" ]; then
+    ssh_client="$(printf '%s\n' "$SSH_CONNECTION" | awk '{print $1}')"
+  fi
+  ui "ssh_client=$ssh_client"
+
+  ip_bin="$(find_tool ip || true)"
+  if [ -n "$ip_bin" ] && [ "$ssh_client" != "unknown" ]; then
+    ssh_route="$($ip_bin route get "$ssh_client" 2>/dev/null | sed -n '1p' || true)"
+  else
+    ssh_route=""
+  fi
+  ui "ssh_route=${ssh_route:-unknown}"
+
+  ui "default_routes:"
+  if [ -n "$ip_bin" ]; then
+    routes="$($ip_bin route show default 2>/dev/null || true)"
+    if [ -n "$routes" ]; then
+      printf '%s\n' "$routes" | sed 's/^/  - /'
+    else
+      ui "  - none"
+    fi
+  else
+    ui "  - ip command missing"
+  fi
+
+  ui "wifi_interfaces:"
+  interfaces="$(detect_wifi_interfaces || true)"
+  if [ -z "$interfaces" ]; then
+    ui "  - none"
+  else
+    for iface in $interfaces; do
+      operstate="unknown"
+      carrier="unknown"
+      [ -r "/sys/class/net/$iface/operstate" ] && operstate="$(sed -n '1p' "/sys/class/net/$iface/operstate" 2>/dev/null || echo unknown)"
+      [ -r "/sys/class/net/$iface/carrier" ] && carrier="$(sed -n '1p' "/sys/class/net/$iface/carrier" 2>/dev/null || echo unknown)"
+
+      ui "  - iface=$iface"
+      ui "    operstate=$operstate"
+      ui "    carrier=$carrier"
+
+      if [ -n "$ip_bin" ]; then
+        addrs="$($ip_bin -o addr show dev "$iface" 2>/dev/null | awk '{print $3 ":" $4}' || true)"
+        if [ -n "$addrs" ]; then
+          printf '%s\n' "$addrs" | sed 's/^/    addr=/'
+        else
+          ui "    addr=none"
+        fi
+      else
+        ui "    addr=unknown"
+      fi
+
+      iw_bin="$(find_tool iw || true)"
+      if [ -n "$iw_bin" ]; then
+        power_save="$($iw_bin dev "$iface" get power_save 2>/dev/null | awk '{print $2}' || true)"
+        link_raw="$($iw_bin dev "$iface" link 2>/dev/null || true)"
+        case "$link_raw" in
+          *"Connected to "*)
+            link_state="connected"
+            ;;
+          *"Not connected."*)
+            link_state="not-connected"
+            ;;
+          *)
+            link_state="unknown"
+            ;;
+        esac
+        ui "    power_save=${power_save:-unknown}"
+        ui "    link=$link_state"
+      else
+        ui "    power_save=unknown"
+        ui "    link=unknown"
+      fi
+    done
+  fi
+
+  ui "runtime_fingerprint:"
+  for tool_name in ip iw wpa_cli wpa_supplicant nmcli systemctl; do
+    ui "  $tool_name=$(runtime_tool_state "$tool_name")"
+  done
 }
 
 cmd_scan_real() {
@@ -825,6 +986,106 @@ cmd_connect_safe() {
   ui "next_safe_step=review-plan-or-run-read-only-diagnostics"
 }
 
+cmd_state_snapshot() {
+  mode="${1:-}"
+  output_json=0
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --simulate)
+        mode="--simulate"
+        ;;
+      --json)
+        output_json=1
+        ;;
+      *)
+        ui "unknown state-snapshot option: $1"
+        ui "supported options: --simulate, --json"
+        return 1
+        ;;
+    esac
+    shift
+  done
+
+  if [ "$mode" != "--simulate" ]; then
+    ui "state-snapshot requires --simulate in this prototype"
+    return 1
+  fi
+
+  iface="$(first_wifi_interface || true)"
+  backend="$(recommended_backend)"
+  current_ip=""
+  current_ssid_state="unknown"
+  power_save=""
+  if [ -n "$iface" ]; then
+    current_ip="$(current_ip_for_iface "$iface" || true)"
+    current_ssid_probe="$(current_ssid_for_iface "$iface" || true)"
+    if [ -n "$current_ssid_probe" ]; then
+      current_ssid_state="present"
+    fi
+    power_save="$(power_save_for_iface "$iface" || true)"
+  fi
+  default_route="$(default_route_line || true)"
+  ssh_client="$(ssh_client_address)"
+  ssh_iface="$(ssh_route_interface || true)"
+  timestamp="$(timestamp_utc)"
+  runtime_fingerprint="$(printf '%s|%s|%s|%s\n' "${backend:-unknown}" "${iface:-unknown}" "${ssh_iface:-unknown}" "${timestamp:-unknown}")"
+
+  if [ "$output_json" -eq 1 ]; then
+    awk -v backend="${backend:-unknown}" \
+        -v iface="${iface:-unknown}" \
+        -v current_ssid_state="${current_ssid_state:-unknown}" \
+        -v current_ip="${current_ip:-unknown}" \
+        -v default_route="${default_route:-unknown}" \
+        -v power_save="${power_save:-unknown}" \
+        -v ssh_client="${ssh_client:-unknown}" \
+        -v ssh_iface="${ssh_iface:-unknown}" \
+        -v timestamp="$timestamp" \
+        -v runtime_fingerprint="$runtime_fingerprint" '
+      function json_escape(value, escaped) {
+        escaped=value
+        gsub(/\\/, "\\\\", escaped)
+        gsub(/"/, "\\\"", escaped)
+        return escaped
+      }
+      BEGIN {
+        printf "{\n"
+        printf "  \"mode\":\"simulate\",\n"
+        printf "  \"backend\":\"%s\",\n", json_escape(backend)
+        printf "  \"interface\":\"%s\",\n", json_escape(iface)
+        printf "  \"current_ssid_state\":\"%s\",\n", json_escape(current_ssid_state)
+        printf "  \"current_ip\":\"%s\",\n", json_escape(current_ip)
+        printf "  \"default_route\":\"%s\",\n", json_escape(default_route)
+        printf "  \"power_save\":\"%s\",\n", json_escape(power_save)
+        printf "  \"ssh_client\":\"%s\",\n", json_escape(ssh_client)
+        printf "  \"ssh_route_interface\":\"%s\",\n", json_escape(ssh_iface)
+        printf "  \"runtime_fingerprint\":\"%s\",\n", json_escape(runtime_fingerprint)
+        printf "  \"timestamp\":\"%s\",\n", json_escape(timestamp)
+        printf "  \"secret_policy\":\"no-secrets\",\n"
+        printf "  \"persistence\":\"none\"\n"
+        printf "}\n"
+      }
+    '
+    return 0
+  fi
+
+  ui_header "state-snapshot --simulate"
+  ui "safety: simulation only; no network writes, no secrets, no persistence"
+  ui "mode=simulate"
+  ui "backend=${backend:-unknown}"
+  ui "interface=${iface:-unknown}"
+  ui "current_ssid_state=${current_ssid_state:-unknown}"
+  ui "current_ip=${current_ip:-unknown}"
+  ui "default_route=${default_route:-unknown}"
+  ui "power_save=${power_save:-unknown}"
+  ui "ssh_client=${ssh_client:-unknown}"
+  ui "ssh_route_interface=${ssh_iface:-unknown}"
+  ui "runtime_fingerprint=$runtime_fingerprint"
+  ui "timestamp=$timestamp"
+  ui "secret_policy=no-secrets"
+  ui "persistence=none"
+}
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -836,6 +1097,7 @@ Usage:
   sh prototype/wifi-kit.sh recovery-plan
   sh prototype/wifi-kit.sh backend-detect
   sh prototype/wifi-kit.sh status-real
+  sh prototype/wifi-kit.sh runtime-state show
   sh prototype/wifi-kit.sh scan-real [--json] [IFACE]
   sh prototype/wifi-kit.sh stability-status
   sh prototype/wifi-kit.sh stability-plan
@@ -846,6 +1108,7 @@ Usage:
   sh prototype/wifi-kit.sh ssh-safety-simulate [--safe|--danger]
   sh prototype/wifi-kit.sh connect-safe-timeout-simulate [--validation-timeout|--rollback-timeout]
   sh prototype/wifi-kit.sh connect-safe --simulate
+  sh prototype/wifi-kit.sh state-snapshot --simulate [--json]
 
 This is a SAFE prototype. No hostapd/dnsmasq/NetworkManager actions are executed.
 EOF
@@ -871,6 +1134,13 @@ main() {
     recovery-plan) cmd_recovery_plan ;;
     backend-detect) cmd_backend_detect ;;
     status-real) cmd_status_real ;;
+    runtime-state)
+      shift
+      case "${1:-}" in
+        show) cmd_runtime_state_show ;;
+        *) usage; exit 2 ;;
+      esac
+      ;;
     scan-real) shift; cmd_scan_real "${1:-}" ;;
     stability-status) cmd_stability_status ;;
     stability-plan) cmd_stability_plan ;;
@@ -881,6 +1151,7 @@ main() {
     ssh-safety-simulate) shift; cmd_ssh_safety_simulate "${1:-}" ;;
     connect-safe-timeout-simulate) shift; cmd_connect_safe_timeout_simulate "${1:-}" ;;
     connect-safe) shift; cmd_connect_safe "${1:-}" ;;
+    state-snapshot) shift; cmd_state_snapshot "$@" ;;
     *) usage ;;
   esac
 }

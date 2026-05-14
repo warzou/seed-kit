@@ -100,6 +100,16 @@ sh modules/wifi-kit/prototype/wifi-kit.sh connect-safe --simulate
 
 It is simulation-only and must not ask for a real SSID, PSK, or secret.
 
+The current snapshot preview command is:
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit.sh state-snapshot --simulate
+sh modules/wifi-kit/prototype/wifi-kit.sh state-snapshot --simulate --json
+```
+
+It exists to preview the runtime state that a future real transaction would need
+before any candidate Wi-Fi change is considered.
+
 The documented transaction order is:
 
 1. `preflight`: confirm tools, stability, SSH safety, and rollback path.
@@ -112,6 +122,19 @@ The documented transaction order is:
 8. `commit-or-rollback`: commit only after validation, otherwise rollback.
 9. `state-journal`: record non-secret state transitions for review.
 
+The snapshot preview must stay minimal and non-secret:
+
+- backend detected,
+- target Wi-Fi interface,
+- current SSID presence metadata when readable, without raw SSID values,
+- current IP,
+- default route,
+- `power_save` state,
+- SSH client metadata,
+- SSH route interface metadata,
+- timestamp,
+- minimal runtime fingerprint.
+
 Abort conditions include:
 
 - SSH appears to use the target Wi-Fi interface,
@@ -122,6 +145,33 @@ Abort conditions include:
 - rollback cannot be proven.
 
 In V1, this remains a planning model. It does not perform the future controlled attempt.
+
+## Runtime snapshot preview
+
+`runtime-state show` is the current read-only snapshot preview for future
+`connect-safe` recovery work.
+
+It may inspect:
+
+- timestamp,
+- hostname and OS family,
+- backend hint,
+- SSH client route,
+- default routes,
+- Wi-Fi interface state,
+- Wi-Fi power-save state,
+- minimal tool fingerprint.
+
+It must not include:
+
+- Wi-Fi passwords,
+- raw `wpa_supplicant` content,
+- Cloudflare or Tailscale credentials,
+- full system dumps,
+- persistent archives.
+
+This keeps the snapshot useful for rollback design without turning it into a
+secret store.
 
 ## SSH-aware behavior
 

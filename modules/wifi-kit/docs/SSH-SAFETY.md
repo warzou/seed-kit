@@ -100,6 +100,20 @@ Simple ideas:
 
 This is still design only. No detection or enforcement is implemented here.
 
+`runtime-state show` may report the current SSH client address and the route
+used to reach it. This is read-only observability only; it does not yet enforce
+SSH safety decisions.
+
+`state-snapshot --simulate` extends that same SAFE observability with the fields
+that a future rollback-aware transaction would need:
+
+- `ssh_client`,
+- `ssh_route_interface`,
+- backend,
+- target Wi-Fi interface,
+- current IP,
+- default route.
+
 In the transaction simulation, SSH safety is evaluated during `preflight` and again during `validation`.
 
 The safe default is:

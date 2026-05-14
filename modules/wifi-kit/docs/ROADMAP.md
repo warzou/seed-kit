@@ -74,6 +74,8 @@ Le helper local `prototype/helpers.sh` garde la detection des outils reseau dans
 
 - Prototype `transaction-state`: premiere version disponible via `connect-safe-simulate`.
 - Prototype `snapshot`: premiere version disponible via `snapshot-simulate`.
+- Prototype `runtime-state show`: snapshot read-only du runtime, sans secret et sans ecriture reseau.
+- Prototype `state-snapshot --simulate`: apercu read-only du futur snapshot rollback, en texte ou JSON stable, sans secret et sans persistance complexe.
 - Prototype `restore`: premiere version disponible via `restore-simulate`.
 - Prototype `timeout`: premiere version disponible via `connect-safe-timeout-simulate`.
 - Prototype `ssh-awareness`: premiere version disponible via `ssh-safety-simulate`.
@@ -85,6 +87,7 @@ Le helper local `prototype/helpers.sh` garde la detection des outils reseau dans
 
 - Utiliser `scan-real` comme base terminal.
 - Utiliser `scan-real --json` comme base API/UI locale.
+- Utiliser `state-snapshot --simulate --json` comme base runtime-state/rollback preview.
 - Garder le backend testable seul en SSH.
 - Ne pas ajouter de connexion, sauvegarde, cache persistant, AP mode ou ecriture `wpa_supplicant`.
 - Garder le futur portal-ui derriere `connect-safe`, rollback, recovery et SSH safety.
