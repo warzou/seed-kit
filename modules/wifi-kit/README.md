@@ -125,6 +125,14 @@ sh modules/wifi-kit/prototype/ui/render-readonly-ui.sh > /tmp/wifi-kit-ui.html
 
 La page generee embarque uniquement des donnees read-only (`safe-diagnose --json`, `scan-real --json`, `state-snapshot --simulate --json`). Elle ne contient aucun bouton de connexion, ne collecte aucun secret et ne lance aucun portail captif.
 
+Backend HTTP local read-only, manuel et optionnel:
+
+```sh
+python3 modules/wifi-kit/prototype/ui/serve-readonly.py --host 127.0.0.1 --port 8088
+```
+
+Ce serveur expose seulement des endpoints `GET` JSON et la page statique. Il ne fournit aucun endpoint d'action et ne demarre pas automatiquement.
+
 ## Stabilite Wi-Fi terrain
 
 Sur Raspberry Pi Zero 2 W, un retour terrain a montre que `wlan0 power_save=on` peut rendre le Wi-Fi instable en idle.

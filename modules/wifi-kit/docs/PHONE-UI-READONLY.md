@@ -60,18 +60,34 @@ modules/wifi-kit/prototype/ui/index.html
 It can be opened directly for demo data, or rendered from live read-only
 commands using `render-readonly-ui.sh`.
 
+## Local HTTP prototype
+
+The first HTTP prototype is also read-only and manual:
+
+```sh
+python3 modules/wifi-kit/prototype/ui/serve-readonly.py --host 127.0.0.1 --port 8088
+```
+
+Endpoints:
+
+- `GET /`
+- `GET /api/runtime-state`
+- `GET /api/safe-diagnose`
+- `GET /api/scan`
+- `GET /api/snapshot-preview`
+- `GET /api/ui-data`
+
+The server uses fixed command lists only. It does not accept arbitrary command
+input and does not expose POST actions.
+
+This remains a local prototype.
+No AP mode, captive portal, or hotspot rescue is enabled now.
+
 ## Future HTTP shape
 
-Later, the same inputs could be exposed through a tiny local HTTP layer:
-
-- BusyBox `httpd` static files,
-- CGI shell endpoints,
-- one JSON endpoint for `safe-diagnose`,
-- one JSON endpoint for `scan-real`,
-- simple polling from the browser.
-
-This is only a future direction.
-No HTTP server, AP mode, captive portal, or hotspot rescue is enabled now.
+Later, the same inputs could be exposed through BusyBox `httpd` static files and
+CGI shell endpoints. That future shape should keep the same GET-only boundary
+until `connect-safe`, rollback, and recovery are validated.
 
 ## Safety boundary
 

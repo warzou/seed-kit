@@ -91,6 +91,23 @@
       font-weight: 650;
     }
 
+    button {
+      min-height: 30px;
+      border: 1px solid var(--safe);
+      border-radius: 6px;
+      background: var(--safe);
+      color: #ffffff;
+      padding: 4px 10px;
+      font: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: default;
+      opacity: 0.6;
+    }
+
     .grid {
       display: grid;
       grid-template-columns: repeat(12, 1fr);
@@ -182,6 +199,7 @@
         <span class="badge">no connect</span>
         <span class="badge">no wpa_supplicant write</span>
         <span class="badge">no hostapd/dnsmasq</span>
+        <button id="refresh" type="button">Refresh</button>
       </div>
     </div>
   </header>
@@ -276,7 +294,7 @@
 }
   </script>
   <script>
-    const data = JSON.parse(document.getElementById('wifi-kit-data').textContent);
+    let data = JSON.parse(document.getElementById('wifi-kit-data').textContent);
 
     function setPairs(targetId, source, keys) {
       const target = document.getElementById(targetId);
@@ -318,28 +336,48 @@
       target.replaceChildren(table);
     }
 
-    setPairs('diagnose', data.diagnose, [
-      'backend',
-      'interface',
-      'current_ip',
-      'default_route',
-      'power_save',
-      'scan_status',
-      'real_apply_allowed'
-    ]);
+    function renderAll() {
+      setPairs('diagnose', data.diagnose, [
+        'backend',
+        'interface',
+        'current_ip',
+        'default_route',
+        'power_save',
+        'scan_status',
+        'real_apply_allowed'
+      ]);
 
-    setPairs('snapshot', data.snapshot, [
-      'current_ssid_state',
-      'ssh_client',
-      'ssh_route_interface',
-      'secret_policy',
-      'persistence',
-      'timestamp'
-    ]);
+      setPairs('snapshot', data.snapshot, [
+        'current_ssid_state',
+        'ssh_client',
+        'ssh_route_interface',
+        'secret_policy',
+        'persistence',
+        'timestamp'
+      ]);
 
-    renderScan(data.scan);
-    document.getElementById('raw-diagnose').textContent = JSON.stringify(data.diagnose, null, 2);
-    document.getElementById('raw-scan').textContent = JSON.stringify(data.scan, null, 2);
+      renderScan(data.scan);
+      document.getElementById('raw-diagnose').textContent = JSON.stringify(data.diagnose, null, 2);
+      document.getElementById('raw-scan').textContent = JSON.stringify(data.scan, null, 2);
+    }
+
+    async function refreshFromServer() {
+      if (window.location.protocol === 'file:') return;
+
+      const button = document.getElementById('refresh');
+      button.disabled = true;
+      try {
+        const response = await fetch('/api/ui-data', { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        data = await response.json();
+        renderAll();
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    document.getElementById('refresh').addEventListener('click', refreshFromServer);
+    renderAll();
   </script>
 </body>
 </html>

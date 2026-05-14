@@ -53,6 +53,15 @@ sh modules/wifi-kit/prototype/ui/render-readonly-ui.sh > /tmp/wifi-kit-ui.html
 The generated page embeds JSON at render time. It does not add a server, cache,
 daemon, portal, or write path.
 
+The optional local HTTP prototype exposes the same data over fixed GET-only
+endpoints:
+
+```sh
+python3 modules/wifi-kit/prototype/ui/serve-readonly.py --host 127.0.0.1 --port 8088
+```
+
+It is not installed as a service and does not expose action endpoints.
+
 ## Minimal fields
 
 The runtime-state model should stay limited to metadata such as:
