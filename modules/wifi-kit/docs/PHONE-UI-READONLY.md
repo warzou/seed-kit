@@ -72,6 +72,31 @@ The user-facing message should avoid raw reasons like `iw-scan-failed` or
 advanced diagnostics. The main screen should show which backend produced the
 result, for example `wpa_cli scan_results` or `iw fallback`.
 
+## Signal display
+
+The phone UI should present Wi-Fi signal like a phone selector, not like raw
+radio diagnostics.
+
+Network cards show:
+
+- SSID as the main title,
+- visual signal bars,
+- readable quality (`Excellent`, `Tres bon`, `Bon`, `Moyen`, `Faible`),
+- dBm value as secondary detail,
+- channel and security badges,
+- disabled future connection action.
+
+Signal quality is derived from dBm using a deliberately simple table:
+
+- `>= -50`: Excellent,
+- `>= -60`: Tres bon,
+- `>= -67`: Bon,
+- `>= -75`: Moyen,
+- otherwise: Faible.
+
+This is display-only. It must not trigger scans, connections, roaming decisions,
+or network writes.
+
 ## Backend inputs
 
 The read-only UI can use existing prototype commands:

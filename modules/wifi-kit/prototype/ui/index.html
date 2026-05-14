@@ -177,6 +177,54 @@
 
     .network-meta { margin-top: 8px; }
 
+    .signal-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: end;
+      margin-top: 12px;
+    }
+
+    .signal-bars {
+      display: inline-flex;
+      align-items: end;
+      gap: 3px;
+      min-height: 24px;
+    }
+
+    .signal-bars span {
+      display: block;
+      width: 7px;
+      border-radius: 999px;
+      background: #d8d0c0;
+    }
+
+    .signal-bars span:nth-child(1) { height: 8px; }
+    .signal-bars span:nth-child(2) { height: 12px; }
+    .signal-bars span:nth-child(3) { height: 16px; }
+    .signal-bars span:nth-child(4) { height: 21px; }
+
+    .signal-bars[data-level="1"] span:nth-child(-n+1),
+    .signal-bars[data-level="2"] span:nth-child(-n+2),
+    .signal-bars[data-level="3"] span:nth-child(-n+3),
+    .signal-bars[data-level="4"] span:nth-child(-n+4) {
+      background: var(--safe);
+    }
+
+    .signal-quality {
+      display: grid;
+      gap: 1px;
+    }
+
+    .signal-quality strong {
+      font-size: 0.98rem;
+    }
+
+    .signal-quality small {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
     .network-action {
       display: grid;
       gap: 8px;
@@ -421,6 +469,45 @@
       return `Source de scan: ${backend}`;
     }
 
+    function signalDbm(signal) {
+      const match = String(signal || '').match(/-?\d+/);
+      return match ? Number(match[0]) : null;
+    }
+
+    function signalQuality(signal) {
+      const dbm = signalDbm(signal);
+      if (dbm === null) return { label: 'Inconnu', level: 0, dbm: 'dBm inconnu' };
+      if (dbm >= -50) return { label: 'Excellent', level: 4, dbm: `${dbm} dBm` };
+      if (dbm >= -60) return { label: 'Tr\u00e8s bon', level: 4, dbm: `${dbm} dBm` };
+      if (dbm >= -67) return { label: 'Bon', level: 3, dbm: `${dbm} dBm` };
+      if (dbm >= -75) return { label: 'Moyen', level: 2, dbm: `${dbm} dBm` };
+      return { label: 'Faible', level: 1, dbm: `${dbm} dBm` };
+    }
+
+    function signalWidget(signal) {
+      const quality = signalQuality(signal);
+      const row = document.createElement('div');
+      row.className = 'signal-row';
+
+      const bars = document.createElement('div');
+      bars.className = 'signal-bars';
+      bars.dataset.level = String(quality.level);
+      bars.setAttribute('aria-label', `Signal ${quality.label}`);
+      for (let i = 0; i < 4; i += 1) {
+        bars.appendChild(document.createElement('span'));
+      }
+
+      const text = document.createElement('div');
+      text.className = 'signal-quality';
+      const label = document.createElement('strong');
+      const dbm = document.createElement('small');
+      label.textContent = quality.label;
+      dbm.textContent = quality.dbm;
+      text.append(label, dbm);
+      row.append(bars, text);
+      return row;
+    }
+
     function describeScanReason(scan) {
       const reason = scan.reason || scan.status || 'unknown';
       if (reason === 'scan-readonly-failed') {
@@ -480,7 +567,7 @@
         action.type = 'button';
         action.className = 'button';
         action.disabled = true;
-        action.textContent = 'Se connecter';
+        action.textContent = 'Connexion bientot disponible';
         placeholder.append(text, action);
         target.append(placeholder);
         return;
@@ -498,7 +585,6 @@
         title.textContent = ssid;
         meta.className = 'network-meta';
         [
-          `Signal ${network.signal || 'inconnu'}`,
           `Canal ${network.channel || 'inconnu'}`,
           network.security || 'securite inconnue'
         ].forEach((label) => {
@@ -507,7 +593,7 @@
           badge.textContent = label;
           meta.appendChild(badge);
         });
-        text.append(title, meta);
+        text.append(title, signalWidget(network.signal), meta);
 
         const actionWrap = document.createElement('div');
         actionWrap.className = 'network-action';
@@ -520,7 +606,7 @@
         action.type = 'button';
         action.className = 'button';
         action.disabled = true;
-        action.textContent = 'Se connecter';
+        action.textContent = 'Connexion bientot disponible';
         actionWrap.append(password, action);
 
         row.append(text, actionWrap);
