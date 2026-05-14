@@ -36,6 +36,7 @@ usage() {
   echo "  sh tools/profile-state.sh inventory"
   echo "  sh tools/profile-state.sh backup --dry-run"
   echo "  sh tools/profile-state.sh backup --local --dry-run"
+  echo "  sh tools/profile-state.sh snapshot --local --dry-run --output <dir>"
 }
 
 show_plan() {
@@ -165,6 +166,143 @@ show_docker_volumes() {
   done
 }
 
+write_snapshot_paths() {
+  file="$1"
+  category="$2"
+  paths="$3"
+  note="$4"
+  policy="$5"
+
+  printf '%s\n' "$paths" | while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    if [ -e "$path" ]; then
+      status="present"
+      size="$(path_size "$path")"
+    else
+      status="missing"
+      size="0"
+    fi
+    {
+      echo "path=$path"
+      echo "category=$category"
+      echo "status=$status"
+      echo "size=$size"
+      echo "note=$note"
+      echo "policy=$policy"
+      echo
+    } >> "$file"
+  done
+}
+
+safe_snapshot_output_dir() {
+  output_dir="$1"
+
+  [ -n "$output_dir" ] || return 1
+
+  case "$output_dir" in
+    /|/home|/home/|"$HOME"|"$HOME/"|/etc|/etc/|/var|/var/|/usr|/usr/|/opt|/opt/)
+      return 1
+      ;;
+  esac
+
+  return 0
+}
+
+snapshot_local_dry_run() {
+  output_dir="$1"
+
+  if ! safe_snapshot_output_dir "$output_dir"; then
+    echo "unsafe or missing --output: $output_dir" >&2
+    echo "choose an explicit test directory, for example /tmp/seed-kit-profile-state-snapshot" >&2
+    return 2
+  fi
+
+  mkdir -p "$output_dir"
+  mkdir -p "$output_dir/inventory" \
+    "$output_dir/projects" \
+    "$output_dir/configs" \
+    "$output_dir/docker-volumes" \
+    "$output_dir/manual" \
+    "$output_dir/excluded"
+
+  manifest="$output_dir/MANIFEST.txt"
+  inventory_file="$output_dir/inventory/classification.txt"
+  manual_file="$output_dir/manual/restore-notes.txt"
+  excluded_file="$output_dir/excluded/do-not-clone.txt"
+  sums_file="$output_dir/SHA256SUMS"
+
+  {
+    echo "profile-state snapshot dry-run"
+    echo "mode=local"
+    echo "dry_run=true"
+    echo "archive_created=false"
+    echo "encryption_performed=false"
+    echo "restore_performed=false"
+    echo "secret_content_read=false"
+    echo "cloud_upload=false"
+    echo
+    echo "This directory is a preview manifest only."
+    echo "No project files, .env files, host identity files, Tailscale state, or Docker volumes are copied."
+  } > "$manifest"
+
+  {
+    echo "profile-state classification"
+    echo
+  } > "$inventory_file"
+  write_snapshot_paths "$inventory_file" "public-project" "$public_project_paths" "repo-backed project files; review before backup" "manifest only; no copy"
+  write_snapshot_paths "$inventory_file" "manual-restore" "$manual_restore_paths" "restore inputs only; not auto-applied" "manifest only; no copy"
+  write_snapshot_paths "$inventory_file" "sensitive" "$sensitive_candidate_paths" "private state; do not print contents" "encrypted archive required; no copy"
+
+  {
+    echo "manual restore notes"
+    echo
+    echo "- review rpi-edge-vps project files before restore"
+    echo "- restore .env only from an encrypted archive"
+    echo "- reconnect Tailscale manually"
+    echo "- authenticate Cloudflare manually"
+    echo "- validate Caddy and Homepage before production cutover"
+    echo "- do not run docker compose up from this dry-run"
+  } > "$manual_file"
+
+  {
+    echo "do-not-clone"
+    echo
+  } > "$excluded_file"
+  write_snapshot_paths "$excluded_file" "do-not-clone" "$do_not_clone_paths" "unique node identity; regenerate or reconnect manually" "exclude always"
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    (
+      cd "$output_dir"
+      sha256sum MANIFEST.txt inventory/classification.txt manual/restore-notes.txt excluded/do-not-clone.txt
+    ) > "$sums_file"
+  else
+    {
+      echo "sha256sum unavailable"
+      echo "checksums not generated"
+    } > "$sums_file"
+  fi
+
+  echo "profile-state snapshot local dry-run"
+  echo "output: $output_dir"
+  echo "created:"
+  echo "  MANIFEST.txt"
+  echo "  SHA256SUMS"
+  echo "  inventory/"
+  echo "  projects/"
+  echo "  configs/"
+  echo "  docker-volumes/"
+  echo "  manual/"
+  echo "  excluded/"
+  echo
+  echo "summary:"
+  echo "  archive created: no"
+  echo "  encryption performed: no"
+  echo "  restore performed: no"
+  echo "  secret content read: no"
+  echo "  sensitive files copied: no"
+  echo "  do-not-clone files copied: no"
+}
+
 list_inventory() {
   echo "profile-state inventory"
   echo
@@ -246,6 +384,31 @@ case "${1:-}" in
         exit 2
         ;;
         esac
+        ;;
+    esac
+    ;;
+  snapshot)
+    case "${2:-} ${3:-}" in
+      "--local --dry-run")
+        output_dir=""
+        shift 3
+        while [ "$#" -gt 0 ]; do
+          case "$1" in
+            --output)
+              output_dir="${2:-}"
+              shift 2
+              ;;
+            *)
+              usage >&2
+              exit 2
+              ;;
+          esac
+        done
+        snapshot_local_dry_run "$output_dir"
+        ;;
+      *)
+        usage >&2
+        exit 2
         ;;
     esac
     ;;
