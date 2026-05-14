@@ -194,7 +194,35 @@ bootstrap_runtime_ready() {
   command -v seed_detect_os >/dev/null 2>&1
 }
 
-if [ ! -f "$RUNTIME_OS" ]; then
+is_full_repo_mode() {
+  [ -f "$ROOT_DIR/docs/ARCHITECTURE.md" ]
+}
+
+seed_detect_os_builtin() {
+  if is_full_repo_mode; then
+    SEED_RUNTIME_MODE="full repo"
+  else
+    SEED_RUNTIME_MODE="single-file"
+  fi
+  SEED_OS_ID="generic"
+  SEED_OS_NAME="local system"
+  SEED_OS_LIKE=" "
+
+  if [ -r /etc/os-release ]; then
+    . /etc/os-release
+    if [ -n "${ID+x}" ] && [ -n "$ID" ]; then
+      SEED_OS_ID="$ID"
+    fi
+    if [ -n "${NAME+x}" ] && [ -n "$NAME" ]; then
+      SEED_OS_NAME="$NAME"
+    fi
+    if [ -n "${ID_LIKE+x}" ] && [ -n "$ID_LIKE" ]; then
+      SEED_OS_LIKE="$ID_LIKE"
+    fi
+  fi
+}
+
+if [ ! -f "$RUNTIME_OS" ] && ! is_full_repo_mode; then
   echo "Seed-Kit"
   echo "Small shell bootstrap toolkit"
   echo ""
@@ -219,32 +247,51 @@ if [ ! -f "$RUNTIME_OS" ]; then
   esac
 fi
 
-. "$RUNTIME_OS"
-if ! bootstrap_runtime_ready; then
-  bootstrap_init_runtime
+if [ -f "$RUNTIME_OS" ]; then
   . "$RUNTIME_OS"
+fi
+
+if ! bootstrap_runtime_ready; then
+  if is_full_repo_mode; then
+    seed_detect_os() { seed_detect_os_builtin; }
+  else
+    bootstrap_init_runtime
+    . "$RUNTIME_OS"
+  fi
 fi
 
 MODULES="git docker tailscale wifi-stability cloudflared caddy homer homepage wifi-kit"
 
+load_backend_file() {
+  backend_file=$1
+  backend_label=$2
+
+  if [ -f "$backend_file" ]; then
+    . "$backend_file"
+  else
+    backend_name() { echo "$backend_label"; }
+    backend_plan() { echo "- backend file not present in this checkout"; echo "- using built-in minimal backend fallback"; }
+  fi
+}
+
 load_backend() {
   case "$SEED_OS_ID" in
     raspberrypi)
-      . "$ROOT_DIR/backends/raspberrypi.sh"
+      load_backend_file "$ROOT_DIR/backends/raspberrypi.sh" "raspberrypi"
       ;;
     debian)
-      . "$ROOT_DIR/backends/debian.sh"
+      load_backend_file "$ROOT_DIR/backends/debian.sh" "debian"
       ;;
     ubuntu)
-      . "$ROOT_DIR/backends/debian.sh"
+      load_backend_file "$ROOT_DIR/backends/debian.sh" "debian"
       ;;
     openwrt)
-      . "$ROOT_DIR/backends/openwrt.sh"
+      load_backend_file "$ROOT_DIR/backends/openwrt.sh" "openwrt"
       ;;
     *)
       case " $SEED_OS_LIKE " in
         *" debian "*)
-          . "$ROOT_DIR/backends/debian.sh"
+          load_backend_file "$ROOT_DIR/backends/debian.sh" "debian"
           ;;
         *)
           backend_name() { echo "generic"; }
@@ -1104,12 +1151,12 @@ fetch_repo_module() {
   if ! (
     cd "$target_dir" &&
     git sparse-checkout set --no-cone \
-      seed-kit.sh \
-      modules/wifi-kit \
-      modules/wifi-kit.sh \
-      docs/ARCHITECTURE.md \
-      docs/MODULES.md \
-      docs/FRESH-NODE-FLOW.md
+      /seed-kit.sh \
+      /modules/wifi-kit \
+      /modules/wifi-kit.sh \
+      /docs/ARCHITECTURE.md \
+      /docs/MODULES.md \
+      /docs/FRESH-NODE-FLOW.md
   ); then
     echo "[fetch] sparse-checkout failed in $target_dir" >&2
     return 5
