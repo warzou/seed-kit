@@ -200,6 +200,69 @@ section. It must not connect, save, select, enable, or reconfigure Wi-Fi.
 This remains a local prototype.
 No AP mode, captive portal, or hotspot rescue is enabled now.
 
+## Field validation milestone
+
+Validated on `pocket-node.lan` from branch `wifi-kit-work` up to commit
+`e680276 feat: add wifi-kit connection prep simulation`.
+
+Observed result:
+
+- phone UI served temporarily from the read-only HTTP prototype,
+- `wpa_cli` scan backend used successfully,
+- passive scan returned cached Wi-Fi results,
+- explicit refresh returned 7 visible networks,
+- network selection worked in the phone UI,
+- local password field was displayed,
+- `Prepare connection` rendered only a SAFE simulated plan,
+- no password was sent to the backend,
+- no password appeared in diagnostics JSON,
+- no password appeared in server logs.
+
+Commands and endpoints exercised:
+
+- `GET /`,
+- `GET /api/ui-data`,
+- `GET /api/scan`,
+- `GET /api/scan?refresh=1`,
+- `GET /api/scan-refresh`,
+- `GET /api/runtime-state`,
+- `GET /api/safe-diagnose`,
+- `GET /api/snapshot-preview`,
+- `POST /api/scan` returned `405`.
+
+Safety guarantees confirmed during the field test:
+
+- no real `connect-safe`,
+- no `wpa_supplicant` write,
+- no `save_config`,
+- no `reconfigure`,
+- no `select_network`,
+- no `enable_network`,
+- no `hostapd`,
+- no `dnsmasq`,
+- no reboot,
+- no network restart,
+- no SSID or PSK change.
+
+Current limits:
+
+- the UI is still a read-only onboarding rehearsal,
+- `Prepare connection` is frontend simulation only,
+- the password field is local browser state only,
+- the HTTP backend remains GET-only,
+- no access control or captive portal exists yet,
+- no real AP/bootstrap/rescue mode is enabled.
+
+Next UI step:
+
+- improve the visual phone experience around network cards, selected state,
+  reassurance copy, and advanced diagnostics.
+
+Separate future step:
+
+- real `connect-safe` can only be considered after rollback, timeout,
+  SSH-safety, and recovery flows are validated end to end.
+
 ## Future HTTP shape
 
 Later, the same inputs could be exposed through BusyBox `httpd` static files and

@@ -98,6 +98,47 @@ Le helper local `prototype/helpers.sh` garde la detection des outils reseau dans
 - Ne pas ajouter de connexion, sauvegarde, cache persistant, AP mode ou ecriture `wpa_supplicant`.
 - Garder le futur portal-ui derriere `connect-safe`, rollback, recovery et SSH safety.
 
+## Jalon valide - UI telephone read-only terrain
+
+Etat valide sur `pocket-node.lan`:
+
+- branche `wifi-kit-work` poussee jusqu'a `e680276`,
+- UI telephone read-only servie temporairement,
+- backend scan `wpa_cli` valide,
+- refresh explicite valide,
+- 7 reseaux detectes apres refresh,
+- selection reseau validee,
+- champ mot de passe local uniquement,
+- plan SAFE simule valide,
+- aucun secret envoye ou logge,
+- aucun `connect-safe` reel,
+- aucune ecriture `wpa_supplicant`,
+- aucun `hostapd` / `dnsmasq`,
+- aucun reboot ou restart network.
+
+Endpoints valides:
+
+- `GET /`,
+- `GET /api/ui-data`,
+- `GET /api/scan`,
+- `GET /api/scan?refresh=1`,
+- `GET /api/scan-refresh`,
+- `GET /api/runtime-state`,
+- `GET /api/safe-diagnose`,
+- `GET /api/snapshot-preview`,
+- `POST /api/scan` refuse en `405`.
+
+Prochaine etape directe:
+
+- ameliorer l'UX visuelle telephone read-only: cartes reseaux, etat selectionne,
+  messages de reassurance, et diagnostics avances mieux separes.
+
+Etape future separee:
+
+- `connect-safe` reel avec rollback, timeout, validation SSH et recovery.
+  Cette etape reste interdite tant que les garde-fous ne sont pas valides en
+  design et en test controle.
+
 ## V2 - mode reel controle
 
 - Ecriture controlee via `wpa_supplicant` quand les garde-fous seront documentes.
