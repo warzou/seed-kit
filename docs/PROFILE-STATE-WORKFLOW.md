@@ -47,9 +47,10 @@ Package verification:
 sh tools/profile-state.sh package --verify --input /tmp/profile-state-package/profile-state-snapshot.tar
 ```
 
-sh tests/profile-state-smoke.sh
+Smoke tests:
 
 ```sh
+sh tests/run-smoke.sh
 sh tests/profile-state-smoke.sh
 ```
 
