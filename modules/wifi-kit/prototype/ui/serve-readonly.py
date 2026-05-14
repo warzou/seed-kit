@@ -8,7 +8,7 @@ import json
 import subprocess
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -46,8 +46,11 @@ def safe_diagnose() -> dict:
     return run_json_command(["safe-diagnose", "--json"])
 
 
-def scan() -> dict:
-    return run_json_command(["scan-real", "--json"])
+def scan(refresh: bool = False) -> dict:
+    args = ["scan-real", "--json"]
+    if refresh:
+        args.insert(1, "--refresh")
+    return run_json_command(args)
 
 
 def snapshot_preview() -> dict:
@@ -111,7 +114,9 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         self.do_POST()
 
     def do_GET(self) -> None:
-        path = urlparse(self.path).path
+        parsed = urlparse(self.path)
+        path = parsed.path
+        query = parse_qs(parsed.query)
 
         if path in ("/", "/index.html"):
             self.send_bytes(200, "text/html; charset=utf-8", render_index().encode("utf-8"))
@@ -122,7 +127,11 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/scan":
-            self.send_json(scan())
+            self.send_json(scan(refresh=query.get("refresh") == ["1"]))
+            return
+
+        if path == "/api/scan-refresh":
+            self.send_json(scan(refresh=True))
             return
 
         if path == "/api/snapshot-preview":

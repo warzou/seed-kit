@@ -153,11 +153,21 @@ Endpoints:
 - `GET /api/runtime-state`
 - `GET /api/safe-diagnose`
 - `GET /api/scan`
+- `GET /api/scan?refresh=1`
+- `GET /api/scan-refresh`
 - `GET /api/snapshot-preview`
 - `GET /api/ui-data`
 
 The server uses fixed command lists only. It does not accept arbitrary command
 input and does not expose POST actions.
+
+`GET /api/scan` remains passive and calls `scan-real --json`.
+`GET /api/scan?refresh=1` and `GET /api/scan-refresh` are explicit refresh
+requests and call only `scan-real --refresh --json`.
+
+The phone UI must not refresh automatically on page load. The user-facing
+refresh button is GET-only, shows a loading message, and updates only the scan
+section. It must not connect, save, select, enable, or reconfigure Wi-Fi.
 
 This remains a local prototype.
 No AP mode, captive portal, or hotspot rescue is enabled now.

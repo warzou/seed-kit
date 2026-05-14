@@ -254,6 +254,16 @@
       color: var(--muted);
     }
 
+    .scan-status {
+      margin: 8px 0 12px;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .scan-status strong {
+      color: var(--ink);
+    }
+
     .mini-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -340,7 +350,7 @@
         </div>
         <div class="hero-actions" style="margin-top: 14px;">
           <span class="pill safe">Lecture seule</span>
-          <button id="refresh" type="button" class="button secondary">Rafraichir</button>
+          <button id="refresh" type="button" class="button secondary">Actualiser les reseaux</button>
         </div>
       </div>
     </header>
@@ -350,6 +360,7 @@
         <p class="eyebrow">Etape 1</p>
         <h2 id="network-title">Reseaux disponibles</h2>
         <p class="empty" id="scan-source">Source de scan: inconnue</p>
+        <p class="scan-status" id="scan-status">Scan passif pret.</p>
         <div id="scan-message" class="callout" hidden></div>
         <div id="network-list" class="network-list"></div>
       </section>
@@ -469,6 +480,18 @@
       return `Source de scan: ${backend}`;
     }
 
+    function describeScanStatus(scan) {
+      const networks = Array.isArray(scan.networks) ? scan.networks.length : 0;
+      const suffix = networks > 1 ? 'reseaux trouves' : 'reseau trouve';
+      if (scan.refresh_attempted) {
+        const status = scan.refresh_status || 'unknown';
+        if (status === 'ok') return `<strong>${networks}</strong> ${suffix} apres actualisation.`;
+        if (status === 'failed-used-existing-results') return `<strong>${networks}</strong> ${suffix}; actualisation impossible, resultats existants conserves.`;
+        return `<strong>${networks}</strong> ${suffix}; actualisation non terminee (${status}).`;
+      }
+      return `<strong>${networks}</strong> ${suffix} en lecture passive.`;
+    }
+
     function signalDbm(signal) {
       const match = String(signal || '').match(/-?\d+/);
       return match ? Number(match[0]) : null;
@@ -549,6 +572,7 @@
       const scan = data.scan || {};
       const networks = Array.isArray(scan.networks) ? scan.networks : [];
       document.getElementById('scan-source').textContent = describeScanBackend(scan);
+      document.getElementById('scan-status').innerHTML = describeScanStatus(scan);
       target.innerHTML = '';
 
       if (networks.length === 0) {
@@ -636,22 +660,26 @@
       renderDebug();
     }
 
-    async function refreshFromServer() {
+    async function refreshScanFromServer() {
       if (window.location.protocol === 'file:') return;
 
       const button = document.getElementById('refresh');
+      const status = document.getElementById('scan-status');
       button.disabled = true;
+      status.textContent = 'Actualisation SAFE en cours...';
       try {
-        const response = await fetch('/api/ui-data', { cache: 'no-store' });
+        const response = await fetch('/api/scan?refresh=1', { cache: 'no-store' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        data = await response.json();
+        data.scan = await response.json();
         renderAll();
+      } catch (error) {
+        status.textContent = `Actualisation impossible: ${error.message}`;
       } finally {
         button.disabled = false;
       }
     }
 
-    document.getElementById('refresh').addEventListener('click', refreshFromServer);
+    document.getElementById('refresh').addEventListener('click', refreshScanFromServer);
     renderAll();
   </script>
 </body>

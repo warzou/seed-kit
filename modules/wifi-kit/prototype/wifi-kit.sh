@@ -713,6 +713,12 @@ cmd_scan_real() {
 
   if [ -z "$iface" ]; then
     if [ "$output_json" -eq 1 ]; then
+      if [ "$refresh" -eq 1 ]; then
+        SCAN_REFRESH_ATTEMPTED="true"
+        SCAN_REFRESH_STATUS="no-wifi-interface"
+        SCAN_REFRESH_BACKEND="wpa_cli"
+        SCAN_REFRESH_ERROR="no Wi-Fi interface detected"
+      fi
       emit_scan_json_unavailable "no-wifi-interface" "unknown" "wpa_cli"
       return 0
     fi
