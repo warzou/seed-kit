@@ -44,6 +44,14 @@ Profiles are named module compositions for common node shapes. They are public p
 
 The `node` suffix means Tailscale is expected or planned. Profile details are documented in [PROFILES.md](PROFILES.md).
 
+### Field test note
+
+`minimal-resilient-node` profile apply V1 was field-tested on `rpi-edge-audit.lan`.
+
+The orchestration behaved as intended: modules ran sequentially, `wifi-stability` skipped cleanly because it was already active, and the flow stopped at `tailscale` when package install needed an interactive sudo-capable terminal.
+
+No profile orchestration code failure was identified. A full end-to-end profile test is still pending from an interactive SSH or local terminal with sudo available.
+
 ## Node shapes
 
 Seed-Kit supports two target shapes:

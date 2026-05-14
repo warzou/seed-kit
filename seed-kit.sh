@@ -1268,6 +1268,13 @@ run_profile_apply() {
     ui_line "  $module"
   done
   ui_line ""
+  ui_line "Preflight:"
+  ui_line "  some modules may require sudo"
+  ui_line "  some modules may require network access"
+  ui_line "  package installs should run from an interactive SSH/local terminal"
+  ui_line "  profile apply stops on first failure"
+  ui_line "  no rollback automation is implemented"
+  ui_line ""
   ui_line "This applies modules sequentially and stops on first failure."
   ui_line "No rollback automation is implemented."
 
