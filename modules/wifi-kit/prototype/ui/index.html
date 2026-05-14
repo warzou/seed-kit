@@ -12,6 +12,7 @@
       --surface-strong: rgba(24, 37, 57, 0.96);
       --surface-soft: rgba(255, 255, 255, 0.055);
       --ink: #f7f9ff;
+      --soft: #d8e4f5;
       --muted: #a9b5c8;
       --dim: #74839b;
       --line: rgba(213, 229, 255, 0.12);
@@ -23,8 +24,8 @@
       --orange: #ffb13d;
       --red: #ff554d;
       --code: #050b12;
-      --shadow: 0 22px 46px rgba(0, 0, 0, 0.45);
-      --glow: 0 14px 34px rgba(45, 149, 255, 0.22);
+      --shadow: 0 26px 58px rgba(0, 0, 0, 0.48);
+      --glow: 0 18px 42px rgba(45, 149, 255, 0.24);
       --radius-xl: 28px;
       --radius-lg: 22px;
       --radius-md: 16px;
@@ -47,9 +48,9 @@
     button, input { font: inherit; }
 
     .shell {
-      width: min(720px, 100%);
+      width: min(700px, 100%);
       margin: 0 auto;
-      padding: 16px 12px 26px;
+      padding: 18px 14px 26px;
     }
 
     .app {
@@ -59,8 +60,8 @@
 
     .hero {
       display: grid;
-      gap: 10px;
-      padding: 2px 2px 4px;
+      gap: 12px;
+      padding: 5px 3px 8px;
     }
 
     .hero-top {
@@ -72,7 +73,7 @@
 
     .brand-row {
       display: flex;
-      gap: 12px;
+      gap: 14px;
       align-items: center;
       min-width: 0;
     }
@@ -91,8 +92,8 @@
     }
 
     .icon-svg {
-      width: 1.2em;
-      height: 1.2em;
+      width: 1.32em;
+      height: 1.32em;
       display: block;
       fill: none;
       stroke: currentColor;
@@ -103,16 +104,18 @@
 
     .orb .icon-svg,
     .network-orb .icon-svg {
-      width: 28px;
-      height: 28px;
-      stroke-width: 2.35;
+      width: 34px;
+      height: 34px;
+      stroke-width: 2.55;
     }
 
     .orb {
-      width: 48px;
-      height: 46px;
-      background: linear-gradient(145deg, #4d8dff, #6558f5);
-      box-shadow: 0 14px 34px rgba(45, 149, 255, 0.28);
+      width: 66px;
+      height: 66px;
+      background:
+        radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.34), transparent 30%),
+        linear-gradient(145deg, #3eb8ff, #5b63ff 62%, #7a55ff);
+      box-shadow: 0 18px 44px rgba(45, 149, 255, 0.36);
       font-size: 1.05rem;
     }
 
@@ -127,9 +130,9 @@
 
     h1 {
       margin: 0;
-      font-size: clamp(2rem, 11vw, 2.9rem);
-      line-height: 0.92;
-      letter-spacing: -0.075em;
+      font-size: clamp(2.45rem, 14vw, 4rem);
+      line-height: 0.9;
+      letter-spacing: 0;
     }
 
     h2 {
@@ -149,7 +152,7 @@
       margin: 0;
       max-width: 40ch;
       color: var(--muted);
-      font-size: 0.96rem;
+      font-size: 0.98rem;
     }
 
     .chip,
@@ -168,6 +171,14 @@
       white-space: nowrap;
     }
 
+    .hero .chip {
+      min-height: 34px;
+      border-color: rgba(68, 212, 230, 0.54);
+      background: rgba(6, 24, 38, 0.72);
+      color: #6ef1ff;
+      box-shadow: inset 0 0 0 1px rgba(68, 212, 230, 0.1);
+    }
+
     .panel,
     details {
       border: 1px solid var(--line);
@@ -183,59 +194,71 @@
 
     .overview {
       display: grid;
-      gap: 8px;
-      padding: 10px 11px;
+      gap: 12px;
+      padding: 14px;
+      overflow: hidden;
+    }
+
+    .overview::before {
+      content: "";
+      height: 1px;
+      margin: -14px -14px 0;
+      background: linear-gradient(90deg, transparent, rgba(68, 212, 230, 0.38), transparent);
     }
 
     .overview-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 7px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: stretch;
     }
 
     .overview-safe {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 6px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
       border-top: 1px solid var(--line);
-      padding-top: 9px;
+      padding-top: 12px;
     }
 
     .status-mini,
     .safe-mini,
     .metric {
       min-width: 0;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: rgba(255, 255, 255, 0.03);
-      padding: 8px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      padding: 0;
     }
 
     .status-mini {
       display: flex;
-      gap: 9px;
+      flex: 1 1 136px;
+      gap: 11px;
       align-items: center;
       min-width: 0;
-      gap: 7px;
-      align-items: center;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.028));
     }
 
     .safe-mini {
-      display: grid;
-      justify-items: center;
-      gap: 4px;
-      text-align: center;
-      padding: 7px 5px;
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      min-height: 38px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.035);
+      padding: 5px 9px 5px 6px;
+      text-align: left;
     }
 
     .status-icon,
     .safe-icon {
-      width: 32px;
-      height: 32px;
+      width: 42px;
+      height: 42px;
       background: rgba(45, 149, 255, 0.13);
       color: var(--blue);
-      font-size: 0.84rem;
+      box-shadow: 0 10px 28px rgba(45, 149, 255, 0.13);
+      font-size: 1rem;
     }
 
     .safe-icon.safe { background: rgba(83, 220, 98, 0.12); color: var(--green); }
@@ -248,7 +271,7 @@
     .safe-mini span {
       display: block;
       color: var(--dim);
-      font-size: 0.63rem;
+      font-size: 0.62rem;
       font-weight: 950;
       letter-spacing: 0.08em;
       text-transform: uppercase;
@@ -260,7 +283,7 @@
       display: block;
       overflow-wrap: anywhere;
       color: var(--ink);
-      font-size: 0.82rem;
+      font-size: 0.9rem;
     }
 
     .safe-mini strong { font-size: 0.78rem; }
@@ -270,7 +293,7 @@
       gap: 10px;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 8px;
+      margin-bottom: 13px;
     }
 
     .section-copy,
@@ -285,9 +308,9 @@
     .scan-status { margin-top: 4px; color: #cbd7e8; }
 
     .button {
-      min-height: 42px;
+      min-height: 46px;
       border: 1px solid rgba(111, 205, 255, 0.42);
-      border-radius: 16px;
+      border-radius: 18px;
       background: linear-gradient(135deg, #4f72ff, #38d0c8);
       box-shadow: 0 16px 32px rgba(45, 149, 255, 0.22);
       color: #f8fbff;
@@ -320,17 +343,19 @@
 
     .network-list {
       display: grid;
-      gap: 8px;
+      gap: 10px;
     }
 
     .network {
       display: grid;
-      gap: 9px;
+      gap: 11px;
       width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.056), rgba(255, 255, 255, 0.028));
-      padding: 10px 11px 11px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      background:
+        radial-gradient(circle at 0% 50%, rgba(45, 149, 255, 0.12), transparent 12rem),
+        linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(11, 24, 38, 0.7));
+      padding: 12px;
       text-align: left;
       transition: border-color 190ms ease, background 190ms ease, transform 190ms ease, box-shadow 190ms ease;
     }
@@ -344,20 +369,22 @@
       transform: translateY(-1px);
     }
 
-    .network.selected { box-shadow: inset 0 0 0 1px rgba(45, 149, 255, 0.36), var(--glow); }
+    .network.selected { box-shadow: inset 0 0 0 1px rgba(45, 149, 255, 0.38), var(--glow); }
 
     .network-main {
       display: grid;
-      grid-template-columns: 44px minmax(0, 1fr) auto;
-      gap: 10px;
+      grid-template-columns: 62px minmax(0, 1fr) auto auto;
+      gap: 12px;
       align-items: center;
     }
 
     .network-orb {
-      width: 44px;
-      height: 44px;
-      background: linear-gradient(145deg, var(--blue), #0e65d8);
-      box-shadow: 0 12px 22px rgba(45, 149, 255, 0.18);
+      width: 62px;
+      height: 62px;
+      background:
+        radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.34), transparent 32%),
+        linear-gradient(145deg, var(--blue), #0e65d8);
+      box-shadow: 0 18px 34px rgba(45, 149, 255, 0.2);
       font-size: 0.98rem;
     }
 
@@ -371,9 +398,9 @@
     .network-sub {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
+      gap: 7px;
       align-items: center;
-      margin-top: 4px;
+      margin-top: 8px;
     }
 
     .badge {
@@ -381,9 +408,9 @@
       border-color: rgba(255, 255, 255, 0.1);
       background: rgba(255, 255, 255, 0.055);
       color: var(--ink);
-      padding: 4px 8px;
+      padding: 4px 9px;
       font-size: 0.67rem;
-      border-radius: 9px;
+      border-radius: 999px;
     }
 
     .badge.quality { color: var(--quality-color, var(--blue)); border-color: rgba(255, 255, 255, 0.16); }
@@ -391,13 +418,12 @@
     .choice-dot {
       display: inline-grid;
       place-items: center;
-      width: 26px;
-      height: 26px;
-      border: 2px solid rgba(255, 255, 255, 0.16);
+      width: 32px;
+      height: 32px;
+      border: 1px solid rgba(255, 255, 255, 0.13);
       border-radius: 999px;
-      color: transparent;
-      background: rgba(255, 255, 255, 0.05);
-      font-size: 0.68rem;
+      color: rgba(255, 255, 255, 0.74);
+      background: rgba(255, 255, 255, 0.045);
       font-weight: 950;
     }
 
@@ -411,6 +437,7 @@
       display: grid;
       gap: 5px;
       justify-items: end;
+      min-width: 55px;
     }
 
     .signal-bars {
@@ -422,15 +449,15 @@
 
     .signal-bars span {
       display: block;
-      width: 6px;
+      width: 7px;
       border-radius: 999px;
       background: rgba(255, 255, 255, 0.15);
     }
 
-    .signal-bars span:nth-child(1) { height: 7px; }
-    .signal-bars span:nth-child(2) { height: 10px; }
-    .signal-bars span:nth-child(3) { height: 14px; }
-    .signal-bars span:nth-child(4) { height: 19px; }
+    .signal-bars span:nth-child(1) { height: 8px; }
+    .signal-bars span:nth-child(2) { height: 12px; }
+    .signal-bars span:nth-child(3) { height: 18px; }
+    .signal-bars span:nth-child(4) { height: 24px; }
 
     .signal-bars[data-level="1"] span:nth-child(-n+1),
     .signal-bars[data-level="2"] span:nth-child(-n+2),
@@ -441,16 +468,16 @@
 
     .signal-quality {
       color: var(--signal-color, var(--blue));
-      font-size: 0.74rem;
+      font-size: 0.78rem;
       font-weight: 900;
       white-space: nowrap;
     }
 
     .network-prep {
       display: grid;
-      gap: 8px;
+      gap: 9px;
       border-top: 1px solid rgba(255, 255, 255, 0.1);
-      padding-top: 10px;
+      padding-top: 12px;
     }
 
     .field-label {
@@ -486,7 +513,7 @@
       display: grid;
       gap: 8px;
       border: 1px solid rgba(68, 212, 230, 0.22);
-      border-radius: 18px;
+      border-radius: 20px;
       background: rgba(68, 212, 230, 0.075);
       padding: 12px;
     }
@@ -544,7 +571,7 @@
 
     details {
       box-shadow: none;
-      opacity: 0.76;
+      opacity: 0.7;
       padding: 14px;
     }
 
@@ -572,16 +599,48 @@
       max-height: 280px;
     }
 
+    .bottom-nav {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: rgba(9, 18, 30, 0.66);
+      padding: 8px;
+    }
+
+    .nav-item {
+      display: grid;
+      gap: 5px;
+      justify-items: center;
+      border: 0;
+      border-radius: 17px;
+      background: transparent;
+      color: var(--dim);
+      padding: 9px 5px;
+      font-size: 0.72rem;
+      font-weight: 800;
+    }
+
+    .nav-item .icon-svg {
+      width: 23px;
+      height: 23px;
+    }
+
+    .nav-item.active {
+      background: rgba(68, 212, 230, 0.09);
+      color: var(--cyan);
+    }
+
     @media (min-width: 760px) {
       .shell { padding: 18px 16px 30px; }
       .app { grid-template-columns: 0.9fr 1.1fr; align-items: start; }
       .hero, .advanced { grid-column: 1 / -1; }
-      .overview-safe { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-      .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .network-orb {
-        width: 46px;
-        height: 46px;
+        width: 64px;
+        height: 64px;
       }
+      .bottom-nav { grid-column: 1 / -1; }
     }
   </style>
 </head>
@@ -643,6 +702,14 @@
       <path d="M13 3l-1.2 5.2L7 10l4.8 1.8L13 17l1.2-5.2L19 10l-4.8-1.8L13 3z"></path>
       <path d="M5 15l-.6 2.4L2 18l2.4.6L5 21l.6-2.4L8 18l-2.4-.6L5 15z"></path>
     </symbol>
+    <symbol id="icon-chevron" viewBox="0 0 24 24">
+      <path d="M9 6l6 6-6 6"></path>
+    </symbol>
+    <symbol id="icon-info" viewBox="0 0 24 24">
+      <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z"></path>
+      <path d="M12 11v5"></path>
+      <path d="M12 8h.01"></path>
+    </symbol>
   </svg>
   <main class="shell app">
     <header class="hero">
@@ -664,7 +731,7 @@
         <h2 id="state-title">Apercu du node</h2>
         <span class="chip">Read-only</span>
       </div>
-      <p class="node-copy">Informations en lecture seule — votre session Raspberry Pi ne bouge pas.</p>
+      <p class="node-copy">Informations en lecture seule. Votre session Raspberry Pi ne bouge pas.</p>
       <div class="overview-grid" aria-label="Etat actuel du node">
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Interface</span><strong id="status-interface">...</strong></div></div>
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-location"></use></svg></span><div><span>Adresse IP</span><strong id="status-ip">...</strong></div></div>
@@ -707,6 +774,13 @@
         </section>
       </div>
     </details>
+
+    <nav class="bottom-nav" aria-label="Navigation visuelle">
+      <button class="nav-item active" type="button" aria-current="page"><svg class="icon-svg" aria-hidden="true"><use href="#icon-wifi"></use></svg>Reseaux</button>
+      <button class="nav-item" type="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-server"></use></svg>Apercu</button>
+      <button class="nav-item" type="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-activity"></use></svg>Diag</button>
+      <button class="nav-item" type="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-info"></use></svg>Infos</button>
+    </nav>
   </main>
 
   <script id="wifi-kit-data" type="application/json">
@@ -990,7 +1064,7 @@
         signalLabel.textContent = quality.dbm;
         signalLabel.style.setProperty('--signal-color', quality.color);
         dot.className = 'choice-dot';
-        dot.textContent = 'OK';
+        dot.appendChild(makeIcon('chevron'));
 
         [
           [network.security || 'securite inconnue', ''],
