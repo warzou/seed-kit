@@ -13,6 +13,41 @@ DNS, change Cloudflare, or replace the production node.
 - mode: dry-run / test reconstruction
 - private state: reviewed manually, not restored automatically
 
+## Field test note: validated reconstruction dry-run
+
+A real reconstruction dry-run was validated from `rpi-edge` to
+`rpi3-edge-audit`.
+
+Validated flow:
+
+- Seed-Kit was retrieved on the target.
+- `git` was installed through Seed-Kit only.
+- A test snapshot of `rpi-edge-vps` was transferred without the real `.env`.
+- `profile-state inventory` completed successfully.
+- `profile-state backup --dry-run` completed successfully.
+
+Detected as expected:
+
+- `rpi-edge-vps`
+- `compose/docker-compose.yml`
+- `config/caddy`
+- `config/homepage`
+- missing `.env`
+
+Safety confirmations:
+
+- no secret content was read,
+- no real restore was performed,
+- no Docker Compose stack was started,
+- no `tailscale up` was run,
+- no Cloudflare login or tunnel mutation was performed,
+- no DNS cutover was performed,
+- `/etc/machine-id` and host SSH keys were excluded as `do-not-clone`.
+
+Docker volumes were unknown or not accessible to the `codex` user during this
+test. That is not blocking for the dry-run; real volume backup will require an
+explicit encrypted backup design and appropriate operator privileges.
+
 ## SAFE steps
 
 1. Install Seed-Kit on the target.
