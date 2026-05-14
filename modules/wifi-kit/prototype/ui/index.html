@@ -194,31 +194,27 @@
 
     .overview {
       display: grid;
-      gap: 12px;
-      padding: 14px;
+      gap: 14px;
+      padding: 3px 2px 8px;
       overflow: hidden;
     }
 
     .overview::before {
-      content: "";
-      height: 1px;
-      margin: -14px -14px 0;
-      background: linear-gradient(90deg, transparent, rgba(68, 212, 230, 0.38), transparent);
+      content: none;
     }
 
     .overview-grid {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px 12px;
       align-items: stretch;
     }
 
     .overview-safe {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
-      border-top: 1px solid var(--line);
-      padding-top: 12px;
+      gap: 9px;
+      padding: 0;
     }
 
     .status-mini,
@@ -233,10 +229,10 @@
 
     .status-mini {
       display: flex;
-      flex: 1 1 136px;
-      gap: 11px;
+      gap: 12px;
       align-items: center;
       min-width: 0;
+      padding: 2px 0;
     }
 
     .safe-mini {
@@ -253,12 +249,50 @@
 
     .status-icon,
     .safe-icon {
-      width: 42px;
-      height: 42px;
+      width: 58px;
+      height: 58px;
       background: rgba(45, 149, 255, 0.13);
       color: var(--blue);
-      box-shadow: 0 10px 28px rgba(45, 149, 255, 0.13);
+      box-shadow: 0 14px 34px rgba(45, 149, 255, 0.16);
       font-size: 1rem;
+    }
+
+    .status-icon .icon-svg {
+      width: 28px;
+      height: 28px;
+      stroke-width: 2.3;
+    }
+
+    .status-mini:nth-child(1) .status-icon {
+      background: linear-gradient(145deg, rgba(68, 212, 230, 0.18), rgba(45, 149, 255, 0.1));
+      color: var(--cyan);
+    }
+
+    .status-mini:nth-child(2) .status-icon {
+      background: linear-gradient(145deg, rgba(45, 149, 255, 0.2), rgba(130, 116, 255, 0.11));
+      color: #7eb9ff;
+    }
+
+    .status-mini:nth-child(3) .status-icon {
+      background: linear-gradient(145deg, rgba(130, 116, 255, 0.22), rgba(45, 149, 255, 0.1));
+      color: var(--violet);
+    }
+
+    .status-mini:nth-child(4) .status-icon {
+      background: linear-gradient(145deg, rgba(83, 220, 98, 0.18), rgba(68, 212, 230, 0.1));
+      color: var(--green);
+    }
+
+    .safe-icon {
+      width: 34px;
+      height: 34px;
+      box-shadow: none;
+    }
+
+    .safe-icon .icon-svg {
+      width: 19px;
+      height: 19px;
+      stroke-width: 2.25;
     }
 
     .safe-icon.safe { background: rgba(83, 220, 98, 0.12); color: var(--green); }
@@ -283,7 +317,7 @@
       display: block;
       overflow-wrap: anywhere;
       color: var(--ink);
-      font-size: 0.9rem;
+      font-size: 1rem;
     }
 
     .safe-mini strong { font-size: 0.78rem; }
@@ -563,6 +597,8 @@
       gap: 10px;
     }
 
+    .node-header .chip { display: none; }
+
     .node-copy {
       margin: 0;
       color: var(--dim);
@@ -635,7 +671,8 @@
     @media (min-width: 760px) {
       .shell { padding: 18px 16px 30px; }
       .app { grid-template-columns: 0.9fr 1.1fr; align-items: start; }
-      .hero, .advanced { grid-column: 1 / -1; }
+      .hero, .overview, .advanced { grid-column: 1 / -1; }
+      .overview-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .network-orb {
         width: 64px;
         height: 64px;
@@ -726,7 +763,7 @@
       <p class="lead">Pr&eacute;pare une connexion Wi-Fi sans modifier le Raspberry Pi.</p>
     </header>
 
-    <section class="panel overview" aria-labelledby="state-title">
+    <section class="overview" aria-labelledby="state-title">
       <div class="node-header">
         <h2 id="state-title">Apercu du node</h2>
         <span class="chip">Read-only</span>
