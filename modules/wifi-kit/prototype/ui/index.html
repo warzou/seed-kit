@@ -3,28 +3,31 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Seed-Kit WiFi - read-only</title>
+  <title>Wifi-Kit - Seed-Kit</title>
   <style>
     :root {
-      --bg: #080d12;
-      --bg-2: #101922;
-      --panel: rgba(20, 29, 38, 0.86);
-      --panel-2: rgba(27, 39, 50, 0.92);
-      --panel-3: rgba(12, 18, 25, 0.8);
-      --ink: #f4f7ee;
-      --muted: #9eaa9c;
-      --soft: #d8e8cc;
-      --line: rgba(225, 238, 210, 0.13);
-      --line-strong: rgba(126, 224, 153, 0.34);
-      --safe: #70e099;
-      --safe-2: #1f7a4f;
-      --warn: #f5c76b;
+      --bg: #0b1018;
+      --bg-2: #121a27;
+      --panel: rgba(22, 29, 42, 0.78);
+      --panel-2: rgba(29, 38, 54, 0.9);
+      --panel-3: rgba(15, 21, 31, 0.74);
+      --ink: #f5f7fb;
+      --muted: #a6b0c3;
+      --soft: #dbe6f6;
+      --line: rgba(220, 231, 248, 0.12);
+      --line-strong: rgba(137, 188, 255, 0.38);
+      --accent: #8dc7ff;
+      --accent-2: #b8a7ff;
+      --safe: #7ee0b2;
+      --safe-2: #2f9271;
+      --warn: #f2c879;
       --danger: #ff9b8a;
-      --code: #05080c;
-      --shadow: 0 18px 55px rgba(0, 0, 0, 0.34);
-      --radius-xl: 28px;
-      --radius-lg: 20px;
-      --radius-md: 14px;
+      --code: #070b12;
+      --shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
+      --glow: 0 18px 42px rgba(106, 152, 255, 0.16);
+      --radius-xl: 30px;
+      --radius-lg: 22px;
+      --radius-md: 15px;
     }
 
     * { box-sizing: border-box; }
@@ -33,11 +36,12 @@
       min-height: 100vh;
       margin: 0;
       background:
-        radial-gradient(circle at 20% -10%, rgba(112, 224, 153, 0.2), transparent 18rem),
-        radial-gradient(circle at 96% 8%, rgba(86, 157, 255, 0.13), transparent 18rem),
-        linear-gradient(180deg, #070b10 0%, var(--bg) 58%, #0d1218 100%);
+        radial-gradient(circle at 18% -12%, rgba(141, 199, 255, 0.22), transparent 18rem),
+        radial-gradient(circle at 94% 2%, rgba(184, 167, 255, 0.18), transparent 19rem),
+        radial-gradient(circle at 45% 100%, rgba(126, 224, 178, 0.08), transparent 18rem),
+        linear-gradient(180deg, #080c14 0%, var(--bg) 56%, #0e1420 100%);
       color: var(--ink);
-      font-family: "Trebuchet MS", "Segoe UI", Verdana, sans-serif;
+      font-family: "Aptos", "Segoe UI", Verdana, sans-serif;
       line-height: 1.42;
     }
 
@@ -59,9 +63,11 @@
     details {
       border: 1px solid var(--line);
       border-radius: var(--radius-xl);
-      background: linear-gradient(180deg, var(--panel), rgba(11, 17, 24, 0.84));
+      background:
+        linear-gradient(180deg, rgba(32, 42, 60, 0.82), rgba(13, 19, 30, 0.82)),
+        radial-gradient(circle at top left, rgba(141, 199, 255, 0.12), transparent 16rem);
       box-shadow: var(--shadow);
-      backdrop-filter: blur(14px);
+      backdrop-filter: blur(18px);
     }
 
     .hero {
@@ -80,7 +86,7 @@
       width: 210px;
       height: 210px;
       border-radius: 999px;
-      background: radial-gradient(circle, rgba(112, 224, 153, 0.16), transparent 68%);
+      background: radial-gradient(circle, rgba(141, 199, 255, 0.18), transparent 68%);
       pointer-events: none;
     }
 
@@ -100,7 +106,7 @@
 
     .eyebrow {
       margin: 0 0 6px;
-      color: var(--safe);
+      color: var(--accent);
       font-size: 0.72rem;
       font-weight: 900;
       letter-spacing: 0.14em;
@@ -111,9 +117,9 @@
 
     h1 {
       margin-bottom: 6px;
-      font-size: clamp(2.15rem, 13vw, 4rem);
+      font-size: clamp(2.45rem, 14vw, 4.25rem);
       line-height: 0.86;
-      letter-spacing: -0.08em;
+      letter-spacing: -0.09em;
     }
 
     h2 {
@@ -142,10 +148,10 @@
       align-items: center;
       width: fit-content;
       min-height: 28px;
-      border: 1px solid rgba(112, 224, 153, 0.28);
+      border: 1px solid rgba(141, 199, 255, 0.28);
       border-radius: 999px;
-      background: rgba(112, 224, 153, 0.1);
-      color: var(--safe);
+      background: rgba(141, 199, 255, 0.1);
+      color: var(--accent);
       padding: 5px 9px;
       font-size: 0.76rem;
       font-weight: 900;
@@ -154,11 +160,11 @@
 
     .button {
       min-height: 44px;
-      border: 1px solid rgba(112, 224, 153, 0.5);
+      border: 1px solid rgba(141, 199, 255, 0.48);
       border-radius: 999px;
-      background: linear-gradient(180deg, #78e99f, #2b9e63);
-      box-shadow: 0 14px 30px rgba(42, 172, 99, 0.24);
-      color: #08100d;
+      background: linear-gradient(180deg, #b6dcff, #7ea9ff);
+      box-shadow: 0 14px 30px rgba(100, 142, 255, 0.24);
+      color: #08101c;
       padding: 9px 16px;
       font-weight: 950;
       cursor: pointer;
@@ -167,7 +173,7 @@
 
     .button:not(:disabled):hover {
       transform: translateY(-1px);
-      box-shadow: 0 18px 36px rgba(42, 172, 99, 0.3);
+      box-shadow: 0 18px 36px rgba(100, 142, 255, 0.32);
     }
 
     .button:disabled {
@@ -203,7 +209,7 @@
       min-width: 0;
       border: 1px solid var(--line);
       border-radius: var(--radius-md);
-      background: rgba(255, 255, 255, 0.045);
+      background: rgba(255, 255, 255, 0.052);
       padding: 10px;
     }
 
@@ -258,11 +264,12 @@
       gap: 8px;
       width: 100%;
       border: 1px solid var(--line);
-      border-radius: 18px;
-      background: rgba(255, 255, 255, 0.055);
+      border-radius: 20px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.04));
       padding: 12px;
       text-align: left;
-      transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+      transition: border-color 180ms ease, background 180ms ease, transform 180ms ease, box-shadow 180ms ease;
     }
 
     .network.selectable {
@@ -272,13 +279,14 @@
     .network.selectable:hover,
     .network.selected {
       border-color: var(--line-strong);
-      background: rgba(112, 224, 153, 0.09);
+      background:
+        linear-gradient(180deg, rgba(141, 199, 255, 0.14), rgba(184, 167, 255, 0.08));
       transform: translateY(-1px);
     }
 
     .network.selected {
       gap: 12px;
-      box-shadow: inset 0 0 0 1px rgba(112, 224, 153, 0.35);
+      box-shadow: inset 0 0 0 1px rgba(141, 199, 255, 0.34), var(--glow);
     }
 
     .network-main {
@@ -317,9 +325,9 @@
     }
 
     .network.selected .choice-dot {
-      border-color: var(--safe);
-      background: var(--safe);
-      color: #08100d;
+      border-color: var(--accent);
+      background: linear-gradient(180deg, var(--accent), var(--accent-2));
+      color: #08101c;
     }
 
     .signal-row {
@@ -352,7 +360,7 @@
     .signal-bars[data-level="2"] span:nth-child(-n+2),
     .signal-bars[data-level="3"] span:nth-child(-n+3),
     .signal-bars[data-level="4"] span:nth-child(-n+4) {
-      background: linear-gradient(180deg, #a8ffc0, var(--safe));
+      background: linear-gradient(180deg, #cfeaff, var(--accent));
     }
 
     .signal-quality {
@@ -394,8 +402,8 @@
     }
 
     .password-local:not(:disabled):focus {
-      border-color: rgba(112, 224, 153, 0.7);
-      box-shadow: 0 0 0 4px rgba(112, 224, 153, 0.13);
+      border-color: rgba(141, 199, 255, 0.76);
+      box-shadow: 0 0 0 4px rgba(141, 199, 255, 0.14);
     }
 
     .network-prep {
@@ -415,9 +423,9 @@
       display: grid;
       gap: 8px;
       margin-top: 12px;
-      border: 1px solid rgba(112, 224, 153, 0.28);
+      border: 1px solid rgba(141, 199, 255, 0.24);
       border-radius: 18px;
-      background: rgba(112, 224, 153, 0.1);
+      background: rgba(141, 199, 255, 0.09);
       padding: 12px;
     }
 
@@ -493,11 +501,11 @@
     <header class="hero">
       <div class="topline">
         <div class="brand">
-          <p class="eyebrow">Prototype read-only</p>
-          <h1>Seed-Kit WiFi</h1>
+          <p class="eyebrow">Seed-Kit module</p>
+          <h1>Wifi-Kit</h1>
           <p class="lead">Pr&eacute;pare une connexion Wi-Fi sans modifier le Raspberry Pi.</p>
         </div>
-        <span class="safe-chip">SAFE</span>
+        <span class="safe-chip">Read-only</span>
       </div>
       <div class="status-grid" aria-label="Etat actuel du node">
         <div class="status-tile"><span>Interface</span><strong id="status-interface">...</strong></div>
@@ -515,7 +523,7 @@
       <div class="section-head">
         <div>
           <p class="eyebrow">Etape 1</p>
-          <h2 id="network-title">Choisir un reseau</h2>
+          <h2 id="network-title">Reseaux detectes</h2>
           <p class="empty" id="scan-source">Source de scan: inconnue</p>
         </div>
       </div>
@@ -526,7 +534,7 @@
 
     <section class="panel" aria-labelledby="safe-title">
       <p class="eyebrow">Garanties</p>
-      <h2 id="safe-title">Lecture seule, zero surprise</h2>
+      <h2 id="safe-title">Mode exploration uniquement</h2>
       <div class="mini-grid">
         <div class="metric"><span>Connexion reelle</span><strong id="real-apply">desactivee</strong></div>
         <div class="metric"><span>Ecriture reseau</span><strong id="network-writes">desactivee</strong></div>
@@ -536,7 +544,7 @@
     </section>
 
     <details class="advanced">
-      <summary>Details techniques</summary>
+      <summary>Diagnostics avances</summary>
       <div class="advanced-grid">
         <section aria-labelledby="node-title">
           <h2 id="node-title">Diagnostic SAFE</h2>
