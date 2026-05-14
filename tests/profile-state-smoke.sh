@@ -69,6 +69,17 @@ retara_from_dir() {
   )
 }
 
+make_path_without_sha256sum() {
+  bin_dir="$1"
+
+  mkdir -p "$bin_dir"
+  for tool in sh tar grep mktemp rm; do
+    tool_path="$(command -v "$tool" 2>/dev/null || true)"
+    [ -n "$tool_path" ] || fail "missing required tool: $tool"
+    ln -s "$tool_path" "$bin_dir/$tool"
+  done
+}
+
 echo "profile-state smoke"
 
 run_ok sh -n "$profile_state"
@@ -84,6 +95,19 @@ package_dir="$tmp_root/package"
 make_package "$package_dir"
 run_ok sh "$profile_state" package --verify --input "$package_dir/profile-state-snapshot.tar"
 pass "package verify OK"
+
+no_sha_bin="$tmp_root/no-sha-bin"
+no_sha_output="$tmp_root/no-sha-output.txt"
+make_path_without_sha256sum "$no_sha_bin"
+if PATH="$no_sha_bin" sh "$profile_state" package --verify --input "$package_dir/profile-state-snapshot.tar" > "$no_sha_output" 2>&1; then
+  grep -q '^checksum: WARNING sha256sum unavailable, skipped$' "$no_sha_output" || fail "missing sha256sum unavailable warning"
+  if grep -q '^checksum: OK$' "$no_sha_output"; then
+    fail "checksum OK reported while sha256sum is unavailable"
+  fi
+else
+  fail "verify should stay SAFE when sha256sum is unavailable"
+fi
+pass "sha256sum unavailable warning"
 
 run_fail sh "$profile_state" package --verify
 pass "missing input refused"
