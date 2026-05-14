@@ -173,6 +173,23 @@
       border-radius: 18px;
       background: #fffaf2;
       padding: 14px;
+      text-align: left;
+      transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+    }
+
+    .network.selectable {
+      cursor: pointer;
+    }
+
+    .network.selectable:hover,
+    .network.selected {
+      border-color: rgba(20, 108, 67, 0.72);
+      box-shadow: 0 10px 24px rgba(20, 108, 67, 0.12);
+      transform: translateY(-1px);
+    }
+
+    .network.selected {
+      background: #f2fbf0;
     }
 
     .network-meta { margin-top: 8px; }
@@ -230,7 +247,8 @@
       gap: 8px;
     }
 
-    .password-mock {
+    .password-mock,
+    .password-local {
       width: 100%;
       min-height: 42px;
       border: 1px dashed var(--line);
@@ -239,6 +257,49 @@
       padding: 9px 11px;
       color: var(--muted);
     }
+
+    .password-local {
+      border-style: solid;
+      background: #fffdf8;
+      color: var(--ink);
+    }
+
+    .field-label {
+      display: grid;
+      gap: 6px;
+      margin: 12px 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+      font-weight: 800;
+    }
+
+    .prepare-card {
+      border-color: rgba(20, 108, 67, 0.28);
+    }
+
+    .selected-summary {
+      margin-bottom: 10px;
+      color: var(--muted);
+    }
+
+    .prepare-plan {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+      border: 1px solid #a7d7b4;
+      border-radius: 18px;
+      background: var(--safe-2);
+      padding: 13px;
+    }
+
+    .prepare-plan[hidden] { display: none; }
+
+    .prepare-plan ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .prepare-plan li + li { margin-top: 5px; }
 
     .callout {
       margin-bottom: 12px;
@@ -365,6 +426,19 @@
         <div id="network-list" class="network-list"></div>
       </section>
 
+      <section class="prepare-card" aria-labelledby="prepare-title">
+        <p class="eyebrow">Etape 2</p>
+        <h2 id="prepare-title">Preparer la connexion</h2>
+        <p id="selected-summary" class="selected-summary">Choisis un reseau dans la liste pour afficher un plan SAFE simule.</p>
+        <div id="selected-details" class="mini-grid"></div>
+        <label class="field-label" for="wifi-password-local">
+          Mot de passe Wi-Fi (local uniquement)
+          <input id="wifi-password-local" class="password-local" type="password" autocomplete="new-password" placeholder="Non envoye au serveur" disabled>
+        </label>
+        <button id="prepare-connection" type="button" class="button" disabled>Preparer la connexion</button>
+        <div id="prepare-plan" class="prepare-plan" hidden></div>
+      </section>
+
       <section aria-labelledby="safe-title">
         <p class="eyebrow">Mode SAFE</p>
         <h2 id="safe-title">Ce prototype ne connecte rien</h2>
@@ -443,6 +517,7 @@
   </script>
   <script>
     let data = JSON.parse(document.getElementById('wifi-kit-data').textContent);
+    let selectedNetwork = null;
 
     function value(source, key) {
       return String(source?.[key] ?? 'inconnu');
@@ -554,6 +629,68 @@
       return `Le scan Wi-Fi est indisponible pour le moment (${reason}).`;
     }
 
+    function displaySsid(network) {
+      return network?.ssid_hidden ? 'Reseau masque' : (network?.ssid || 'Reseau masque');
+    }
+
+    function selectNetwork(network, row) {
+      selectedNetwork = network;
+      document.querySelectorAll('.network.selected').forEach((item) => item.classList.remove('selected'));
+      row?.classList.add('selected');
+      renderConnectionPrep(false);
+    }
+
+    function renderConnectionPrep(showPlan) {
+      const summary = document.getElementById('selected-summary');
+      const details = document.getElementById('selected-details');
+      const password = document.getElementById('wifi-password-local');
+      const button = document.getElementById('prepare-connection');
+      const plan = document.getElementById('prepare-plan');
+      details.replaceChildren();
+      plan.hidden = true;
+      plan.replaceChildren();
+
+      if (!selectedNetwork) {
+        summary.textContent = 'Choisis un reseau dans la liste pour afficher un plan SAFE simule.';
+        password.value = '';
+        password.disabled = true;
+        button.disabled = true;
+        return;
+      }
+
+      const quality = signalQuality(selectedNetwork.signal);
+      summary.textContent = `Reseau choisi: ${displaySsid(selectedNetwork)}. Le mot de passe reste uniquement dans ce navigateur.`;
+      details.replaceChildren(
+        metric('SSID choisi', displaySsid(selectedNetwork)),
+        metric('Signal', `${quality.label} (${quality.dbm})`),
+        metric('Securite', selectedNetwork.security || 'inconnue'),
+        metric('Canal', selectedNetwork.channel || 'inconnu')
+      );
+      password.disabled = false;
+      button.disabled = false;
+
+      if (!showPlan) return;
+
+      const title = document.createElement('strong');
+      title.textContent = 'Plan SAFE simule - aucune connexion lancee';
+      const list = document.createElement('ul');
+      [
+        'snapshot actuel requis avant toute tentative future',
+        `reseau cible prepare: ${displaySsid(selectedNetwork)}`,
+        'mot de passe non envoye au serveur et non inclus dans les diagnostics',
+        'tentative future controlee par connect-safe uniquement',
+        'timeout court prevu pendant la tentative future',
+        'rollback automatique prevu si IP, route ou validation echoue',
+        'validation SSH requise avant commit futur'
+      ].forEach((item) => {
+        const li = document.createElement('li');
+        li.textContent = item;
+        list.appendChild(li);
+      });
+      plan.append(title, list);
+      plan.hidden = false;
+    }
+
     function renderNodeState() {
       const target = document.getElementById('node-state');
       target.replaceChildren(
@@ -574,6 +711,8 @@
       document.getElementById('scan-source').textContent = describeScanBackend(scan);
       document.getElementById('scan-status').innerHTML = describeScanStatus(scan);
       target.innerHTML = '';
+
+      renderConnectionPrep(false);
 
       if (networks.length === 0) {
         message.hidden = false;
@@ -600,12 +739,12 @@
       message.hidden = true;
       networks.forEach((network) => {
         const row = document.createElement('div');
-        row.className = 'network';
+        row.className = 'network selectable';
 
         const text = document.createElement('div');
         const title = document.createElement('h3');
         const meta = document.createElement('div');
-        const ssid = network.ssid_hidden ? 'Reseau masque' : (network.ssid || 'Reseau masque');
+        const ssid = displaySsid(network);
         title.textContent = ssid;
         meta.className = 'network-meta';
         [
@@ -621,17 +760,20 @@
 
         const actionWrap = document.createElement('div');
         actionWrap.className = 'network-action';
-        const password = document.createElement('input');
-        password.className = 'password-mock';
-        password.type = 'password';
-        password.disabled = true;
-        password.placeholder = 'Mot de passe - bientot';
+        const note = document.createElement('p');
+        note.className = 'empty';
+        note.textContent = 'Simulation uniquement';
         const action = document.createElement('button');
         action.type = 'button';
-        action.className = 'button';
-        action.disabled = true;
-        action.textContent = 'Connexion bientot disponible';
-        actionWrap.append(password, action);
+        action.className = 'button secondary';
+        action.textContent = 'Choisir ce reseau';
+        actionWrap.append(note, action);
+
+        row.addEventListener('click', () => selectNetwork(network, row));
+        action.addEventListener('click', (event) => {
+          event.stopPropagation();
+          selectNetwork(network, row);
+        });
 
         row.append(text, actionWrap);
         target.append(row);
@@ -670,6 +812,7 @@
       try {
         const response = await fetch('/api/scan?refresh=1', { cache: 'no-store' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        selectedNetwork = null;
         data.scan = await response.json();
         renderAll();
       } catch (error) {
@@ -680,6 +823,7 @@
     }
 
     document.getElementById('refresh').addEventListener('click', refreshScanFromServer);
+    document.getElementById('prepare-connection').addEventListener('click', () => renderConnectionPrep(true));
     renderAll();
   </script>
 </body>

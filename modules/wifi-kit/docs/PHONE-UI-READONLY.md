@@ -107,7 +107,35 @@ Signal quality is derived from dBm using a deliberately simple table:
 This is display-only. It must not trigger scans, connections, roaming decisions,
 or network writes.
 
+
+## Connection preparation simulation
+
+The phone UI may let the user select a visible network and open a local password
+field, but this remains frontend-only simulation.
+
+Rules:
+
+- selecting a network only updates the page state,
+- the password field has no `name` attribute and is not submitted,
+- no password is sent to the HTTP server,
+- no password is logged or copied into raw JSON/debug panels,
+- the `Prepare connection` action only renders a local plan,
+- no POST endpoint is used,
+- no `connect-safe` real apply is called.
+
+The simulated plan should explain the future SAFE sequence in user language:
+
+- current snapshot required,
+- controlled future attempt,
+- short timeout,
+- automatic rollback,
+- SSH validation before any future commit.
+
+This is intentionally not a connection form yet. It is a UX rehearsal for the
+future `connect-safe` flow after rollback and recovery are validated.
+
 ## Backend inputs
+
 
 The read-only UI can use existing prototype commands:
 
