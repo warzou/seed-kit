@@ -889,6 +889,7 @@ seed_kit_usage() {
   echo "  --modules        list available modules"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --fetch-module=wifi-kit [--yes|-y]  fetch one repo-backed module with git sparse checkout"
+  echo "  --install-module=wifi-kit [--yes|-y]  prepare git if needed, then fetch one repo-backed module"
   echo "  --detect         show OS detection details"
   echo "  --uninstall-runtime [--yes|-y]  remove local Seed-Kit runtime directories (lib/modules/backends)"
 }
@@ -1010,6 +1011,60 @@ fetch_repo_module() {
   ui_line "  sh seed-kit.sh --modules"
   ui_line "  sh seed-kit.sh --plan"
   ui_line "  sh seed-kit.sh --apply --modules=wifi-kit"
+}
+
+parse_install_options() {
+  INSTALL_AUTO=0
+  for arg in "$@"; do
+    case "$arg" in
+      -y|--yes)
+        INSTALL_AUTO=1
+        ;;
+      *)
+        echo "unknown option: $arg" >&2
+        return 2
+        ;;
+    esac
+  done
+}
+
+install_repo_module() {
+  module=$1
+
+  case "$module" in
+    wifi-kit)
+      ;;
+    *)
+      echo "unsupported repo-backed module install: $module" >&2
+      echo "supported: wifi-kit" >&2
+      return 2
+      ;;
+  esac
+
+  ui_header "install module" "$module"
+  ui_line "This prepares a sparse repo-backed module checkout."
+  ui_line "It does not run wifi-kit, update Seed-Kit, or overwrite existing directories."
+
+  if ! command -v git >/dev/null 2>&1; then
+    ui_line "Git is required for repo-backed modules."
+    ui_line "Manual option:"
+    ui_line "  sh seed-kit.sh --apply --modules=git"
+    ui_line "Seed-Kit can run that SAFE git install path now."
+
+    APPLY_AUTO=$INSTALL_AUTO
+    if ! apply_module_git; then
+      echo "[install] git install path did not complete" >&2
+      return 3
+    fi
+
+    if ! command -v git >/dev/null 2>&1; then
+      echo "[install] git is still missing after install attempt" >&2
+      return 4
+    fi
+  fi
+
+  FETCH_AUTO=$INSTALL_AUTO
+  fetch_repo_module "$module"
 }
 
 parse_apply_modules() {
@@ -1276,6 +1331,14 @@ case "${1:-}" in
       exit 2
     fi
     fetch_repo_module "$fetch_module"
+    ;;
+  --install-module=*)
+    install_module="${1#--install-module=}"
+    shift
+    if ! parse_install_options "$@"; then
+      exit 2
+    fi
+    install_repo_module "$install_module"
     ;;
   --detect)
     ui_header "os detection"

@@ -39,3 +39,11 @@ sh seed-kit.sh --apply --modules=wifi-kit
 ```
 
 This uses git sparse checkout, writes to `~/seed-kit-wifi-kit`, and does not overwrite an existing directory.
+
+To let Seed-Kit prepare Git first when needed, then fetch `wifi-kit`:
+
+```sh
+sh seed-kit.sh --install-module=wifi-kit
+```
+
+This still uses SAFE confirmations and does not run the `wifi-kit` prototype automatically.
