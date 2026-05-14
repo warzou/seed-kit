@@ -87,6 +87,18 @@ Some modules will depend on packages, services, network access, or earlier modul
 
 A complex dependency engine is not needed yet. Keep dependencies explicit in prose and module output until repeated real cases justify a small shared helper.
 
+## Single module apply
+
+Use `--apply-module=<module>` to retest or repair one specific module without rerunning a whole profile:
+
+```sh
+sh seed-kit.sh --apply-module=homer
+```
+
+This command applies only the selected module. It does not resolve dependencies automatically, perform rollback, retry failed actions, or keep a state engine.
+
+Field note: `--apply-module=homer` was validated on `rpi-edge-audit.lan`; it skipped cleanly when the Homer placeholder was already present and reported `[OK] homer`.
+
 Profiles are planned compositions of modules, stored later under `profiles/`. They are useful for common node shapes, but modules must remain usable directly without profiles.
 
 Profile naming and V1 compositions are documented in [PROFILES.md](PROFILES.md). In V1, profiles are plan-only aids; they do not apply modules automatically.
