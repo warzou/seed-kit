@@ -72,6 +72,10 @@ path_size_kb() {
   du -sk "$path" 2>/dev/null | awk '{print $1}' || echo 0
 }
 
+timestamp_utc() {
+  date -u '+%Y-%m-%dT%H:%M:%SZ'
+}
+
 print_archive_path() {
   category="$1"
   path="$2"
@@ -235,6 +239,14 @@ snapshot_local_dry_run() {
 
   {
     echo "profile-state snapshot dry-run"
+    echo "PROFILE_STATE_FORMAT_VERSION=1"
+    echo "GENERATED_AT=$(timestamp_utc)"
+    echo "TOOL=profile-state.sh"
+    echo "MODE=safe-dry-run"
+    echo "ARCHIVE=unencrypted-tar"
+    echo "RESTORE_SUPPORTED=no"
+    echo "CLOUD_SUPPORTED=no"
+    echo "SECRETS_INCLUDED=no"
     echo "mode=local"
     echo "dry_run=true"
     echo "archive_created=false"
@@ -449,6 +461,18 @@ package_verify() {
     elif [ "$errors" -eq 0 ]; then
       echo "extraction: ERROR"
       errors=$((errors + 1))
+    fi
+
+    if [ "$errors" -eq 0 ]; then
+      if grep -q '^PROFILE_STATE_FORMAT_VERSION=1$' "$verify_tmp_dir/MANIFEST.txt"; then
+        echo "format version: 1"
+      elif grep -q '^PROFILE_STATE_FORMAT_VERSION=' "$verify_tmp_dir/MANIFEST.txt"; then
+        echo "format version: ERROR unsupported"
+        errors=$((errors + 1))
+      else
+        echo "format version: ERROR missing"
+        errors=$((errors + 1))
+      fi
     fi
 
     if [ "$errors" -eq 0 ]; then
