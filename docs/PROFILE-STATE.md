@@ -71,21 +71,44 @@ Excluded:
 
 ## 3. Archive format
 
-Future archive shape:
+Future V1 local encrypted archive shape:
 
 ```text
 profile-state/
   manifest.txt
   inventory/
-  caddy/
-  cloudflared/
-  homer/
-  homepage/
+  project/
+    rpi-edge-vps/
+  config/
+    caddy/
+    homepage/
   env/
+    rpi-edge-vps.env
+  docker-volumes/
+    caddy_data/
+    caddy_config/
   notes/
 ```
 
 The manifest should be readable without restoring anything. It should list paths, timestamps, source host, target profile, and restore warnings.
+
+The `rpi-edge-vps` project may be archived without `.git` if the repository can
+be cloned again from its source. The archive should prefer the working tree
+content needed for reconstruction, not Git history.
+
+Expected included content:
+
+- `rpi-edge-vps` project files, optionally without `.git`
+- `.env` only inside an encrypted archive
+- `config/caddy`
+- `config/homepage`
+- Docker volumes only when explicitly selected and encrypted
+
+Expected excluded content:
+
+- `/etc/machine-id`
+- host SSH keys
+- full Tailscale state or identity
 
 ## 4. Encryption requirement
 
@@ -94,6 +117,9 @@ Any archive containing private config or secrets must be encrypted before leavin
 Plain archives are only acceptable for read-only inventories with no secrets.
 
 Future implementation should refuse to export known secret-bearing paths without encryption.
+
+No archive containing `.env`, Cloudflare config, private notes, or Docker volume
+state may be written unencrypted.
 
 ## 5. Backup workflow
 
@@ -106,6 +132,17 @@ Future implementation should refuse to export known secret-bearing paths without
 7. Store checksum and human-readable manifest.
 
 No backup command should silently include new secret paths.
+
+Future commands:
+
+```sh
+sh tools/profile-state.sh backup --local --dry-run
+sh tools/profile-state.sh backup --local --encrypted
+```
+
+`backup --local --dry-run` should show exactly what would be included without
+creating an archive. `backup --local --encrypted` should be the first command
+allowed to write a real archive containing private state.
 
 ## 6. Restore workflow SAFE
 
@@ -120,6 +157,15 @@ No backup command should silently include new secret paths.
 9. Recheck services manually.
 
 Restore must not mutate DNS, Cloudflare tunnels, or Tailscale state automatically.
+
+Future restore dry-run command:
+
+```sh
+sh tools/profile-state.sh restore --dry-run <archive>
+```
+
+Restore dry-run should inspect the archive manifest, classify target paths, and
+show conflicts without writing files.
 
 ## 7. Replacing the rpi-edge SD card
 
