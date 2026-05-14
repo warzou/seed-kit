@@ -19,14 +19,37 @@ It should show:
 - `safe-diagnose` summary,
 - clear SAFE boundaries.
 
+The main screen should feel like the beginning of a Wi-Fi setup flow, not like a
+developer console. Debug JSON should stay available, but behind an advanced
+diagnostics section.
+
 It must not show:
 
 - Wi-Fi passwords,
 - PSK values,
-- connection buttons,
+- enabled connection buttons,
 - SSID change forms,
 - AP/hotspot controls,
 - service restart controls.
+
+Disabled future-action buttons are allowed when they clearly communicate that
+real connection is not implemented yet.
+
+## Scan limitations
+
+`scan-real --json` can return `status=unavailable`.
+This is expected in some SAFE/read-only contexts.
+
+Common reasons:
+
+- `iw` is missing,
+- the process lacks the capabilities required for active scan,
+- the Wi-Fi interface is busy maintaining the current connection,
+- the driver refuses active scan without elevated permissions.
+
+The UI must explain these cases without suggesting a network restart or
+reconnection. The current link is more important than showing a perfect network
+list.
 
 ## Backend inputs
 

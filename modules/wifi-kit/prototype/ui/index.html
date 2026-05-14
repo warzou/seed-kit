@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>wifi-kit read-only console</title>
+  <title>wifi-kit read-only setup</title>
   <style>
     :root {
-      --bg: #f5f7f4;
-      --ink: #162018;
-      --muted: #5e6a60;
-      --line: #cdd8ce;
+      --bg: #f6f8f4;
+      --ink: #172116;
+      --muted: #62705f;
+      --line: #d2dccf;
       --panel: #ffffff;
-      --safe: #146c43;
+      --soft: #edf4ea;
+      --safe: #166b42;
       --warn: #9a5b00;
-      --chip: #e8efe7;
       --code: #101713;
     }
 
@@ -28,30 +28,15 @@
     }
 
     header {
+      background: linear-gradient(180deg, #eaf3e7 0%, #f6f8f4 100%);
       border-bottom: 1px solid var(--line);
-      background: #eef4ed;
-      padding: 18px 16px;
+      padding: 18px 16px 16px;
     }
 
     main {
       width: min(1040px, 100%);
       margin: 0 auto;
-      padding: 18px 16px 32px;
-    }
-
-    h1, h2 {
-      margin: 0;
-      line-height: 1.15;
-      letter-spacing: 0;
-    }
-
-    h1 {
-      font-size: clamp(1.5rem, 2.8vw, 2.2rem);
-    }
-
-    h2 {
-      font-size: 1rem;
-      margin-bottom: 10px;
+      padding: 16px 12px 32px;
     }
 
     .topline {
@@ -59,13 +44,34 @@
       margin: 0 auto;
     }
 
-    .subhead {
-      margin: 8px 0 0;
-      color: var(--muted);
-      max-width: 68ch;
+    h1, h2, h3, p { margin-top: 0; }
+
+    h1 {
+      margin-bottom: 8px;
+      font-size: clamp(1.45rem, 5vw, 2.35rem);
+      line-height: 1.1;
+      letter-spacing: 0;
     }
 
-    .status-row {
+    h2 {
+      margin-bottom: 10px;
+      font-size: 1.05rem;
+      line-height: 1.2;
+    }
+
+    h3 {
+      margin-bottom: 4px;
+      font-size: 0.98rem;
+      line-height: 1.25;
+    }
+
+    .subhead {
+      margin-bottom: 0;
+      color: var(--muted);
+      max-width: 65ch;
+    }
+
+    .badges {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
@@ -78,41 +84,23 @@
       min-height: 30px;
       border: 1px solid var(--line);
       border-radius: 6px;
-      background: var(--chip);
+      background: var(--soft);
       padding: 4px 9px;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       color: var(--ink);
     }
 
     .badge.safe {
-      border-color: #93c5a6;
-      color: var(--safe);
+      border-color: #91c6a3;
       background: #edf8f0;
-      font-weight: 650;
-    }
-
-    button {
-      min-height: 30px;
-      border: 1px solid var(--safe);
-      border-radius: 6px;
-      background: var(--safe);
-      color: #ffffff;
-      padding: 4px 10px;
-      font: inherit;
-      font-size: 0.9rem;
-      cursor: pointer;
-    }
-
-    button:disabled {
-      cursor: default;
-      opacity: 0.6;
+      color: var(--safe);
+      font-weight: 700;
     }
 
     .grid {
       display: grid;
       grid-template-columns: repeat(12, 1fr);
       gap: 12px;
-      margin-top: 14px;
     }
 
     section {
@@ -125,125 +113,190 @@
     }
 
     @media (min-width: 760px) {
+      main { padding: 20px 16px 36px; }
       .half { grid-column: span 6; }
       .third { grid-column: span 4; }
       .two-thirds { grid-column: span 8; }
     }
 
-    dl {
+    .primary { border-color: #b8d4b9; }
+
+    .node-state {
       display: grid;
-      grid-template-columns: minmax(120px, 36%) minmax(0, 1fr);
-      gap: 7px 10px;
-      margin: 0;
-      font-size: 0.94rem;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
     }
 
-    dt {
-      color: var(--muted);
-    }
-
-    dd {
-      margin: 0;
+    .metric {
       min-width: 0;
-      overflow-wrap: anywhere;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fbfdfa;
+      padding: 10px;
     }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.92rem;
-    }
-
-    th, td {
-      border-bottom: 1px solid var(--line);
-      padding: 8px 6px;
-      text-align: left;
-      vertical-align: top;
-      overflow-wrap: anywhere;
-    }
-
-    th {
+    .metric span {
+      display: block;
       color: var(--muted);
-      font-weight: 650;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 4px;
+      overflow-wrap: anywhere;
+      font-size: 0.95rem;
+    }
+
+    .network-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .network {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 11px;
+      background: #fbfdfa;
+    }
+
+    .network-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    button {
+      min-height: 34px;
+      border: 1px solid var(--safe);
+      border-radius: 6px;
+      background: var(--safe);
+      color: #ffffff;
+      padding: 6px 11px;
+      font: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: #ffffff;
+      color: var(--safe);
+    }
+
+    button:disabled {
+      border-color: var(--line);
+      background: #eef1ec;
+      color: var(--muted);
+      cursor: default;
+    }
+
+    .empty {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .callout {
+      margin-bottom: 10px;
+      border: 1px solid #e1bb74;
+      border-radius: 8px;
+      background: #fff8e8;
+      padding: 11px;
+      color: #513400;
+    }
+
+    details {
+      grid-column: span 12;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 12px 14px;
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 700;
     }
 
     pre {
-      margin: 0;
+      margin: 12px 0 0;
       padding: 12px;
       border-radius: 6px;
       background: var(--code);
       color: #d8eadc;
       overflow: auto;
-      font-size: 0.84rem;
-      max-height: 340px;
-    }
-
-    .empty {
-      color: var(--muted);
-      margin: 0;
-    }
-
-    .warn {
-      color: var(--warn);
-      font-weight: 650;
+      font-size: 0.82rem;
+      max-height: 360px;
     }
   </style>
 </head>
 <body>
   <header>
     <div class="topline">
-      <h1>wifi-kit read-only console</h1>
-      <p class="subhead">Local SAFE view for runtime state, Wi-Fi scan data, and connect-safe preflight planning.</p>
-      <div class="status-row">
+      <h1>Choose Wi-Fi later</h1>
+      <p class="subhead">This screen previews nearby networks and node status. It is read-only, so it cannot change the current connection.</p>
+      <div class="badges">
         <span class="badge safe">READ-ONLY</span>
-        <span class="badge">no connect</span>
-        <span class="badge">no wpa_supplicant write</span>
-        <span class="badge">no hostapd/dnsmasq</span>
-        <button id="refresh" type="button">Refresh</button>
+        <span class="badge">No Wi-Fi changes</span>
+        <span class="badge">No passwords</span>
+        <span class="badge">No hotspot</span>
+        <button id="refresh" type="button" class="secondary">Refresh</button>
       </div>
     </div>
   </header>
 
   <main>
     <div class="grid">
-      <section class="third">
-        <h2>Preflight</h2>
-        <dl id="diagnose"></dl>
+      <section class="two-thirds primary">
+        <h2>Available Networks</h2>
+        <div id="scan-message" class="callout" hidden></div>
+        <div id="network-list" class="network-list"></div>
       </section>
 
       <section class="third">
-        <h2>Snapshot</h2>
-        <dl id="snapshot"></dl>
-      </section>
-
-      <section class="third">
-        <h2>Safety</h2>
-        <dl>
-          <dt>Real apply</dt>
-          <dd class="warn">disabled</dd>
-          <dt>Network writes</dt>
-          <dd>disabled</dd>
-          <dt>Secrets</dt>
-          <dd>not collected</dd>
-          <dt>Portal status</dt>
-          <dd>future read-only design only</dd>
-        </dl>
-      </section>
-
-      <section class="two-thirds">
-        <h2>Wi-Fi Scan</h2>
-        <div id="scan"></div>
+        <h2>Node Status</h2>
+        <div id="node-state" class="node-state"></div>
       </section>
 
       <section class="half">
-        <h2>Raw Safe Diagnose</h2>
+        <h2>Current Safety Mode</h2>
+        <div class="node-state">
+          <div class="metric">
+            <span>Real apply</span>
+            <strong id="real-apply">disabled</strong>
+          </div>
+          <div class="metric">
+            <span>Network writes</span>
+            <strong id="network-writes">disabled</strong>
+          </div>
+          <div class="metric">
+            <span>Secrets</span>
+            <strong id="secret-policy">not collected</strong>
+          </div>
+          <div class="metric">
+            <span>Connect</span>
+            <strong>future connect-safe only</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="half">
+        <h2>Next Step Preview</h2>
+        <p class="empty">A future version may allow selecting one network and passing it to connect-safe. This prototype only shows what would be reviewed first.</p>
+        <button type="button" disabled>Connect later</button>
+      </section>
+
+      <details>
+        <summary>Advanced diagnostics</summary>
         <pre id="raw-diagnose"></pre>
-      </section>
-
-      <section class="half">
-        <h2>Raw Scan</h2>
         <pre id="raw-scan"></pre>
-      </section>
+        <pre id="raw-snapshot"></pre>
+      </details>
     </div>
   </main>
 
@@ -296,69 +349,125 @@
   <script>
     let data = JSON.parse(document.getElementById('wifi-kit-data').textContent);
 
-    function setPairs(targetId, source, keys) {
-      const target = document.getElementById(targetId);
-      target.innerHTML = '';
-      keys.forEach((key) => {
-        const term = document.createElement('dt');
-        const value = document.createElement('dd');
-        term.textContent = key.replaceAll('_', ' ');
-        value.textContent = String(source[key] ?? 'unknown');
-        target.append(term, value);
-      });
+    function value(source, key) {
+      return String(source?.[key] ?? 'unknown');
     }
 
-    function renderScan(scan) {
-      const target = document.getElementById('scan');
+    function metric(label, text) {
+      const item = document.createElement('div');
+      item.className = 'metric';
+      const small = document.createElement('span');
+      const strong = document.createElement('strong');
+      small.textContent = label;
+      strong.textContent = text;
+      item.append(small, strong);
+      return item;
+    }
+
+    function describeScanReason(scan) {
+      const reason = scan.reason || scan.status || 'unknown';
+      if (reason === 'iw-scan-failed') {
+        return 'Scan is not available right now. On Raspberry Pi this can happen when permissions are limited or the Wi-Fi device is busy staying connected.';
+      }
+      if (reason === 'iw-missing') {
+        return 'Scan is not available because the iw tool was not found.';
+      }
+      if (reason === 'no-wifi-interface') {
+        return 'No Wi-Fi interface was detected.';
+      }
+      return `Scan is not available: ${reason}`;
+    }
+
+    function renderNodeState() {
+      const target = document.getElementById('node-state');
+      target.replaceChildren(
+        metric('Interface', value(data.diagnose, 'interface')),
+        metric('IP address', value(data.diagnose, 'current_ip')),
+        metric('Route', value(data.diagnose, 'default_route')),
+        metric('Power save', value(data.diagnose, 'power_save')),
+        metric('Backend', value(data.diagnose, 'backend')),
+        metric('SSH path', value(data.diagnose, 'ssh_route_interface'))
+      );
+    }
+
+    function renderNetworks() {
+      const target = document.getElementById('network-list');
+      const message = document.getElementById('scan-message');
+      const scan = data.scan || {};
       const networks = Array.isArray(scan.networks) ? scan.networks : [];
+      target.innerHTML = '';
+
       if (networks.length === 0) {
-        const message = document.createElement('p');
-        message.className = 'empty';
-        message.textContent = scan.reason ? `No networks shown: ${scan.reason}` : 'No networks shown.';
-        target.replaceChildren(message);
+        message.hidden = false;
+        message.textContent = describeScanReason(scan);
+        const placeholder = document.createElement('div');
+        placeholder.className = 'network';
+        const text = document.createElement('div');
+        const title = document.createElement('h3');
+        const body = document.createElement('p');
+        title.textContent = 'No networks shown';
+        body.className = 'empty';
+        body.textContent = 'The current connection is left untouched. Try refresh later, or review diagnostics below.';
+        text.append(title, body);
+        const action = document.createElement('button');
+        action.type = 'button';
+        action.disabled = true;
+        action.textContent = 'Connect later';
+        placeholder.append(text, action);
+        target.append(placeholder);
         return;
       }
 
-      const table = document.createElement('table');
-      table.innerHTML = '<thead><tr><th>SSID</th><th>Signal</th><th>Channel</th><th>Security</th></tr></thead>';
-      const body = document.createElement('tbody');
+      message.hidden = true;
       networks.forEach((network) => {
-        const row = document.createElement('tr');
-        const ssid = network.ssid_hidden ? '<hidden>' : (network.ssid || '<hidden>');
-        [ssid, network.signal || 'unknown', network.channel || 'unknown', network.security || 'unknown'].forEach((text) => {
-          const cell = document.createElement('td');
-          cell.textContent = text;
-          row.appendChild(cell);
+        const row = document.createElement('div');
+        row.className = 'network';
+
+        const text = document.createElement('div');
+        const title = document.createElement('h3');
+        const meta = document.createElement('div');
+        const ssid = network.ssid_hidden ? 'Hidden network' : (network.ssid || 'Hidden network');
+        title.textContent = ssid;
+        meta.className = 'network-meta';
+        [
+          `Signal ${network.signal || 'unknown'}`,
+          `Channel ${network.channel || 'unknown'}`,
+          network.security || 'unknown security'
+        ].forEach((label) => {
+          const badge = document.createElement('span');
+          badge.className = 'badge';
+          badge.textContent = label;
+          meta.appendChild(badge);
         });
-        body.appendChild(row);
+        text.append(title, meta);
+
+        const action = document.createElement('button');
+        action.type = 'button';
+        action.disabled = true;
+        action.textContent = 'Connect later';
+
+        row.append(text, action);
+        target.append(row);
       });
-      table.appendChild(body);
-      target.replaceChildren(table);
+    }
+
+    function renderSafety() {
+      document.getElementById('real-apply').textContent = data.diagnose?.real_apply_allowed ? 'enabled' : 'disabled';
+      document.getElementById('network-writes').textContent = data.diagnose?.network_writes ? 'enabled' : 'disabled';
+      document.getElementById('secret-policy').textContent = value(data.diagnose, 'secret_policy');
+    }
+
+    function renderDebug() {
+      document.getElementById('raw-diagnose').textContent = JSON.stringify(data.diagnose, null, 2);
+      document.getElementById('raw-scan').textContent = JSON.stringify(data.scan, null, 2);
+      document.getElementById('raw-snapshot').textContent = JSON.stringify(data.snapshot, null, 2);
     }
 
     function renderAll() {
-      setPairs('diagnose', data.diagnose, [
-        'backend',
-        'interface',
-        'current_ip',
-        'default_route',
-        'power_save',
-        'scan_status',
-        'real_apply_allowed'
-      ]);
-
-      setPairs('snapshot', data.snapshot, [
-        'current_ssid_state',
-        'ssh_client',
-        'ssh_route_interface',
-        'secret_policy',
-        'persistence',
-        'timestamp'
-      ]);
-
-      renderScan(data.scan);
-      document.getElementById('raw-diagnose').textContent = JSON.stringify(data.diagnose, null, 2);
-      document.getElementById('raw-scan').textContent = JSON.stringify(data.scan, null, 2);
+      renderNodeState();
+      renderNetworks();
+      renderSafety();
+      renderDebug();
     }
 
     async function refreshFromServer() {

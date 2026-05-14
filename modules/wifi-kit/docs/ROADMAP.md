@@ -81,7 +81,7 @@ Le helper local `prototype/helpers.sh` garde la detection des outils reseau dans
 - Prototype `ssh-awareness`: premiere version disponible via `ssh-safety-simulate`.
 - Prototype `connect-safe --simulate`: flow transactionnel lisible, sans secret et sans apply reel.
 - Prototype `safe-diagnose`: preflight unique combinant runtime-state, snapshot preview, scan read-only et simulation connect-safe.
-- Prototype UI read-only: premiere page statique disponible via `prototype/ui/render-readonly-ui.sh`.
+- Prototype UI read-only: premiere page statique orientee onboarding disponible via `prototype/ui/render-readonly-ui.sh`.
 - Prototype HTTP read-only: endpoints `GET` JSON locaux via `prototype/ui/serve-readonly.py`.
 - Prototype `rollback-plan`.
 - Toujours sans apply reseau reel.
