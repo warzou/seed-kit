@@ -65,6 +65,25 @@ sh modules/wifi-kit/prototype/wifi-kit.sh scan-real
 
 Elles ne lancent aucune connexion Wi-Fi, n'ecrivent pas dans `wpa_supplicant`, ne lisent pas de secret, et ne demarrent aucun service.
 
+## Stabilite Wi-Fi terrain
+
+Sur Raspberry Pi Zero 2 W, un retour terrain a montre que `wlan0 power_save=on` peut rendre le Wi-Fi instable en idle.
+
+Commandes SAFE:
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit.sh stability-status
+sh modules/wifi-kit/prototype/wifi-kit.sh stability-plan
+```
+
+Application manuelle current-boot uniquement, a lancer seulement sur la cible RPi quand explicitement decide:
+
+```sh
+sudo sh modules/wifi-kit/prototype/wifi-kit.sh stability-apply-current-boot wlan0
+```
+
+Cette application ne persiste rien apres reboot, ne modifie pas de config, ne lance aucun service, et ne change aucun SSID/connexion.
+
 ## Integration core
 
 `wifi-kit` est enregistre comme module plan-only (`module_wifi_kit_plan`) et expose un apply SAFE / simulation (`module_wifi_kit_apply`).

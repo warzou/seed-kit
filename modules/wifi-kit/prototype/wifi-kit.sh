@@ -44,6 +44,22 @@ detect_wifi_interfaces() {
   fi
 }
 
+is_wifi_interface() {
+  wanted="$1"
+  detect_wifi_interfaces | awk -v wanted="$wanted" '
+    $0 == wanted { found=1 }
+    END { exit found ? 0 : 1 }
+  '
+}
+
+wifi_interface_count() {
+  detect_wifi_interfaces | awk 'NF { count++ } END { print count + 0 }'
+}
+
+first_wifi_interface() {
+  detect_wifi_interfaces | sed -n '1p'
+}
+
 cmd_backend_detect() {
   ui_header "backend-detect (read-only)"
   ui "safety: read-only, no connection, no network writes, no secrets"
@@ -151,6 +167,80 @@ cmd_scan_real() {
   fi
 
   rm -f "$tmp" "$err"
+}
+
+cmd_stability_status() {
+  ui_header "stability-status (read-only)"
+  ui "safety: read-only, no connection, no network writes, no secrets"
+
+  if ! command -v iw >/dev/null 2>&1; then
+    ui "stability-status unavailable: iw is missing"
+    return 1
+  fi
+
+  interfaces="$(detect_wifi_interfaces || true)"
+  if [ -z "$interfaces" ]; then
+    ui "stability-status unavailable: no Wi-Fi interface detected"
+    return 1
+  fi
+
+  printf '%s\n' "$interfaces" | while IFS= read -r iface; do
+    [ -n "$iface" ] || continue
+    power_save="$(iw dev "$iface" get power_save 2>/dev/null || true)"
+    if [ -z "$power_save" ]; then
+      power_save="power_save: unavailable"
+    fi
+    ui "interface=$iface $power_save"
+  done
+}
+
+cmd_stability_plan() {
+  ui_header "stability-plan"
+  ui "problem: Raspberry Pi Zero 2 W may become unstable in idle when wlan0 power_save=on"
+  ui "validated current-boot fix: iw dev <iface> set power_save off"
+  ui "scope: current boot only; not persistent after reboot"
+  ui "no config files, services, SSID changes, or Wi-Fi connections are touched"
+  ui "rollback: reboot, or run: iw dev <iface> set power_save on"
+  ui "recommended before connect-safe/hotspot: verify Wi-Fi remains stable while idle"
+  ui "manual apply command: sh modules/wifi-kit/prototype/wifi-kit.sh stability-apply-current-boot <iface>"
+}
+
+cmd_stability_apply_current_boot() {
+  ui_header "stability-apply-current-boot"
+  ui "safety: current-boot only; no persistence, no config writes, no services"
+  ui "no secrets, no hostapd, no dnsmasq, no NetworkManager apply, no SSID/connection changes"
+
+  if ! command -v iw >/dev/null 2>&1; then
+    ui "refusing: iw is missing"
+    return 1
+  fi
+
+  iface="${1:-}"
+  if [ -z "$iface" ]; then
+    count="$(wifi_interface_count)"
+    if [ "$count" -eq 1 ]; then
+      iface="$(first_wifi_interface)"
+    else
+      ui "refusing: pass an explicit Wi-Fi interface when none or multiple are detected"
+      return 1
+    fi
+  fi
+
+  if [ -z "$iface" ] || ! is_wifi_interface "$iface"; then
+    ui "refusing: '$iface' is not a detected Wi-Fi interface"
+    return 1
+  fi
+
+  ui "about to run: iw dev $iface set power_save off"
+  if iw dev "$iface" set power_save off; then
+    ui "applied: power_save off for $iface (current boot only)"
+    ui "rollback: reboot, or run: iw dev $iface set power_save on"
+    return 0
+  fi
+
+  ui "failed: iw could not set power_save off for $iface"
+  ui "hint: this may require root/CAP_NET_ADMIN on the target Raspberry Pi"
+  return 1
 }
 
 init_state_root() {
@@ -378,6 +468,9 @@ Usage:
   sh prototype/wifi-kit.sh backend-detect
   sh prototype/wifi-kit.sh status-real
   sh prototype/wifi-kit.sh scan-real [IFACE]
+  sh prototype/wifi-kit.sh stability-status
+  sh prototype/wifi-kit.sh stability-plan
+  sh prototype/wifi-kit.sh stability-apply-current-boot [IFACE]
 
 This is a SAFE prototype. No hostapd/dnsmasq/NetworkManager actions are executed.
 EOF
@@ -404,6 +497,9 @@ main() {
     backend-detect) cmd_backend_detect ;;
     status-real) cmd_status_real ;;
     scan-real) shift; cmd_scan_real "${1:-}" ;;
+    stability-status) cmd_stability_status ;;
+    stability-plan) cmd_stability_plan ;;
+    stability-apply-current-boot) shift; cmd_stability_apply_current_boot "${1:-}" ;;
     *) usage ;;
   esac
 }
