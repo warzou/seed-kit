@@ -1129,8 +1129,58 @@ seed_kit_usage() {
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --fetch-module=wifi-kit [--yes|-y]  fetch one repo-backed module with git sparse checkout"
   echo "  --install-module=wifi-kit [--yes|-y]  prepare git if needed, then fetch one repo-backed module"
+  echo "  --self-check     compare local Seed-Kit with public repository HEAD when git is available"
   echo "  --detect         show OS detection details"
   echo "  --uninstall-runtime [--yes|-y]  remove local Seed-Kit runtime directories (lib/modules/backends)"
+}
+
+show_self_check() {
+  repo_url="https://github.com/warzou/seed-kit.git"
+
+  ui_header "Seed-Kit self check"
+
+  if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    local_mode="git repository"
+    local_head=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+  else
+    local_mode="${SEED_RUNTIME_MODE:-single-file}"
+    local_head="unknown"
+  fi
+
+  ui_kv "Local mode" "$local_mode"
+  ui_kv "Local commit" "$local_head"
+  ui_kv "Remote repo" "$repo_url"
+
+  if ! command -v git >/dev/null 2>&1; then
+    ui_line "Remote HEAD: unavailable"
+    ui_line "Update status: git is required for network self-check"
+    ui_line "Try:"
+    ui_line "  sh seed-kit.sh --apply --modules=git"
+    return 0
+  fi
+
+  if ! remote_line=$(git ls-remote "$repo_url" HEAD 2>/dev/null); then
+    ui_line "Remote HEAD: unavailable"
+    ui_line "Update status: cannot reach public Seed-Kit repository"
+    return 2
+  fi
+
+  remote_head=$(printf '%s\n' "$remote_line" | awk '{print $1}')
+  if [ -z "$remote_head" ]; then
+    ui_line "Remote HEAD: unavailable"
+    ui_line "Update status: remote HEAD not found"
+    return 2
+  fi
+
+  ui_kv "Remote HEAD" "$remote_head"
+
+  if [ "$local_head" = "unknown" ]; then
+    ui_line "Update status: cannot compare local single-file yet"
+  elif [ "$local_head" = "$remote_head" ]; then
+    ui_line "Update status: up to date"
+  else
+    ui_line "Update status: newer remote available or local commit differs"
+  fi
 }
 
 profile_modules() {
@@ -1643,6 +1693,9 @@ case "${1:-}" in
       exit 2
     fi
     install_repo_module "$install_module"
+    ;;
+  --self-check)
+    show_self_check
     ;;
   --detect)
     ui_header "os detection"
