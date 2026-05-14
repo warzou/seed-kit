@@ -6,6 +6,18 @@ It is not part of the public profile definition. It is for the machine-specific 
 
 This document is design-only. No restore implementation exists yet.
 
+## V0 local dry-run status
+
+`tools/profile-state.sh` starts the local-only V0 flow:
+
+```sh
+sh tools/profile-state.sh plan
+sh tools/profile-state.sh inventory
+sh tools/profile-state.sh backup --dry-run
+```
+
+V0 does not create archives, read secret contents, restore files, upload to cloud storage, or require sudo. It only explains the future boundary and lists candidate paths by existence.
+
 ## 1. Objectives
 
 - capture private reconstruction state that does not belong in public Git
