@@ -44,6 +44,15 @@ They do not create a persistent state database.
 state, snapshot preview, scan readiness, and `connect-safe` simulation without
 turning any of those checks into a real apply.
 
+The read-only UI prototype consumes the same JSON surfaces through:
+
+```sh
+sh modules/wifi-kit/prototype/ui/render-readonly-ui.sh > /tmp/wifi-kit-ui.html
+```
+
+The generated page embeds JSON at render time. It does not add a server, cache,
+daemon, portal, or write path.
+
 ## Minimal fields
 
 The runtime-state model should stay limited to metadata such as:

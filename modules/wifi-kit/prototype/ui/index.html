@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wifi-kit read-only console</title>
+  <style>
+    :root {
+      --bg: #f5f7f4;
+      --ink: #162018;
+      --muted: #5e6a60;
+      --line: #cdd8ce;
+      --panel: #ffffff;
+      --safe: #146c43;
+      --warn: #9a5b00;
+      --chip: #e8efe7;
+      --code: #101713;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: ui-sans-serif, "Segoe UI", Verdana, sans-serif;
+      line-height: 1.45;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      background: #eef4ed;
+      padding: 18px 16px;
+    }
+
+    main {
+      width: min(1040px, 100%);
+      margin: 0 auto;
+      padding: 18px 16px 32px;
+    }
+
+    h1, h2 {
+      margin: 0;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: clamp(1.5rem, 2.8vw, 2.2rem);
+    }
+
+    h2 {
+      font-size: 1rem;
+      margin-bottom: 10px;
+    }
+
+    .topline {
+      width: min(1040px, 100%);
+      margin: 0 auto;
+    }
+
+    .subhead {
+      margin: 8px 0 0;
+      color: var(--muted);
+      max-width: 68ch;
+    }
+
+    .status-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--chip);
+      padding: 4px 9px;
+      font-size: 0.9rem;
+      color: var(--ink);
+    }
+
+    .badge.safe {
+      border-color: #93c5a6;
+      color: var(--safe);
+      background: #edf8f0;
+      font-weight: 650;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    section {
+      grid-column: span 12;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px;
+      min-width: 0;
+    }
+
+    @media (min-width: 760px) {
+      .half { grid-column: span 6; }
+      .third { grid-column: span 4; }
+      .two-thirds { grid-column: span 8; }
+    }
+
+    dl {
+      display: grid;
+      grid-template-columns: minmax(120px, 36%) minmax(0, 1fr);
+      gap: 7px 10px;
+      margin: 0;
+      font-size: 0.94rem;
+    }
+
+    dt {
+      color: var(--muted);
+    }
+
+    dd {
+      margin: 0;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 8px 6px;
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 650;
+    }
+
+    pre {
+      margin: 0;
+      padding: 12px;
+      border-radius: 6px;
+      background: var(--code);
+      color: #d8eadc;
+      overflow: auto;
+      font-size: 0.84rem;
+      max-height: 340px;
+    }
+
+    .empty {
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .warn {
+      color: var(--warn);
+      font-weight: 650;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topline">
+      <h1>wifi-kit read-only console</h1>
+      <p class="subhead">Local SAFE view for runtime state, Wi-Fi scan data, and connect-safe preflight planning.</p>
+      <div class="status-row">
+        <span class="badge safe">READ-ONLY</span>
+        <span class="badge">no connect</span>
+        <span class="badge">no wpa_supplicant write</span>
+        <span class="badge">no hostapd/dnsmasq</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="grid">
+      <section class="third">
+        <h2>Preflight</h2>
+        <dl id="diagnose"></dl>
+      </section>
+
+      <section class="third">
+        <h2>Snapshot</h2>
+        <dl id="snapshot"></dl>
+      </section>
+
+      <section class="third">
+        <h2>Safety</h2>
+        <dl>
+          <dt>Real apply</dt>
+          <dd class="warn">disabled</dd>
+          <dt>Network writes</dt>
+          <dd>disabled</dd>
+          <dt>Secrets</dt>
+          <dd>not collected</dd>
+          <dt>Portal status</dt>
+          <dd>future read-only design only</dd>
+        </dl>
+      </section>
+
+      <section class="two-thirds">
+        <h2>Wi-Fi Scan</h2>
+        <div id="scan"></div>
+      </section>
+
+      <section class="half">
+        <h2>Raw Safe Diagnose</h2>
+        <pre id="raw-diagnose"></pre>
+      </section>
+
+      <section class="half">
+        <h2>Raw Scan</h2>
+        <pre id="raw-scan"></pre>
+      </section>
+    </div>
+  </main>
+
+  <script id="wifi-kit-data" type="application/json">
+{
+  "diagnose": {
+    "mode": "safe-diagnose",
+    "timestamp": "demo",
+    "dry_run_only": true,
+    "real_apply_allowed": false,
+    "backend": "unknown",
+    "interface": "unknown",
+    "current_ssid_state": "unknown",
+    "current_ip": "unknown",
+    "default_route": "unknown",
+    "power_save": "unknown",
+    "ssh_client": "unknown",
+    "ssh_route_interface": "unknown",
+    "scan_status": "unknown",
+    "connect_safe": "simulation-only",
+    "secret_policy": "no-secrets",
+    "network_writes": false,
+    "services_started": false
+  },
+  "snapshot": {
+    "mode": "simulate",
+    "backend": "unknown",
+    "interface": "unknown",
+    "current_ssid_state": "unknown",
+    "current_ip": "unknown",
+    "default_route": "unknown",
+    "power_save": "unknown",
+    "ssh_client": "unknown",
+    "ssh_route_interface": "unknown",
+    "runtime_fingerprint": "unknown",
+    "timestamp": "demo",
+    "secret_policy": "no-secrets",
+    "persistence": "none"
+  },
+  "scan": {
+    "backend": "iw",
+    "interface": "unknown",
+    "timestamp": "demo",
+    "status": "unavailable",
+    "reason": "demo-data",
+    "networks": []
+  }
+}
+  </script>
+  <script>
+    const data = JSON.parse(document.getElementById('wifi-kit-data').textContent);
+
+    function setPairs(targetId, source, keys) {
+      const target = document.getElementById(targetId);
+      target.innerHTML = '';
+      keys.forEach((key) => {
+        const term = document.createElement('dt');
+        const value = document.createElement('dd');
+        term.textContent = key.replaceAll('_', ' ');
+        value.textContent = String(source[key] ?? 'unknown');
+        target.append(term, value);
+      });
+    }
+
+    function renderScan(scan) {
+      const target = document.getElementById('scan');
+      const networks = Array.isArray(scan.networks) ? scan.networks : [];
+      if (networks.length === 0) {
+        const message = document.createElement('p');
+        message.className = 'empty';
+        message.textContent = scan.reason ? `No networks shown: ${scan.reason}` : 'No networks shown.';
+        target.replaceChildren(message);
+        return;
+      }
+
+      const table = document.createElement('table');
+      table.innerHTML = '<thead><tr><th>SSID</th><th>Signal</th><th>Channel</th><th>Security</th></tr></thead>';
+      const body = document.createElement('tbody');
+      networks.forEach((network) => {
+        const row = document.createElement('tr');
+        const ssid = network.ssid_hidden ? '<hidden>' : (network.ssid || '<hidden>');
+        [ssid, network.signal || 'unknown', network.channel || 'unknown', network.security || 'unknown'].forEach((text) => {
+          const cell = document.createElement('td');
+          cell.textContent = text;
+          row.appendChild(cell);
+        });
+        body.appendChild(row);
+      });
+      table.appendChild(body);
+      target.replaceChildren(table);
+    }
+
+    setPairs('diagnose', data.diagnose, [
+      'backend',
+      'interface',
+      'current_ip',
+      'default_route',
+      'power_save',
+      'scan_status',
+      'real_apply_allowed'
+    ]);
+
+    setPairs('snapshot', data.snapshot, [
+      'current_ssid_state',
+      'ssh_client',
+      'ssh_route_interface',
+      'secret_policy',
+      'persistence',
+      'timestamp'
+    ]);
+
+    renderScan(data.scan);
+    document.getElementById('raw-diagnose').textContent = JSON.stringify(data.diagnose, null, 2);
+    document.getElementById('raw-scan').textContent = JSON.stringify(data.scan, null, 2);
+  </script>
+</body>
+</html>

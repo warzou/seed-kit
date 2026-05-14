@@ -40,7 +40,9 @@ NetworkManager n'est pas retenu en V1 car il est plus lourd, moins adapte aux RP
 - `docs/RECOVERY.md`: strategie de bascule AP / client / recovery.
 - `docs/SECURITY.md`: stockage des secrets, metadonnees et permissions.
 - `docs/ROADMAP.md`: suite technique.
+- `docs/PHONE-UI-READONLY.md`: premiere architecture UI telephone read-only.
 - `prototype/wifi-kit.sh`: script shell V0 simule.
+- `prototype/ui/`: prototype HTML local read-only.
 
 ## Utilisation (simulation)
 
@@ -112,6 +114,16 @@ sh modules/wifi-kit/prototype/wifi-kit.sh safe-diagnose --json
 ```
 
 `safe-diagnose` regroupe uniquement des lectures et simulations: backend, runtime-state, snapshot preview, scan read-only et simulation `connect-safe`. Il sert de preflight avant tout futur `connect-safe` reel et ne modifie rien.
+
+## Prototype UI read-only
+
+Le prototype UI telephone reste local, statique et optionnel:
+
+```sh
+sh modules/wifi-kit/prototype/ui/render-readonly-ui.sh > /tmp/wifi-kit-ui.html
+```
+
+La page generee embarque uniquement des donnees read-only (`safe-diagnose --json`, `scan-real --json`, `state-snapshot --simulate --json`). Elle ne contient aucun bouton de connexion, ne collecte aucun secret et ne lance aucun portail captif.
 
 ## Stabilite Wi-Fi terrain
 
