@@ -89,6 +89,8 @@ A complex dependency engine is not needed yet. Keep dependencies explicit in pro
 
 Profiles are planned compositions of modules, stored later under `profiles/`. They are useful for common node shapes, but modules must remain usable directly without profiles.
 
+Profile naming and V1 compositions are documented in [PROFILES.md](PROFILES.md). In V1, profiles are plan-only aids; they do not apply modules automatically.
+
 ## Parallel Module Development Threshold
 
 Parallel module development becomes reasonable when:

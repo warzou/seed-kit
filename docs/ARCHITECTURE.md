@@ -38,6 +38,12 @@ The default path is SAFE:
 
 Keep the core small. Avoid heavy frameworks, YAML manifests, dependency engines, plugin systems, and abstractions before real module pressure proves they are needed.
 
+## Profiles
+
+Profiles are named module compositions for common node shapes. They are public planning aids, not secret stores or restore bundles.
+
+The `node` suffix means Tailscale is expected or planned. Profile details are documented in [PROFILES.md](PROFILES.md).
+
 ## Node shapes
 
 Seed-Kit supports two target shapes:

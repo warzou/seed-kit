@@ -1124,12 +1124,54 @@ seed_kit_usage() {
   echo ""
   echo "Planned CLI shape:"
   echo "  --plan           show the full execution plan"
+  echo "  --profile=<name> --plan  show recommended modules for one profile"
   echo "  --modules        list available modules"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --fetch-module=wifi-kit [--yes|-y]  fetch one repo-backed module with git sparse checkout"
   echo "  --install-module=wifi-kit [--yes|-y]  prepare git if needed, then fetch one repo-backed module"
   echo "  --detect         show OS detection details"
   echo "  --uninstall-runtime [--yes|-y]  remove local Seed-Kit runtime directories (lib/modules/backends)"
+}
+
+profile_modules() {
+  case "$1" in
+    rpi0-pocket)
+      echo "wifi-stability homer"
+      ;;
+    rpi0-pocket-node)
+      echo "wifi-stability tailscale homer"
+      ;;
+    rpi3-edge)
+      echo "wifi-stability cloudflared caddy homer"
+      ;;
+    rpi3-edge-node|minimal-resilient-node)
+      echo "wifi-stability tailscale cloudflared caddy homer"
+      ;;
+    edge-services-node)
+      echo "wifi-stability tailscale cloudflared caddy homer docker homepage"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+show_profile_plan() {
+  profile=$1
+
+  if ! modules=$(profile_modules "$profile"); then
+    echo "unknown profile: $profile" >&2
+    echo "known profiles: rpi0-pocket rpi0-pocket-node rpi3-edge rpi3-edge-node minimal-resilient-node edge-services-node" >&2
+    return 2
+  fi
+
+  ui_header "profile plan" "$profile"
+  ui_line "recommended modules:"
+  for module in $modules; do
+    ui_line "  $module"
+  done
+  ui_line ""
+  ui_line "profile apply is not implemented"
 }
 
 parse_fetch_options() {
@@ -1571,6 +1613,20 @@ case "${1:-}" in
       exit 0
     fi
     run_apply_modules
+    ;;
+  --profile=*)
+    profile="${1#--profile=}"
+    shift
+    case "${1:-}" in
+      --plan)
+        show_profile_plan "$profile"
+        ;;
+      *)
+        echo "profiles support --plan only" >&2
+        echo "usage: sh seed-kit.sh --profile=<name> --plan" >&2
+        exit 2
+        ;;
+    esac
     ;;
   --fetch-module=*)
     fetch_module="${1#--fetch-module=}"
