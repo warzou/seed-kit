@@ -404,6 +404,11 @@ package_verify() {
     return 2
   fi
 
+  if ! command -v tar >/dev/null 2>&1; then
+    echo "tar is required to verify profile-state packages" >&2
+    return 2
+  fi
+
   echo "profile-state package verify"
   echo "input: $input_tar"
   echo

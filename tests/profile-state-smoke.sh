@@ -80,6 +80,17 @@ make_path_without_sha256sum() {
   done
 }
 
+make_path_without_tar() {
+  bin_dir="$1"
+
+  mkdir -p "$bin_dir"
+  for tool in sh grep mktemp rm; do
+    tool_path="$(command -v "$tool" 2>/dev/null || true)"
+    [ -n "$tool_path" ] || fail "missing required tool: $tool"
+    ln -s "$tool_path" "$bin_dir/$tool"
+  done
+}
+
 echo "profile-state smoke"
 
 run_ok sh -n "$profile_state"
@@ -108,6 +119,15 @@ else
   fail "verify should stay SAFE when sha256sum is unavailable"
 fi
 pass "sha256sum unavailable warning"
+
+no_tar_bin="$tmp_root/no-tar-bin"
+no_tar_output="$tmp_root/no-tar-output.txt"
+make_path_without_tar "$no_tar_bin"
+if PATH="$no_tar_bin" sh "$profile_state" package --verify --input "$package_dir/profile-state-snapshot.tar" > "$no_tar_output" 2>&1; then
+  fail "verify should fail when tar is unavailable"
+fi
+grep -q '^tar is required to verify profile-state packages$' "$no_tar_output" || fail "missing tar unavailable error"
+pass "tar unavailable refused"
 
 run_fail sh "$profile_state" package --verify
 pass "missing input refused"
