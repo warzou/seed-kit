@@ -8,6 +8,8 @@ public_project_paths="$project_dir"
 
 manual_restore_paths="$project_dir/docker-compose.yml
 $project_dir/compose.yml
+$project_dir/compose/docker-compose.yml
+$project_dir/compose/docker-compose.example.yml
 $project_dir/config/caddy
 $project_dir/config/homepage
 /etc/caddy
