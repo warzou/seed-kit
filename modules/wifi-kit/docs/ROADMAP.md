@@ -56,6 +56,8 @@ Contraintes:
 
 `scan-real` utilise `iw dev <iface> scan` quand possible et ne remonte que SSID + signal.
 
+`scan-real --json` prepare le futur backend read-only du portail avec un format stable: backend, interface, timestamp, SSID, SSID cache, signal, frequence, canal et securite estimee. Cette sortie reste sans connexion, sans ecriture et sans secret.
+
 Le helper local `prototype/helpers.sh` garde la detection des outils reseau dans `wifi-kit` sans ajouter de couche globale au core Seed-Kit.
 
 ## Prochaine etape
@@ -77,6 +79,14 @@ Le helper local `prototype/helpers.sh` garde la detection des outils reseau dans
 - Prototype `ssh-awareness`: premiere version disponible via `ssh-safety-simulate`.
 - Prototype `rollback-plan`.
 - Toujours sans apply reseau reel.
+
+## Backend read-only du futur portail
+
+- Utiliser `scan-real` comme base terminal.
+- Utiliser `scan-real --json` comme base API/UI locale.
+- Garder le backend testable seul en SSH.
+- Ne pas ajouter de connexion, sauvegarde, cache persistant, AP mode ou ecriture `wpa_supplicant`.
+- Garder le futur portal-ui derriere `connect-safe`, rollback, recovery et SSH safety.
 
 ## V2 - mode reel controle
 

@@ -95,11 +95,14 @@ Ces commandes observent l'hote local sans modifier le reseau:
 sh modules/wifi-kit/prototype/wifi-kit.sh backend-detect
 sh modules/wifi-kit/prototype/wifi-kit.sh status-real
 sh modules/wifi-kit/prototype/wifi-kit.sh scan-real
+sh modules/wifi-kit/prototype/wifi-kit.sh scan-real --json
 ```
 
 Elles ne lancent aucune connexion Wi-Fi, n'ecrivent pas dans `wpa_supplicant`, ne lisent pas de secret, et ne demarrent aucun service.
 
 Le prototype utilise un helper local (`prototype/helpers.sh`) pour retrouver les outils reseau dans `PATH`, puis dans `/usr/sbin`, `/sbin`, `/usr/bin` et `/bin`. Ce helper reste strictement local a `wifi-kit`.
+
+`scan-real` est la base du futur backend read-only du portail. Le mode texte affiche `ssid`, `signal`, `channel` et `security`. Le mode `--json` expose un format stable pour une future UI locale, sans connexion, sans cache persistant et sans mutation reseau.
 
 ## Stabilite Wi-Fi terrain
 

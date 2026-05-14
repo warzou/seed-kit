@@ -134,13 +134,31 @@ cmd_scan_real() {
   ui_header "scan-real (read-only)"
   ui "safety: read-only, no connection, no network writes, no secrets"
 
+  output_json=0
+  iface=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --json)
+        output_json=1
+        ;;
+      *)
+        if [ -z "$iface" ]; then
+          iface="$1"
+        else
+          ui "scan-real unknown argument: $1"
+          return 1
+        fi
+        ;;
+    esac
+    shift
+  done
+
   iw_bin="$(find_tool iw 2>/dev/null || true)"
   if [ -z "$iw_bin" ]; then
     ui "scan-real unavailable: iw is missing"
     return 0
   fi
 
-  iface="${1:-}"
   if [ -z "$iface" ]; then
     iface="$(detect_wifi_interfaces | sed -n '1p')"
   fi
@@ -154,19 +172,125 @@ cmd_scan_real() {
   err="${TMPDIR:-/tmp}/wifi-kit-iw-scan-err.$$"
 
   if "$iw_bin" dev "$iface" scan > "$tmp" 2> "$err"; then
-    ui "interface=$iface"
-    awk '
-      /^[[:space:]]*signal:/ {
-        signal=$2 " " $3
-      }
-      /^[[:space:]]*SSID:/ {
-        ssid=$0
-        sub(/^[[:space:]]*SSID:[[:space:]]*/, "", ssid)
-        if (ssid != "") {
-          printf "  - ssid=%s signal=%s\n", ssid, signal
+    if [ "$output_json" -eq 1 ]; then
+      timestamp="$(timestamp_utc)"
+      awk -v iface="$iface" -v timestamp="$timestamp" '
+        function json_escape(value, escaped) {
+          escaped=value
+          gsub(/\\/, "\\\\", escaped)
+          gsub(/"/, "\\\"", escaped)
+          return escaped
         }
-      }
-    ' "$tmp"
+        function channel_from_freq(freq) {
+          if (freq == 2484) return 14
+          if (freq >= 2412 && freq <= 2472) return int((freq - 2407) / 5)
+          if (freq >= 5000 && freq <= 5900) return int((freq - 5000) / 5)
+          return ""
+        }
+        function security_value() {
+          if (sae) return "WPA3"
+          if (rsn && wpa) return "WPA/WPA2"
+          if (rsn) return "WPA2"
+          if (wpa) return "WPA"
+          if (privacy) return "protected"
+          return "open"
+        }
+        function emit_network() {
+          if (!seen_bss) return
+          if (count > 0) printf ",\n"
+          hidden = (ssid == "") ? "true" : "false"
+          channel = channel_from_freq(freq)
+          printf "    {\"ssid\":\"%s\",\"ssid_hidden\":%s,\"signal\":\"%s\",\"freq\":\"%s\",\"channel\":\"%s\",\"security\":\"%s\"}", json_escape(ssid), hidden, json_escape(signal), json_escape(freq), json_escape(channel), json_escape(security_value())
+          count++
+        }
+        BEGIN {
+          printf "{\n"
+          printf "  \"backend\":\"iw\",\n"
+          printf "  \"interface\":\"%s\",\n", json_escape(iface)
+          printf "  \"timestamp\":\"%s\",\n", json_escape(timestamp)
+          printf "  \"networks\":[\n"
+        }
+        /^BSS / {
+          emit_network()
+          seen_bss=1
+          ssid=""
+          signal=""
+          freq=""
+          privacy=0
+          rsn=0
+          wpa=0
+          sae=0
+        }
+        /^[[:space:]]*freq:/ { freq=$2 }
+        /^[[:space:]]*signal:/ { signal=$2 " " $3 }
+        /^[[:space:]]*SSID:/ {
+          ssid=$0
+          sub(/^[[:space:]]*SSID:[[:space:]]*/, "", ssid)
+        }
+        /^[[:space:]]*capability:/ {
+          if ($0 ~ /Privacy/) privacy=1
+        }
+        /^[[:space:]]*RSN:/ { rsn=1 }
+        /^[[:space:]]*WPA:/ { wpa=1 }
+        /SAE/ { sae=1 }
+        END {
+          emit_network()
+          printf "\n  ]\n"
+          printf "}\n"
+        }
+      ' "$tmp"
+    else
+      ui "backend=iw"
+      ui "interface=$iface"
+      ui "timestamp=$(timestamp_utc)"
+      awk '
+        function channel_from_freq(freq) {
+          if (freq == 2484) return 14
+          if (freq >= 2412 && freq <= 2472) return int((freq - 2407) / 5)
+          if (freq >= 5000 && freq <= 5900) return int((freq - 5000) / 5)
+          return "unknown"
+        }
+        function security_value() {
+          if (sae) return "WPA3"
+          if (rsn && wpa) return "WPA/WPA2"
+          if (rsn) return "WPA2"
+          if (wpa) return "WPA"
+          if (privacy) return "protected"
+          return "open"
+        }
+        function emit_network() {
+          if (!seen_bss) return
+          display_ssid = (ssid == "") ? "<hidden>" : ssid
+          printf "  - ssid=%s signal=%s channel=%s security=%s\n", display_ssid, signal, channel_from_freq(freq), security_value()
+        }
+        /^BSS / {
+          emit_network()
+          seen_bss=1
+          ssid=""
+          signal=""
+          freq=""
+          privacy=0
+          rsn=0
+          wpa=0
+          sae=0
+        }
+        /^[[:space:]]*freq:/ { freq=$2 }
+        /^[[:space:]]*signal:/ { signal=$2 " " $3 }
+        /^[[:space:]]*SSID:/ {
+          ssid=$0
+          sub(/^[[:space:]]*SSID:[[:space:]]*/, "", ssid)
+        }
+        /^[[:space:]]*capability:/ {
+          if ($0 ~ /Privacy/) privacy=1
+        }
+        /^[[:space:]]*RSN:/ { rsn=1 }
+        /^[[:space:]]*WPA:/ { wpa=1 }
+        /SAE/ { sae=1 }
+        END {
+          emit_network()
+        }
+      ' "$tmp"
+    fi
   else
     ui "scan-real unavailable on $iface: iw scan failed"
     ui "hint: this may require root/CAP_NET_ADMIN or an idle Wi-Fi interface"
@@ -177,7 +301,6 @@ cmd_scan_real() {
 
   rm -f "$tmp" "$err"
 }
-
 cmd_stability_status() {
   ui_header "stability-status (read-only)"
   ui "safety: read-only, no connection, no network writes, no secrets"
@@ -634,7 +757,7 @@ Usage:
   sh prototype/wifi-kit.sh recovery-plan
   sh prototype/wifi-kit.sh backend-detect
   sh prototype/wifi-kit.sh status-real
-  sh prototype/wifi-kit.sh scan-real [IFACE]
+  sh prototype/wifi-kit.sh scan-real [--json] [IFACE]
   sh prototype/wifi-kit.sh stability-status
   sh prototype/wifi-kit.sh stability-plan
   sh prototype/wifi-kit.sh stability-apply-current-boot [IFACE]
