@@ -38,6 +38,7 @@ usage() {
   echo "  sh tools/profile-state.sh backup --local --dry-run"
   echo "  sh tools/profile-state.sh snapshot --local --dry-run --output <dir>"
   echo "  sh tools/profile-state.sh package --local --dry-run --output <dir>"
+  echo "  sh tools/profile-state.sh package --verify --input <tar>"
 }
 
 show_plan() {
@@ -351,6 +352,77 @@ package_local_dry_run() {
   echo "  cloud upload: no"
 }
 
+tar_contains_entry() {
+  tar_file="$1"
+  entry="$2"
+  tar -tf "$tar_file" | while IFS= read -r item; do
+    case "$item" in
+      "$entry"|"$entry"/)
+        echo yes
+        break
+        ;;
+    esac
+  done | grep -q yes
+}
+
+verify_tar_paths_safe() {
+  tar_file="$1"
+  tar -tf "$tar_file" | while IFS= read -r item; do
+    case "$item" in
+      /*|*../*|../*|*.env|*/.env|*ssh_host_*|*machine-id*|*tailscaled.state*)
+        echo "unsafe tar entry: $item" >&2
+        return 1
+        ;;
+    esac
+  done
+}
+
+package_verify() {
+  input_tar="$1"
+  errors=0
+
+  if [ -z "$input_tar" ]; then
+    echo "missing --input <tar>" >&2
+    return 2
+  fi
+
+  if [ ! -f "$input_tar" ]; then
+    echo "input tar not found: $input_tar" >&2
+    return 2
+  fi
+
+  echo "profile-state package verify"
+  echo "input: $input_tar"
+  echo
+  echo "contents:"
+  tar -tf "$input_tar"
+  echo
+
+  for entry in MANIFEST.txt SHA256SUMS inventory manual excluded; do
+    if tar_contains_entry "$input_tar" "$entry"; then
+      echo "present: $entry"
+    else
+      echo "missing: $entry"
+      errors=$((errors + 1))
+    fi
+  done
+
+  if verify_tar_paths_safe "$input_tar"; then
+    echo "path safety: OK"
+  else
+    errors=$((errors + 1))
+  fi
+
+  echo
+  if [ "$errors" -eq 0 ]; then
+    echo "SAFE VERIFY OK"
+    return 0
+  fi
+
+  echo "SAFE VERIFY ERROR"
+  return 1
+}
+
 list_inventory() {
   echo "profile-state inventory"
   echo
@@ -478,6 +550,9 @@ case "${1:-}" in
           esac
         done
         package_local_dry_run "$output_dir"
+        ;;
+      "--verify --input")
+        package_verify "${4:-}"
         ;;
       *)
         usage >&2
