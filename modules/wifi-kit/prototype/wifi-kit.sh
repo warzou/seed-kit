@@ -467,6 +467,45 @@ cmd_recovery_plan() {
   ui "  5) record recovery attempt in state via reconnect-plan"
 }
 
+cmd_connect_safe_simulate() {
+  failure="${1:-}"
+
+  ui_header "connect-safe-simulate"
+  ui "safety: simulation only; no Wi-Fi connection, no network writes, no secrets"
+  ui "note: no persistent state file is created"
+
+  ui "state=readonly"
+  ui "state=snapshot-created"
+  ui "state=connecting"
+  ui "state=waiting-ip"
+
+  case "$failure" in
+    "")
+      ui "state=validating"
+      ui "state=committed"
+      ui "result: simulated success"
+      ;;
+    --fail-ip)
+      ui "event: simulated DHCP/IP timeout"
+      ui "state=rollback-started"
+      ui "state=rollback-complete"
+      ui "result: simulated rollback after IP failure"
+      ;;
+    --fail-validation)
+      ui "state=validating"
+      ui "event: simulated validation failure"
+      ui "state=rollback-started"
+      ui "state=recovery-required"
+      ui "result: simulated rollback incomplete, recovery required"
+      ;;
+    *)
+      ui "unknown option: $failure"
+      ui "supported options: --fail-ip, --fail-validation"
+      return 1
+      ;;
+  esac
+}
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -482,6 +521,7 @@ Usage:
   sh prototype/wifi-kit.sh stability-status
   sh prototype/wifi-kit.sh stability-plan
   sh prototype/wifi-kit.sh stability-apply-current-boot [IFACE]
+  sh prototype/wifi-kit.sh connect-safe-simulate [--fail-ip|--fail-validation]
 
 This is a SAFE prototype. No hostapd/dnsmasq/NetworkManager actions are executed.
 EOF
@@ -511,6 +551,7 @@ main() {
     stability-status) cmd_stability_status ;;
     stability-plan) cmd_stability_plan ;;
     stability-apply-current-boot) shift; cmd_stability_apply_current_boot "${1:-}" ;;
+    connect-safe-simulate) shift; cmd_connect_safe_simulate "${1:-}" ;;
     *) usage ;;
   esac
 }

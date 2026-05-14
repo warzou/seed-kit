@@ -69,7 +69,7 @@ Le helper local `prototype/helpers.sh` garde la detection des outils reseau dans
 
 ## Prototypes suivants autorises
 
-- Prototype `transaction-state`.
+- Prototype `transaction-state`: premiere version disponible via `connect-safe-simulate`.
 - Prototype `snapshot`.
 - Prototype `timeout`.
 - Prototype `rollback-plan`.

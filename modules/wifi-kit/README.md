@@ -53,6 +53,16 @@ sh modules/wifi-kit/prototype/wifi-kit.sh reconnect-plan
 sh modules/wifi-kit/prototype/wifi-kit.sh recovery-plan
 ```
 
+## Simulation connect-safe
+
+`connect-safe-simulate` affiche uniquement les etats transactionnels prevus pour un futur connect-safe. Il ne cree aucun fichier d'etat persistant et ne touche pas au reseau.
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit.sh connect-safe-simulate
+sh modules/wifi-kit/prototype/wifi-kit.sh connect-safe-simulate --fail-ip
+sh modules/wifi-kit/prototype/wifi-kit.sh connect-safe-simulate --fail-validation
+```
+
 ## Utilisation read-only reelle
 
 Ces commandes observent l'hote local sans modifier le reseau:
