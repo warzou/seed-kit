@@ -31,14 +31,22 @@ do_not_clone_paths="/etc/machine-id
 /var/lib/tailscale/tailscaled.state"
 
 usage() {
+  echo "profile-state"
+  echo
   echo "Usage:"
   echo "  sh tools/profile-state.sh plan"
   echo "  sh tools/profile-state.sh inventory"
-  echo "  sh tools/profile-state.sh backup --dry-run"
   echo "  sh tools/profile-state.sh backup --local --dry-run"
   echo "  sh tools/profile-state.sh snapshot --local --dry-run --output <dir>"
   echo "  sh tools/profile-state.sh package --local --dry-run --output <dir>"
   echo "  sh tools/profile-state.sh package --verify --input <tar>"
+  echo
+  echo "SAFE boundaries:"
+  echo "  no restore"
+  echo "  no cloud"
+  echo "  no encryption yet"
+  echo "  no secrets copied"
+  echo "  no system mutation except explicit --output for dry-run artifacts"
 }
 
 show_plan() {
@@ -647,7 +655,7 @@ case "${1:-}" in
         ;;
     esac
     ;;
-  -h|--help|"")
+  -h|--help|help|"")
     usage
     ;;
   *)
