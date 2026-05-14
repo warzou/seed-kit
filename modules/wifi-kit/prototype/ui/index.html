@@ -3,27 +3,28 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>wifi-kit - assistant Wi-Fi SAFE</title>
+  <title>Seed-Kit WiFi - read-only</title>
   <style>
     :root {
-      --bg: #f3efe5;
-      --ink: #172018;
-      --muted: #687263;
-      --line: #ded3bf;
-      --panel: #fffdf8;
-      --panel-2: #f9f4ea;
-      --safe: #146c43;
-      --safe-deep: #0f4f32;
-      --safe-2: #dff3e5;
-      --safe-3: #effaf2;
-      --warn-2: #fff3d5;
-      --disabled: #edf0e7;
-      --code: #111713;
-      --shadow: 0 20px 60px rgba(51, 44, 32, 0.14);
-      --shadow-soft: 0 10px 30px rgba(51, 44, 32, 0.09);
-      --radius-xl: 30px;
-      --radius-lg: 22px;
-      --radius-md: 16px;
+      --bg: #080d12;
+      --bg-2: #101922;
+      --panel: rgba(20, 29, 38, 0.86);
+      --panel-2: rgba(27, 39, 50, 0.92);
+      --panel-3: rgba(12, 18, 25, 0.8);
+      --ink: #f4f7ee;
+      --muted: #9eaa9c;
+      --soft: #d8e8cc;
+      --line: rgba(225, 238, 210, 0.13);
+      --line-strong: rgba(126, 224, 153, 0.34);
+      --safe: #70e099;
+      --safe-2: #1f7a4f;
+      --warn: #f5c76b;
+      --danger: #ff9b8a;
+      --code: #05080c;
+      --shadow: 0 18px 55px rgba(0, 0, 0, 0.34);
+      --radius-xl: 28px;
+      --radius-lg: 20px;
+      --radius-md: 14px;
     }
 
     * { box-sizing: border-box; }
@@ -32,210 +33,236 @@
       min-height: 100vh;
       margin: 0;
       background:
-        radial-gradient(circle at 12% 4%, rgba(20, 108, 67, 0.22), transparent 18rem),
-        radial-gradient(circle at 92% 0%, rgba(224, 188, 116, 0.28), transparent 20rem),
-        linear-gradient(180deg, #fffaf0 0%, var(--bg) 52%, #ebe4d5 100%);
+        radial-gradient(circle at 20% -10%, rgba(112, 224, 153, 0.2), transparent 18rem),
+        radial-gradient(circle at 96% 8%, rgba(86, 157, 255, 0.13), transparent 18rem),
+        linear-gradient(180deg, #070b10 0%, var(--bg) 58%, #0d1218 100%);
       color: var(--ink);
       font-family: "Trebuchet MS", "Segoe UI", Verdana, sans-serif;
-      line-height: 1.45;
+      line-height: 1.42;
     }
 
     button, input { font: inherit; }
 
     .shell {
-      width: min(1040px, 100%);
+      width: min(760px, 100%);
       margin: 0 auto;
-      padding: 16px 12px 34px;
+      padding: 14px 12px 28px;
+    }
+
+    .app {
+      display: grid;
+      gap: 12px;
+    }
+
+    .hero,
+    .panel,
+    details {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      background: linear-gradient(180deg, var(--panel), rgba(11, 17, 24, 0.84));
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
     }
 
     .hero {
-      position: relative;
-      display: grid;
-      gap: 18px;
-      margin-bottom: 14px;
+      position: sticky;
+      top: 8px;
+      z-index: 3;
       overflow: hidden;
-      border: 1px solid rgba(20, 108, 67, 0.18);
-      border-radius: var(--radius-xl);
-      background:
-        linear-gradient(135deg, rgba(255, 253, 248, 0.94), rgba(239, 250, 242, 0.9)),
-        radial-gradient(circle at top right, rgba(20, 108, 67, 0.18), transparent 18rem);
-      box-shadow: var(--shadow);
-      padding: 24px;
+      padding: 16px;
     }
 
     .hero::after {
       content: "";
       position: absolute;
-      right: -54px;
-      top: -54px;
-      width: 150px;
-      height: 150px;
+      right: -70px;
+      top: -92px;
+      width: 210px;
+      height: 210px;
       border-radius: 999px;
-      background: rgba(20, 108, 67, 0.1);
+      background: radial-gradient(circle, rgba(112, 224, 153, 0.16), transparent 68%);
       pointer-events: none;
+    }
+
+    .topline {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .brand {
+      min-width: 0;
     }
 
     .eyebrow {
       margin: 0 0 6px;
       color: var(--safe);
-      font-size: 0.78rem;
-      font-weight: 800;
-      letter-spacing: 0.12em;
+      font-size: 0.72rem;
+      font-weight: 900;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
     }
 
     h1, h2, h3, p { margin-top: 0; }
 
     h1 {
-      margin-bottom: 12px;
-      max-width: 8ch;
-      font-size: clamp(2.4rem, 13vw, 5.2rem);
+      margin-bottom: 6px;
+      font-size: clamp(2.15rem, 13vw, 4rem);
       line-height: 0.86;
       letter-spacing: -0.08em;
     }
 
     h2 {
       margin-bottom: 10px;
-      font-size: 1.18rem;
-      line-height: 1.15;
+      font-size: 1.02rem;
+      letter-spacing: -0.02em;
     }
 
     h3 {
-      margin-bottom: 5px;
+      margin: 0;
+      overflow-wrap: anywhere;
       font-size: 1rem;
       line-height: 1.2;
     }
 
     .lead {
-      margin-bottom: 0;
+      margin: 0;
+      max-width: 36ch;
       color: var(--muted);
-      max-width: 56ch;
-      font-size: 1.04rem;
+      font-size: 0.96rem;
     }
 
-    .hero-note {
+    .safe-chip,
+    .badge {
       display: inline-flex;
       align-items: center;
       width: fit-content;
-      margin-bottom: 16px;
-      border: 1px solid rgba(20, 108, 67, 0.18);
+      min-height: 28px;
+      border: 1px solid rgba(112, 224, 153, 0.28);
       border-radius: 999px;
-      background: rgba(255, 253, 248, 0.8);
-      padding: 7px 11px;
-      color: var(--safe-deep);
-      font-size: 0.86rem;
-      font-weight: 900;
-    }
-
-    .hero-actions, .network-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      align-items: center;
-    }
-
-    .pill, .badge {
-      display: inline-flex;
-      align-items: center;
-      min-height: 30px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: #fffaf1;
-      padding: 5px 10px;
-      color: var(--muted);
-      font-size: 0.85rem;
-      font-weight: 700;
-    }
-
-    .pill.safe, .badge.safe {
-      border-color: #a7d7b4;
-      background: var(--safe-2);
+      background: rgba(112, 224, 153, 0.1);
       color: var(--safe);
+      padding: 5px 9px;
+      font-size: 0.76rem;
+      font-weight: 900;
+      white-space: nowrap;
     }
 
     .button {
       min-height: 44px;
-      border: 1px solid var(--safe);
+      border: 1px solid rgba(112, 224, 153, 0.5);
       border-radius: 999px;
-      background: linear-gradient(180deg, #1b7d4f, var(--safe-deep));
-      box-shadow: 0 10px 20px rgba(20, 108, 67, 0.2);
-      color: #fff;
-      padding: 9px 17px;
-      font-weight: 900;
+      background: linear-gradient(180deg, #78e99f, #2b9e63);
+      box-shadow: 0 14px 30px rgba(42, 172, 99, 0.24);
+      color: #08100d;
+      padding: 9px 16px;
+      font-weight: 950;
       cursor: pointer;
-      transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+      transition: transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
     }
 
     .button:not(:disabled):hover {
       transform: translateY(-1px);
-      box-shadow: 0 14px 26px rgba(20, 108, 67, 0.24);
-    }
-
-    .button.secondary {
-      background: #fffdf8;
-      box-shadow: none;
-      color: var(--safe);
+      box-shadow: 0 18px 36px rgba(42, 172, 99, 0.3);
     }
 
     .button:disabled {
-      border-color: var(--line);
-      background: var(--disabled);
+      border-color: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.09);
+      box-shadow: none;
       color: var(--muted);
       cursor: default;
     }
 
-    .status-card, section, details {
-      border: 1px solid var(--line);
-      border-radius: var(--radius-lg);
-      background: rgba(255, 253, 248, 0.92);
-      box-shadow: var(--shadow-soft);
-      padding: 17px;
-      min-width: 0;
+    .hero-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 14px;
     }
 
-    .status-card {
+    .refresh-button {
+      min-width: 128px;
+    }
+
+    .status-grid {
       position: relative;
       z-index: 1;
-      background: linear-gradient(180deg, #fffdf8, #f3faef);
-    }
-
-    .status-line {
       display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
     }
 
-    .status-line strong {
+    .status-tile,
+    .metric {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.045);
+      padding: 10px;
+    }
+
+    .status-tile span,
+    .metric span {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 0.66rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .status-tile strong,
+    .metric strong {
+      display: block;
       overflow-wrap: anywhere;
-      font-size: 1.1rem;
+      color: var(--ink);
+      font-size: 0.9rem;
     }
 
-    .grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 14px;
+    .panel,
+    details {
+      padding: 14px;
     }
 
-    .main-card {
-      border-color: rgba(20, 108, 67, 0.28);
-      background: linear-gradient(180deg, #fffdf8, #fff8ed);
+    .section-head {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .scan-status,
+    .empty,
+    .selected-summary {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.9rem;
     }
 
     .network-list {
       display: grid;
-      gap: 12px;
+      gap: 9px;
+      margin-top: 11px;
     }
 
     .network {
-      position: relative;
       display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      gap: 12px;
-      border: 1px solid rgba(222, 211, 191, 0.9);
-      border-radius: 22px;
-      background: linear-gradient(180deg, #fffdf8, #fff7eb);
-      padding: 15px;
+      gap: 8px;
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.055);
+      padding: 12px;
       text-align: left;
-      transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, background 160ms ease;
+      transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
     }
 
     .network.selectable {
@@ -244,154 +271,144 @@
 
     .network.selectable:hover,
     .network.selected {
-      border-color: rgba(20, 108, 67, 0.72);
-      box-shadow: 0 14px 32px rgba(20, 108, 67, 0.16);
+      border-color: var(--line-strong);
+      background: rgba(112, 224, 153, 0.09);
       transform: translateY(-1px);
     }
 
     .network.selected {
-      background: linear-gradient(180deg, #f2fbf0, #fffdf8);
+      box-shadow: inset 0 0 0 1px rgba(112, 224, 153, 0.35);
     }
 
-    .network-heading {
-      display: flex;
+    .network-main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
       gap: 10px;
-      align-items: flex-start;
-      justify-content: space-between;
+      align-items: center;
     }
 
-    .network-title-wrap {
-      min-width: 0;
+    .network-sub {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .badge {
+      min-height: 24px;
+      border-color: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--soft);
+      padding: 4px 8px;
+      font-size: 0.72rem;
     }
 
     .choice-dot {
       display: inline-grid;
-      flex: 0 0 auto;
       place-items: center;
       width: 28px;
       height: 28px;
-      border: 2px solid #c7d3c2;
+      border: 2px solid rgba(255, 255, 255, 0.16);
       border-radius: 999px;
-      background: #fffdf8;
       color: transparent;
-      font-size: 0.82rem;
-      font-weight: 900;
+      font-size: 0.7rem;
+      font-weight: 950;
     }
 
     .network.selected .choice-dot {
       border-color: var(--safe);
       background: var(--safe);
-      color: #fff;
+      color: #08100d;
     }
-
-    .network-meta { margin-top: 8px; }
 
     .signal-row {
       display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      align-items: end;
-      margin-top: 12px;
+      gap: 8px;
+      align-items: center;
+      margin-top: 7px;
     }
 
     .signal-bars {
       display: inline-flex;
       align-items: end;
-      gap: 3px;
-      min-height: 24px;
+      gap: 2px;
+      min-height: 18px;
     }
 
     .signal-bars span {
       display: block;
-      width: 8px;
+      width: 6px;
       border-radius: 999px;
-      background: #ddd5c7;
-      box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+      background: rgba(255, 255, 255, 0.16);
     }
 
-    .signal-bars span:nth-child(1) { height: 8px; }
-    .signal-bars span:nth-child(2) { height: 12px; }
-    .signal-bars span:nth-child(3) { height: 16px; }
-    .signal-bars span:nth-child(4) { height: 21px; }
+    .signal-bars span:nth-child(1) { height: 7px; }
+    .signal-bars span:nth-child(2) { height: 10px; }
+    .signal-bars span:nth-child(3) { height: 13px; }
+    .signal-bars span:nth-child(4) { height: 17px; }
 
     .signal-bars[data-level="1"] span:nth-child(-n+1),
     .signal-bars[data-level="2"] span:nth-child(-n+2),
     .signal-bars[data-level="3"] span:nth-child(-n+3),
     .signal-bars[data-level="4"] span:nth-child(-n+4) {
-      background: linear-gradient(180deg, #43b773, var(--safe));
+      background: linear-gradient(180deg, #a8ffc0, var(--safe));
     }
 
     .signal-quality {
-      display: grid;
-      gap: 1px;
+      display: flex;
+      gap: 6px;
+      align-items: baseline;
+      color: var(--muted);
+      font-size: 0.78rem;
     }
 
     .signal-quality strong {
-      font-size: 0.98rem;
-    }
-
-    .signal-quality small {
-      color: var(--muted);
-      font-size: 0.82rem;
-    }
-
-    .network-action {
-      display: grid;
-      gap: 8px;
-      align-content: center;
-    }
-
-    .password-mock,
-    .password-local {
-      width: 100%;
-      min-height: 42px;
-      border: 1px dashed var(--line);
-      border-radius: 12px;
-      background: #f7f4ec;
-      padding: 9px 11px;
-      color: var(--muted);
-    }
-
-    .password-local {
-      border-style: solid;
-      background: #fffdf8;
       color: var(--ink);
-      outline: none;
-      transition: border-color 140ms ease, box-shadow 140ms ease;
-    }
-
-    .password-local:not(:disabled):focus {
-      border-color: var(--safe);
-      box-shadow: 0 0 0 4px rgba(20, 108, 67, 0.12);
+      font-size: 0.88rem;
     }
 
     .field-label {
       display: grid;
-      gap: 6px;
+      gap: 7px;
       margin: 12px 0;
-      color: var(--muted);
-      font-size: 0.9rem;
-      font-weight: 800;
+      color: var(--soft);
+      font-size: 0.86rem;
+      font-weight: 900;
     }
 
-    .prepare-card {
-      border-color: rgba(20, 108, 67, 0.28);
-      background: linear-gradient(180deg, #f7fcf5, #fffdf8);
+    .password-local {
+      width: 100%;
+      min-height: 46px;
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.065);
+      color: var(--ink);
+      outline: none;
+      padding: 10px 12px;
+      transition: border-color 140ms ease, box-shadow 140ms ease;
     }
 
-    .selected-summary {
-      margin-bottom: 10px;
-      color: var(--muted);
+    .password-local::placeholder {
+      color: rgba(244, 247, 238, 0.42);
+    }
+
+    .password-local:not(:disabled):focus {
+      border-color: rgba(112, 224, 153, 0.7);
+      box-shadow: 0 0 0 4px rgba(112, 224, 153, 0.13);
+    }
+
+    .prepare-card[hidden] {
+      display: none;
     }
 
     .prepare-plan {
       display: grid;
       gap: 8px;
       margin-top: 12px;
-      border: 1px solid #a7d7b4;
-      border-radius: 20px;
-      background: linear-gradient(180deg, var(--safe-2), #f7fff8);
-      padding: 14px;
+      border: 1px solid rgba(112, 224, 153, 0.28);
+      border-radius: 18px;
+      background: rgba(112, 224, 153, 0.1);
+      padding: 12px;
     }
 
     .prepare-plan[hidden] { display: none; }
@@ -399,181 +416,142 @@
     .prepare-plan ul {
       margin: 0;
       padding-left: 18px;
+      color: var(--soft);
+      font-size: 0.9rem;
     }
 
-    .prepare-plan li + li { margin-top: 5px; }
+    .prepare-plan li + li { margin-top: 4px; }
 
     .callout {
-      margin-bottom: 12px;
-      border: 1px solid #e0bc74;
-      border-radius: 18px;
-      background: var(--warn-2);
-      padding: 13px;
-      color: #513400;
-    }
-
-    .empty {
-      margin: 0;
-      color: var(--muted);
-    }
-
-    .scan-status {
-      margin: 8px 0 12px;
-      color: var(--muted);
-      font-size: 0.94rem;
-    }
-
-    .scan-status strong {
-      color: var(--ink);
+      margin: 10px 0 0;
+      border: 1px solid rgba(245, 199, 107, 0.3);
+      border-radius: 16px;
+      background: rgba(245, 199, 107, 0.09);
+      padding: 11px;
+      color: #ffe3a3;
+      font-size: 0.9rem;
     }
 
     .mini-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
-    }
-
-    .metric {
-      min-width: 0;
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      background: #fbf9f3;
-      padding: 11px;
-    }
-
-    .metric span {
-      display: block;
-      color: var(--muted);
-      font-size: 0.76rem;
-      font-weight: 800;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-    }
-
-    .metric strong {
-      display: block;
-      margin-top: 4px;
-      overflow-wrap: anywhere;
-      font-size: 0.95rem;
+      margin-top: 10px;
     }
 
     details {
-      background: rgba(251, 249, 244, 0.72);
       box-shadow: none;
-      opacity: 0.88;
+      opacity: 0.82;
     }
 
     summary {
       cursor: pointer;
-      color: var(--safe);
-      font-weight: 900;
+      color: var(--soft);
+      font-weight: 950;
     }
 
     .advanced-grid {
       display: grid;
       gap: 10px;
-      margin-top: 14px;
+      margin-top: 12px;
     }
 
     pre {
       margin: 8px 0 0;
       padding: 12px;
-      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
       background: var(--code);
-      color: #d8eadc;
+      color: #cde8d1;
       overflow: auto;
-      font-size: 0.8rem;
-      max-height: 330px;
+      font-size: 0.78rem;
+      max-height: 280px;
     }
 
     @media (min-width: 760px) {
-      .shell { padding: 28px 20px 42px; }
-      .hero {
-        grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.6fr);
-        align-items: end;
-      }
-      .grid { grid-template-columns: 1.45fr 0.55fr; }
-      .advanced { grid-column: 1 / -1; }
-      .network {
-        grid-template-columns: minmax(0, 1fr) minmax(180px, 0.35fr);
-        align-items: center;
-      }
+      .shell { padding: 24px 18px 40px; }
+      .app { grid-template-columns: 1.08fr 0.92fr; align-items: start; }
+      .hero, .advanced { grid-column: 1 / -1; }
+      .hero { padding: 20px; }
+      .status-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .network { padding: 14px; }
     }
   </style>
 </head>
 <body>
-  <main class="shell">
+  <main class="shell app">
     <header class="hero">
-      <div>
-        <p class="hero-note">Prototype terrain valide - lecture seule</p>
-        <p class="eyebrow">Assistant Wi-Fi SAFE</p>
-        <h1>Choisir un Wi-Fi</h1>
-        <p class="lead">Selectionne un reseau, prepare le plan, garde le node joignable. Aucun mot de passe n'est envoye, aucun reseau n'est modifie.</p>
+      <div class="topline">
+        <div class="brand">
+          <p class="eyebrow">Prototype read-only</p>
+          <h1>Seed-Kit WiFi</h1>
+          <p class="lead">Pr&eacute;pare une connexion Wi-Fi sans modifier le Raspberry Pi.</p>
+        </div>
+        <span class="safe-chip">SAFE</span>
       </div>
-      <div class="status-card" aria-labelledby="connection-title">
-        <p class="eyebrow">Connexion actuelle</p>
-        <div class="status-line">
-          <strong id="current-connection">Verification en cours</strong>
-          <span id="current-detail" class="empty">Diagnostic lecture seule.</span>
-        </div>
-        <div class="hero-actions" style="margin-top: 14px;">
-          <span class="pill safe">Lecture seule</span>
-          <button id="refresh" type="button" class="button secondary">Actualiser les reseaux</button>
-        </div>
+      <div class="status-grid" aria-label="Etat actuel du node">
+        <div class="status-tile"><span>Interface</span><strong id="status-interface">...</strong></div>
+        <div class="status-tile"><span>Adresse IP</span><strong id="status-ip">...</strong></div>
+        <div class="status-tile"><span>Reseau actuel</span><strong id="status-ssid">...</strong></div>
+        <div class="status-tile"><span>Scan</span><strong id="status-backend">...</strong></div>
+      </div>
+      <div class="hero-actions">
+        <span id="scan-status" class="scan-status">Scan passif pret.</span>
+        <button id="refresh" type="button" class="button refresh-button">Actualiser</button>
       </div>
     </header>
 
-    <div class="grid">
-      <section class="main-card" aria-labelledby="network-title">
-        <p class="eyebrow">Etape 1</p>
-        <h2 id="network-title">Reseaux disponibles</h2>
-        <p class="empty" id="scan-source">Source de scan: inconnue</p>
-        <p class="scan-status" id="scan-status">Scan passif pret.</p>
-        <div id="scan-message" class="callout" hidden></div>
-        <div id="network-list" class="network-list"></div>
-      </section>
-
-      <section class="prepare-card" aria-labelledby="prepare-title">
-        <p class="eyebrow">Etape 2</p>
-        <h2 id="prepare-title">Preparer la connexion</h2>
-        <p id="selected-summary" class="selected-summary">Choisis un reseau dans la liste pour afficher un plan SAFE simule.</p>
-        <div id="selected-details" class="mini-grid"></div>
-        <label class="field-label" for="wifi-password-local">
-          Mot de passe Wi-Fi (local uniquement)
-          <input id="wifi-password-local" class="password-local" type="password" autocomplete="new-password" placeholder="Non envoye au serveur" disabled>
-        </label>
-        <button id="prepare-connection" type="button" class="button" disabled>Preparer la connexion</button>
-        <div id="prepare-plan" class="prepare-plan" hidden></div>
-      </section>
-
-      <section aria-labelledby="safe-title">
-        <p class="eyebrow">Mode SAFE</p>
-        <h2 id="safe-title">Ce prototype ne connecte rien</h2>
-        <div class="mini-grid">
-          <div class="metric"><span>Connexion reelle</span><strong id="real-apply">desactivee</strong></div>
-          <div class="metric"><span>Ecriture reseau</span><strong id="network-writes">desactivee</strong></div>
-          <div class="metric"><span>Secrets</span><strong id="secret-policy">non collectes</strong></div>
-          <div class="metric"><span>Action</span><strong>aucune</strong></div>
+    <section class="panel" aria-labelledby="network-title">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Etape 1</p>
+          <h2 id="network-title">Choisir un reseau</h2>
+          <p class="empty" id="scan-source">Source de scan: inconnue</p>
         </div>
-        <p class="empty" style="margin-top: 12px;">Ici, tout est volontairement inoffensif: on prepare un plan, on ne touche pas au Wi-Fi.</p>
-      </section>
+      </div>
+      <div id="scan-message" class="callout" hidden></div>
+      <div id="network-list" class="network-list"></div>
+    </section>
 
-      <details class="advanced">
-        <summary>Afficher les details techniques</summary>
-        <div class="advanced-grid">
-          <section aria-labelledby="node-title">
-            <h2 id="node-title">Diagnostic SAFE</h2>
-            <div id="node-state" class="mini-grid"></div>
-          </section>
-          <section aria-labelledby="json-title">
-            <h2 id="json-title">JSON brut</h2>
-            <pre id="raw-diagnose"></pre>
-            <pre id="raw-scan"></pre>
-            <pre id="raw-snapshot"></pre>
-          </section>
-        </div>
-      </details>
-    </div>
+    <section id="prepare-card" class="panel prepare-card" aria-labelledby="prepare-title" hidden>
+      <p class="eyebrow">Etape 2</p>
+      <h2 id="prepare-title">Preparer la connexion</h2>
+      <p id="selected-summary" class="selected-summary">Choisis un reseau pour preparer un plan SAFE.</p>
+      <div id="selected-details" class="mini-grid"></div>
+      <label class="field-label" for="wifi-password-local">
+        Mot de passe Wi-Fi (local uniquement)
+        <input id="wifi-password-local" class="password-local" type="password" autocomplete="new-password" placeholder="Jamais envoye au serveur" disabled>
+      </label>
+      <button id="prepare-connection" type="button" class="button" disabled>Preparer la connexion</button>
+      <div id="prepare-plan" class="prepare-plan" hidden></div>
+    </section>
+
+    <section class="panel" aria-labelledby="safe-title">
+      <p class="eyebrow">Garanties</p>
+      <h2 id="safe-title">Lecture seule, zero surprise</h2>
+      <div class="mini-grid">
+        <div class="metric"><span>Connexion reelle</span><strong id="real-apply">desactivee</strong></div>
+        <div class="metric"><span>Ecriture reseau</span><strong id="network-writes">desactivee</strong></div>
+        <div class="metric"><span>Secrets</span><strong id="secret-policy">non collectes</strong></div>
+        <div class="metric"><span>Action</span><strong>simulation</strong></div>
+      </div>
+    </section>
+
+    <details class="advanced">
+      <summary>Details techniques</summary>
+      <div class="advanced-grid">
+        <section aria-labelledby="node-title">
+          <h2 id="node-title">Diagnostic SAFE</h2>
+          <div id="node-state" class="mini-grid"></div>
+        </section>
+        <section aria-labelledby="json-title">
+          <h2 id="json-title">JSON brut</h2>
+          <pre id="raw-diagnose"></pre>
+          <pre id="raw-scan"></pre>
+          <pre id="raw-snapshot"></pre>
+        </section>
+      </div>
+    </details>
   </main>
 
   <script id="wifi-kit-data" type="application/json">
@@ -648,30 +626,31 @@
     function describeConnection() {
       const ssid = value(data.diagnose, 'current_ssid_state');
       const ip = value(data.diagnose, 'current_ip');
-      const route = value(data.diagnose, 'default_route');
-      document.getElementById('current-connection').textContent = ssid === 'unknown' || ssid === 'inconnu'
-        ? 'Connexion Wi-Fi non determinee'
-        : `Connecte a ${ssid}`;
-      document.getElementById('current-detail').textContent = `IP ${ip} - route ${route}`;
+      const iface = value(data.diagnose, 'interface');
+      const backend = data.scan?.backend || value(data.diagnose, 'backend');
+      document.getElementById('status-interface').textContent = iface;
+      document.getElementById('status-ip').textContent = ip;
+      document.getElementById('status-ssid').textContent = ssid === 'unknown' || ssid === 'inconnu' ? 'non determine' : ssid;
+      document.getElementById('status-backend').textContent = backend || 'inconnu';
     }
 
     function describeScanBackend(scan) {
       const backend = scan.backend || 'unknown';
-      if (backend === 'wpa_cli') return 'Source de scan: wpa_cli scan_results (lecture seule)';
-      if (backend === 'iw') return 'Source de scan: iw scan (fallback lecture seule)';
+      if (backend === 'wpa_cli') return 'wpa_cli scan_results - lecture seule';
+      if (backend === 'iw') return 'iw scan - fallback lecture seule';
       return `Source de scan: ${backend}`;
     }
 
     function describeScanStatus(scan) {
       const networks = Array.isArray(scan.networks) ? scan.networks.length : 0;
-      const suffix = networks > 1 ? 'reseaux trouves' : 'reseau trouve';
+      const suffix = networks > 1 ? 'reseaux' : 'reseau';
       if (scan.refresh_attempted) {
         const status = scan.refresh_status || 'unknown';
-        if (status === 'ok') return `<strong>${networks}</strong> ${suffix} apres actualisation.`;
-        if (status === 'failed-used-existing-results') return `<strong>${networks}</strong> ${suffix}; actualisation impossible, resultats existants conserves.`;
-        return `<strong>${networks}</strong> ${suffix}; actualisation non terminee (${status}).`;
+        if (status === 'ok') return `${networks} ${suffix} apres refresh`;
+        if (status === 'failed-used-existing-results') return `${networks} ${suffix}; cache conserve`;
+        return `${networks} ${suffix}; refresh ${status}`;
       }
-      return `<strong>${networks}</strong> ${suffix} en lecture passive.`;
+      return `${networks} ${suffix} en lecture passive`;
     }
 
     function signalDbm(signal) {
@@ -683,7 +662,7 @@
       const dbm = signalDbm(signal);
       if (dbm === null) return { label: 'Inconnu', level: 0, dbm: 'dBm inconnu' };
       if (dbm >= -50) return { label: 'Excellent', level: 4, dbm: `${dbm} dBm` };
-      if (dbm >= -60) return { label: 'Tr\u00e8s bon', level: 4, dbm: `${dbm} dBm` };
+      if (dbm >= -60) return { label: 'Tres bon', level: 4, dbm: `${dbm} dBm` };
       if (dbm >= -67) return { label: 'Bon', level: 3, dbm: `${dbm} dBm` };
       if (dbm >= -75) return { label: 'Moyen', level: 2, dbm: `${dbm} dBm` };
       return { label: 'Faible', level: 1, dbm: `${dbm} dBm` };
@@ -748,6 +727,7 @@
     }
 
     function renderConnectionPrep(showPlan) {
+      const card = document.getElementById('prepare-card');
       const summary = document.getElementById('selected-summary');
       const details = document.getElementById('selected-details');
       const password = document.getElementById('wifi-password-local');
@@ -758,20 +738,22 @@
       plan.replaceChildren();
 
       if (!selectedNetwork) {
-        summary.textContent = 'Choisis un reseau dans la liste pour afficher un plan SAFE simule.';
+        card.hidden = true;
+        summary.textContent = 'Choisis un reseau pour preparer un plan SAFE.';
         password.value = '';
         password.disabled = true;
         button.disabled = true;
         return;
       }
 
+      card.hidden = false;
       const quality = signalQuality(selectedNetwork.signal);
-      summary.textContent = `Reseau choisi: ${displaySsid(selectedNetwork)}. Le mot de passe reste uniquement dans ce navigateur.`;
+      summary.textContent = `${displaySsid(selectedNetwork)} est selectionne. Le mot de passe reste dans ce navigateur.`;
       details.replaceChildren(
-        metric('SSID choisi', displaySsid(selectedNetwork)),
         metric('Signal', `${quality.label} (${quality.dbm})`),
         metric('Securite', selectedNetwork.security || 'inconnue'),
-        metric('Canal', selectedNetwork.channel || 'inconnu')
+        metric('Canal', selectedNetwork.channel || 'inconnu'),
+        metric('Mode', 'simulation')
       );
       password.disabled = false;
       button.disabled = false;
@@ -779,16 +761,16 @@
       if (!showPlan) return;
 
       const title = document.createElement('strong');
-      title.textContent = 'Plan SAFE simule - aucune connexion lancee';
+      title.textContent = 'Plan SAFE simule';
       const list = document.createElement('ul');
       [
-        'snapshot actuel requis avant toute tentative future',
+        'snapshot actuel requis',
         `reseau cible prepare: ${displaySsid(selectedNetwork)}`,
-        'mot de passe non envoye au serveur et non inclus dans les diagnostics',
-        'tentative future controlee par connect-safe uniquement',
-        'timeout court prevu pendant la tentative future',
-        'rollback automatique prevu si IP, route ou validation echoue',
-        'validation SSH requise avant commit futur'
+        'mot de passe non envoye au serveur',
+        'tentative future controlee par connect-safe',
+        'timeout court prevu',
+        'rollback automatique prevu',
+        'validation SSH obligatoire'
       ].forEach((item) => {
         const li = document.createElement('li');
         li.textContent = item;
@@ -816,7 +798,7 @@
       const scan = data.scan || {};
       const networks = Array.isArray(scan.networks) ? scan.networks : [];
       document.getElementById('scan-source').textContent = describeScanBackend(scan);
-      document.getElementById('scan-status').innerHTML = describeScanStatus(scan);
+      document.getElementById('scan-status').textContent = describeScanStatus(scan);
       target.innerHTML = '';
 
       renderConnectionPrep(false);
@@ -826,19 +808,12 @@
         message.textContent = describeScanReason(scan);
         const placeholder = document.createElement('div');
         placeholder.className = 'network';
-        const text = document.createElement('div');
         const title = document.createElement('h3');
         const body = document.createElement('p');
         title.textContent = 'Aucun reseau affiche';
         body.className = 'empty';
-        body.textContent = 'La connexion actuelle est preservee. Tu peux rafraichir plus tard ou ouvrir les details techniques.';
-        text.append(title, body);
-        const action = document.createElement('button');
-        action.type = 'button';
-        action.className = 'button';
-        action.disabled = true;
-        action.textContent = 'Connexion bientot disponible';
-        placeholder.append(text, action);
+        body.textContent = 'La connexion actuelle reste preservee. Actualise plus tard ou ouvre les details techniques.';
+        placeholder.append(title, body);
         target.append(placeholder);
         return;
       }
@@ -848,22 +823,20 @@
         const row = document.createElement('div');
         row.className = 'network selectable';
 
-        const text = document.createElement('div');
-        const heading = document.createElement('div');
+        const main = document.createElement('div');
         const titleWrap = document.createElement('div');
         const title = document.createElement('h3');
         const dot = document.createElement('span');
         const meta = document.createElement('div');
         const ssid = displaySsid(network);
-        heading.className = 'network-heading';
-        titleWrap.className = 'network-title-wrap';
+        main.className = 'network-main';
         dot.className = 'choice-dot';
         dot.textContent = 'OK';
         title.textContent = ssid;
-        meta.className = 'network-meta';
+        meta.className = 'network-sub';
         [
-          `Canal ${network.channel || 'inconnu'}`,
-          network.security || 'securite inconnue'
+          network.security || 'securite inconnue',
+          `Canal ${network.channel || 'inconnu'}`
         ].forEach((label) => {
           const badge = document.createElement('span');
           badge.className = 'badge';
@@ -871,27 +844,10 @@
           meta.appendChild(badge);
         });
         titleWrap.append(title, signalWidget(network.signal));
-        heading.append(titleWrap, dot);
-        text.append(heading, meta);
-
-        const actionWrap = document.createElement('div');
-        actionWrap.className = 'network-action';
-        const note = document.createElement('p');
-        note.className = 'empty';
-        note.textContent = 'Simulation uniquement';
-        const action = document.createElement('button');
-        action.type = 'button';
-        action.className = 'button secondary';
-        action.textContent = 'Choisir ce reseau';
-        actionWrap.append(note, action);
+        main.append(titleWrap, dot);
+        row.append(main, meta);
 
         row.addEventListener('click', () => selectNetwork(network, row));
-        action.addEventListener('click', (event) => {
-          event.stopPropagation();
-          selectNetwork(network, row);
-        });
-
-        row.append(text, actionWrap);
         target.append(row);
       });
     }
@@ -924,7 +880,7 @@
       const button = document.getElementById('refresh');
       const status = document.getElementById('scan-status');
       button.disabled = true;
-      status.textContent = 'Actualisation SAFE en cours...';
+      status.textContent = 'Refresh SAFE en cours...';
       try {
         const response = await fetch('/api/scan?refresh=1', { cache: 'no-store' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -932,7 +888,7 @@
         data.scan = await response.json();
         renderAll();
       } catch (error) {
-        status.textContent = `Actualisation impossible: ${error.message}`;
+        status.textContent = `Refresh impossible: ${error.message}`;
       } finally {
         button.disabled = false;
       }
