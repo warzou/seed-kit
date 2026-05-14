@@ -26,6 +26,7 @@ Apply support is currently handled in `seed-kit.sh` for the first real path (`gi
 Near-term modules:
 
 - `tailscale`
+- `wifi-stability`
 - `cloudflared`
 - `caddy`
 - `homer`
@@ -45,6 +46,7 @@ Strategic module:
 Minimal resilient node:
 
 - `tailscale`
+- `wifi-stability`
 - `cloudflared`
 - `caddy`
 - `homer`
@@ -57,9 +59,11 @@ Edge services node:
 - `docker`
 - `homepage`
 
-Docker is optional. Tailscale, Cloudflared, Caddy, and Homer are host-level modules for the minimal node path. Homepage remains optional and likely depends on Docker or a heavier web services stack.
+Docker is optional. Tailscale, Wi-Fi stability, Cloudflared, Caddy, and Homer are host-level modules for the minimal node path. Homepage remains optional and likely depends on Docker or a heavier web services stack.
 
 Tailscale apply scope is install-only: no `tailscale up`, no auth keys, no stored secrets, and no automatic tailnet join.
+
+Wi-Fi stability V1 is Raspberry Pi only. It can disable `wlan0` power save for the current boot with `sudo iw dev wlan0 set power_save off` after SAFE confirmation. Reboot persistence is TODO.
 
 Cloudflared apply scope is install-only: no Cloudflare login, no tunnel creation, no tunnel service install, no token, and no stored credentials.
 

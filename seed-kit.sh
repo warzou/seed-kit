@@ -133,6 +133,18 @@ module_tailscale_plan() {
 EOF
   fi
 
+  if [ ! -f "$ROOT_DIR/modules/wifi-stability.sh" ]; then
+    cat > "$ROOT_DIR/modules/wifi-stability.sh" <<'EOF'
+#!/bin/sh
+module_wifi_stability_plan() {
+  echo "- runtime bootstrap placeholder"
+  echo "- Raspberry Pi Wi-Fi power save stability check"
+  echo "- apply can disable wlan0 power_save for the current boot"
+  echo "- persistence after reboot is TODO"
+}
+EOF
+  fi
+
   if [ ! -f "$ROOT_DIR/modules/cloudflared.sh" ]; then
     cat > "$ROOT_DIR/modules/cloudflared.sh" <<'EOF'
 #!/bin/sh
@@ -213,7 +225,7 @@ if ! bootstrap_runtime_ready; then
   . "$RUNTIME_OS"
 fi
 
-MODULES="git docker tailscale cloudflared caddy homer homepage wifi-kit"
+MODULES="git docker tailscale wifi-stability cloudflared caddy homer homepage wifi-kit"
 
 load_backend() {
   case "$SEED_OS_ID" in
@@ -505,6 +517,104 @@ apply_module_git() {
 
   echo "[git] post-install check failed: binary not found" >&2
   return 6
+}
+
+is_raspberry_pi() {
+  case "$SEED_OS_ID" in
+    raspberrypi)
+      return 0
+      ;;
+  esac
+
+  if [ -r /proc/device-tree/model ]; then
+    model=$(tr -d '\000' < /proc/device-tree/model 2>/dev/null || true)
+    case "$model" in
+      *"Raspberry Pi"*) return 0 ;;
+    esac
+  fi
+
+  return 1
+}
+
+wifi_stability_power_save_state() {
+  iw dev wlan0 get power_save 2>/dev/null || return 1
+}
+
+apply_module_wifi_stability() {
+  apply_step "wifi-stability: checking Raspberry Pi"
+  if ! is_raspberry_pi; then
+    apply_skip "not a Raspberry Pi target"
+    return 0
+  fi
+
+  apply_step "wifi-stability: checking wlan0"
+  if [ ! -d /sys/class/net/wlan0 ]; then
+    apply_skip "wlan0 not present"
+    return 0
+  fi
+
+  if ! command -v iw >/dev/null 2>&1; then
+    echo "[wifi-stability] iw is required to inspect or change Wi-Fi power save." >&2
+    return 2
+  fi
+
+  current_state=$(wifi_stability_power_save_state || true)
+  if [ -z "$current_state" ]; then
+    echo "[wifi-stability] unable to read wlan0 power_save state" >&2
+    return 2
+  fi
+
+  ui_line "[wifi-stability] current: $current_state"
+  case "$current_state" in
+    *": off"|*" off")
+      apply_skip "wlan0 power_save already off"
+      return 0
+      ;;
+    *": on"|*" on")
+      ;;
+    *)
+      echo "[wifi-stability] unknown power_save state: $current_state" >&2
+      return 2
+      ;;
+  esac
+
+  ui_line "Wi-Fi power save may make idle Raspberry Pi nodes unreachable."
+  ui_line "This V1 action disables wlan0 power_save for the current boot only."
+  ui_line "Persistence after reboot is TODO."
+
+  if ! apply_safe_confirm; then
+    return 2
+  fi
+
+  if ! require_sudo_for_system_action "wifi power save disable"; then
+    return 2
+  fi
+
+  if [ "$(id -u)" -eq 0 ]; then
+    SUDO=
+  else
+    SUDO=sudo
+  fi
+
+  apply_step "wifi-stability: disable wlan0 power_save"
+  if ! $SUDO iw dev wlan0 set power_save off; then
+    echo "[wifi-stability] failed to disable wlan0 power_save" >&2
+    return 3
+  fi
+
+  verify_state=$(wifi_stability_power_save_state || true)
+  ui_line "[wifi-stability] after: ${verify_state:-unknown}"
+  case "$verify_state" in
+    *": off"|*" off")
+      apply_step "wifi-stability: wlan0 power_save off"
+      ui_line "Persistence after reboot is not configured yet."
+      return 0
+      ;;
+    *)
+      echo "[wifi-stability] verification failed: wlan0 power_save is not off" >&2
+      return 4
+      ;;
+  esac
 }
 
 tailscale_repo_distro() {
@@ -1217,6 +1327,9 @@ run_apply_modules() {
         ;;
       tailscale)
         apply_module_tailscale
+        ;;
+      wifi-stability)
+        apply_module_wifi_stability
         ;;
       cloudflared)
         apply_module_cloudflared

@@ -45,6 +45,7 @@ Seed-Kit supports two target shapes:
 ```text
 minimal resilient node
   tailscale
+  wifi-stability
   cloudflared
   caddy
   homer
@@ -64,6 +65,8 @@ Tailscale is host-level. It must not depend on Docker.
 `homer` is the recommended lightweight dashboard for low-RAM and rescue-style nodes. `homepage` stays optional and is likely tied to Docker or a heavier services stack.
 
 Homer V1 uses `/srv/seed-kit/homer` for a local static placeholder. Seed-Kit should not quietly create a web service or Caddy configuration for it.
+
+On Raspberry Pi nodes with Wi-Fi, `wifi-stability` is a host-level guard before Wi-Fi onboarding work. V1 can disable `wlan0` power save for the current boot after SAFE confirmation; reboot persistence remains a later decision.
 
 ## Runtime
 
