@@ -1135,6 +1135,7 @@ seed_kit_usage() {
   echo "  --profile=<name> --apply  preview profile apply order without running modules"
   echo "  --modules        list available modules"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
+  echo "  --apply-module=<module> [--yes|-y]  apply one module only"
   echo "  --fetch-module=wifi-kit [--yes|-y]  fetch one repo-backed module with git sparse checkout"
   echo "  --install-module=wifi-kit [--yes|-y]  prepare git if needed, then fetch one repo-backed module"
   echo "  --self-check     compare local Seed-Kit with public repository HEAD when git is available"
@@ -1558,6 +1559,62 @@ parse_apply_options() {
   parse_apply_modules "$APPLY_MODULES_FILTER"
 }
 
+parse_apply_module_options() {
+  APPLY_AUTO=0
+  for arg in "$@"; do
+    case "$arg" in
+      -y|--yes)
+        APPLY_AUTO=1
+        ;;
+      *)
+        echo "unknown option: $arg" >&2
+        return 2
+        ;;
+    esac
+  done
+}
+
+run_single_module_apply() {
+  module=$1
+
+  if ! parse_apply_modules "$module"; then
+    return 2
+  fi
+
+  ui_header "apply module" "$module"
+  APPLY_MODULES=$module
+  if run_apply_modules; then
+    ui_line ""
+    ui_line "apply module completed"
+    ui_line ""
+    ui_success "[OK] $module"
+    case "$module" in
+      tailscale)
+        ui_line ""
+        ui_warning "manual steps remaining:"
+        ui_line "- sudo tailscale up"
+        ;;
+      cloudflared)
+        ui_line ""
+        ui_warning "manual steps remaining:"
+        ui_line "- configure cloudflared tunnel"
+        ;;
+      caddy)
+        ui_line ""
+        ui_warning "manual steps remaining:"
+        ui_line "- configure caddy sites"
+        ;;
+    esac
+    return 0
+  fi
+
+  ui_line ""
+  ui_line "apply module failed"
+  ui_line ""
+  ui_failure "[FAIL] $module"
+  return 1
+}
+
 parse_uninstall_runtime_options() {
   UNINSTALL_AUTO=0
   for arg in "$@"; do
@@ -1768,6 +1825,17 @@ case "${1:-}" in
       exit 0
     fi
     run_apply_modules
+    ;;
+  --apply-module=*)
+    apply_module="${1#--apply-module=}"
+    shift
+    if ! parse_apply_module_options "$@"; then
+      exit 2
+    fi
+    if [ "$APPLY_AUTO" -eq 1 ]; then
+      ui_whisper "auto-confirm mode requested"
+    fi
+    run_single_module_apply "$apply_module"
     ;;
   --profile=*)
     profile="${1#--profile=}"
