@@ -45,6 +45,8 @@ Future profile name:
 rpi-edge-replacement
 ```
 
+V1 status: plan-only. It is intended to show the recommended public modules for rebuilding an `rpi-edge`-style host, but it must not apply production replacement actions automatically.
+
 Probable modules:
 
 - `wifi-stability` when the replacement is a Raspberry Pi using Wi-Fi
@@ -52,8 +54,11 @@ Probable modules:
 - `cloudflared`
 - `caddy`
 - `homer`
-- `docker` only when required by edge services
-- `homepage` only when the heavier dashboard path is required
+
+Optional later, not part of the V1 plan-only profile:
+
+- `docker` when required by edge services
+- `homepage` when the heavier dashboard path is required
 
 ## V1 limits
 

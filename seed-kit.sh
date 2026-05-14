@@ -1203,7 +1203,7 @@ profile_modules() {
     rpi3-edge)
       echo "wifi-stability cloudflared caddy homer"
       ;;
-    rpi3-edge-node|minimal-resilient-node)
+    rpi3-edge-node|minimal-resilient-node|rpi-edge-replacement)
       echo "wifi-stability tailscale cloudflared caddy homer"
       ;;
     edge-services-node)
@@ -1220,7 +1220,7 @@ show_profile_plan() {
 
   if ! modules=$(profile_modules "$profile"); then
     echo "unknown profile: $profile" >&2
-    echo "known profiles: rpi0-pocket rpi0-pocket-node rpi3-edge rpi3-edge-node minimal-resilient-node edge-services-node" >&2
+    echo "known profiles: rpi0-pocket rpi0-pocket-node rpi3-edge rpi3-edge-node minimal-resilient-node edge-services-node rpi-edge-replacement" >&2
     return 2
   fi
 
@@ -1238,7 +1238,7 @@ show_profile_apply_preview() {
 
   if ! modules=$(profile_modules "$profile"); then
     echo "unknown profile: $profile" >&2
-    echo "known profiles: rpi0-pocket rpi0-pocket-node rpi3-edge rpi3-edge-node minimal-resilient-node edge-services-node" >&2
+    echo "known profiles: rpi0-pocket rpi0-pocket-node rpi3-edge rpi3-edge-node minimal-resilient-node edge-services-node rpi-edge-replacement" >&2
     return 2
   fi
 
