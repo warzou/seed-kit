@@ -47,6 +47,12 @@ Package verification:
 sh tools/profile-state.sh package --verify --input /tmp/profile-state-package/profile-state-snapshot.tar
 ```
 
+sh tests/profile-state-smoke.sh
+
+```sh
+sh tests/profile-state-smoke.sh
+```
+
 ## SAFE guarantees
 
 Current profile-state commands must not:
