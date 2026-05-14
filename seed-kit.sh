@@ -1323,6 +1323,13 @@ uninstall_runtime_path() {
 }
 
 uninstall_seed_runtime() {
+  if is_full_repo_mode; then
+    echo "This looks like a full repo or sparse repo-backed checkout." >&2
+    echo "Refusing to remove modules/." >&2
+    echo "Use --uninstall-runtime only from a generated bootstrap runtime." >&2
+    return 2
+  fi
+
   if [ "$UNINSTALL_AUTO" -eq 0 ]; then
     ui_line "This only removes Seed-Kit local runtime files."
     ui_line "It does not uninstall system packages or remove seed-kit.sh."
