@@ -426,11 +426,6 @@ apply_safe_confirm() {
 
 require_sudo_for_system_action() {
   label=${1:-this action}
-  if [ -n "${2:-}" ]; then
-    rerun_command=$2
-  else
-    rerun_command="sh seed-kit.sh --apply --modules=git"
-  fi
 
   if [ "$(id -u)" -eq 0 ]; then
     ui_line "running as root; no sudo needed for $label"
@@ -442,13 +437,17 @@ require_sudo_for_system_action() {
     return 3
   fi
 
+  if [ -t 0 ] && [ -t 1 ]; then
+    if ! sudo -v; then
+      echo "sudo access is required for $label." >&2
+      return 4
+    fi
+    return 0
+  fi
+
   if ! sudo -n true >/dev/null 2>&1; then
     echo "sudo access is required for $label."
-    echo "This SSH session cannot provide a sudo password."
-    echo "Try:"
-    echo "  ssh -t user@host"
-    echo "  sudo -v"
-    echo "  $rerun_command"
+    echo "Run this command from an interactive terminal."
     return 4
   fi
 
@@ -929,6 +928,7 @@ fetch_module_safe_confirm() {
 
 fetch_repo_module() {
   module=$1
+  repo_url="https://github.com/warzou/seed-kit.git"
 
   case "$module" in
     wifi-kit)
@@ -963,7 +963,7 @@ fetch_repo_module() {
   fi
 
   ui_header "fetch module" "$module"
-  ui_line "Repository: https://github.com/warzou/seed-kit.git"
+  ui_line "Repository: $repo_url"
   ui_line "Target: $target_dir"
   ui_line "Mode: git sparse checkout"
   ui_line "No git pull, no token, no overwrite."
@@ -976,10 +976,17 @@ fetch_repo_module() {
     ui_whisper "auto-confirm mode requested"
   fi
 
-  ui_line "[fetch] clone sparse repository"
-  if ! git clone --filter=blob:none --sparse https://github.com/warzou/seed-kit.git "$target_dir"; then
-    echo "[fetch] clone failed" >&2
+  ui_line "[fetch] check repository access"
+  if ! git ls-remote "$repo_url" HEAD >/dev/null 2>&1; then
+    echo "Cannot reach warzou/seed-kit repository." >&2
+    echo "Check network access and GitHub connectivity." >&2
     return 3
+  fi
+
+  ui_line "[fetch] clone sparse repository"
+  if ! git clone --filter=blob:none --sparse "$repo_url" "$target_dir"; then
+    echo "[fetch] clone failed" >&2
+    return 4
   fi
 
   ui_line "[fetch] select wifi-kit paths"
@@ -994,7 +1001,7 @@ fetch_repo_module() {
       docs/FRESH-NODE-FLOW.md
   ); then
     echo "[fetch] sparse-checkout failed in $target_dir" >&2
-    return 4
+    return 5
   fi
 
   ui_line "Module fetched: wifi-kit"
