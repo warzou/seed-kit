@@ -65,6 +65,7 @@ Le helper local `prototype/helpers.sh` garde la detection des outils reseau dans
 - Valider la stabilite Wi-Fi current-boot avec `docs/WIFI-STABILITY.md`.
 - Formaliser `connect-safe` avec `docs/CONNECT-SAFE.md`.
 - Finaliser le rollback avec `docs/ROLLBACK-DESIGN.md`.
+- Finaliser le design SSH safety avec `docs/SSH-SAFETY.md`.
 - Garder le `connect-safe` reel interdit tant que l'architecture, le rollback, les timeouts et le chemin recovery ne sont pas valides.
 
 ## Prototypes suivants autorises
@@ -73,6 +74,7 @@ Le helper local `prototype/helpers.sh` garde la detection des outils reseau dans
 - Prototype `snapshot`: premiere version disponible via `snapshot-simulate`.
 - Prototype `restore`: premiere version disponible via `restore-simulate`.
 - Prototype `timeout`.
+- Prototype `ssh-awareness`.
 - Prototype `rollback-plan`.
 - Toujours sans apply reseau reel.
 
