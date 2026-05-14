@@ -90,6 +90,24 @@
       letter-spacing: -0.08em;
     }
 
+    .icon-svg {
+      width: 1.18em;
+      height: 1.18em;
+      display: block;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .orb .icon-svg,
+    .network-orb .icon-svg {
+      width: 27px;
+      height: 27px;
+      stroke-width: 2.35;
+    }
+
     .orb {
       width: 46px;
       height: 46px;
@@ -97,9 +115,6 @@
       box-shadow: 0 14px 34px rgba(45, 149, 255, 0.28);
       font-size: 1.05rem;
     }
-
-    .orb::before,
-    .network-orb::before { content: "Wi"; }
 
     .crumb {
       margin: 0 0 2px;
@@ -168,21 +183,22 @@
 
     .overview {
       display: grid;
-      gap: 12px;
+      gap: 10px;
+      padding: 12px;
     }
 
     .overview-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
+      gap: 7px;
     }
 
     .overview-safe {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 8px;
+      gap: 6px;
       border-top: 1px solid var(--line);
-      padding-top: 12px;
+      padding-top: 9px;
     }
 
     .status-mini,
@@ -192,30 +208,31 @@
       border: 1px solid var(--line);
       border-radius: var(--radius-md);
       background: rgba(255, 255, 255, 0.045);
-      padding: 10px;
+      padding: 8px;
     }
 
     .status-mini {
       display: grid;
       grid-template-columns: auto minmax(0, 1fr);
-      gap: 8px;
+      gap: 7px;
       align-items: center;
     }
 
     .safe-mini {
       display: grid;
       justify-items: center;
-      gap: 6px;
+      gap: 4px;
       text-align: center;
+      padding: 7px 5px;
     }
 
     .status-icon,
     .safe-icon {
-      width: 32px;
-      height: 32px;
+      width: 30px;
+      height: 30px;
       background: rgba(45, 149, 255, 0.13);
       color: var(--blue);
-      font-size: 0.75rem;
+      font-size: 0.84rem;
     }
 
     .safe-icon.safe { background: rgba(83, 220, 98, 0.12); color: var(--green); }
@@ -275,6 +292,14 @@
       font-weight: 950;
       cursor: pointer;
       transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+    }
+
+    .button .icon-svg {
+      display: inline-block;
+      width: 1em;
+      height: 1em;
+      margin-right: 7px;
+      vertical-align: -0.16em;
     }
 
     .button:not(:disabled):hover {
@@ -538,11 +563,69 @@
   </style>
 </head>
 <body>
+  <svg aria-hidden="true" width="0" height="0" style="position:absolute">
+    <symbol id="icon-wifi" viewBox="0 0 24 24">
+      <path d="M4.5 9.5a11 11 0 0 1 15 0"></path>
+      <path d="M8 13a6 6 0 0 1 8 0"></path>
+      <path d="M10.8 16.5a2 2 0 0 1 2.4 0"></path>
+      <path d="M12 19h.01"></path>
+    </symbol>
+    <symbol id="icon-shield" viewBox="0 0 24 24">
+      <path d="M12 3l7 3v5c0 4.6-2.8 8.1-7 10-4.2-1.9-7-5.4-7-10V6l7-3z"></path>
+      <path d="M9 12l2 2 4-5"></path>
+    </symbol>
+    <symbol id="icon-lock" viewBox="0 0 24 24">
+      <path d="M7 11V8a5 5 0 0 1 10 0v3"></path>
+      <path d="M6 11h12v9H6z"></path>
+      <path d="M12 15v2"></path>
+    </symbol>
+    <symbol id="icon-gear" viewBox="0 0 24 24">
+      <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"></path>
+      <path d="M19 12a7 7 0 0 0-.1-1.1l2-1.5-2-3.4-2.4 1a8 8 0 0 0-1.8-1L14.4 3h-4.8L9.3 6a8 8 0 0 0-1.8 1l-2.4-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.1l-2 1.5 2 3.4 2.4-1a8 8 0 0 0 1.8 1l.3 3h4.8l.3-3a8 8 0 0 0 1.8-1l2.4 1 2-3.4-2-1.5c.1-.3.1-.7.1-1.1z"></path>
+    </symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24">
+      <path d="M20 6v5h-5"></path>
+      <path d="M4 18v-5h5"></path>
+      <path d="M18.3 9a7 7 0 0 0-11.5-2.5L4 9"></path>
+      <path d="M5.7 15a7 7 0 0 0 11.5 2.5L20 15"></path>
+    </symbol>
+    <symbol id="icon-network" viewBox="0 0 24 24">
+      <path d="M6 8h12"></path>
+      <path d="M12 8v8"></path>
+      <path d="M4 16h4v4H4z"></path>
+      <path d="M10 16h4v4h-4z"></path>
+      <path d="M16 16h4v4h-4z"></path>
+      <path d="M9 4h6v4H9z"></path>
+    </symbol>
+    <symbol id="icon-server" viewBox="0 0 24 24">
+      <path d="M5 4h14v6H5z"></path>
+      <path d="M5 14h14v6H5z"></path>
+      <path d="M8 7h.01"></path>
+      <path d="M8 17h.01"></path>
+    </symbol>
+    <symbol id="icon-activity" viewBox="0 0 24 24">
+      <path d="M3 12h4l2-6 4 12 2-6h6"></path>
+    </symbol>
+    <symbol id="icon-location" viewBox="0 0 24 24">
+      <path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11z"></path>
+      <path d="M12 10.5h.01"></path>
+    </symbol>
+    <symbol id="icon-eye-off" viewBox="0 0 24 24">
+      <path d="M3 3l18 18"></path>
+      <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"></path>
+      <path d="M9.8 5.2A10 10 0 0 1 12 5c5 0 8.5 4.2 9.5 7a12 12 0 0 1-2.1 3.1"></path>
+      <path d="M6.2 6.8A12.4 12.4 0 0 0 2.5 12c1 2.8 4.5 7 9.5 7 1.4 0 2.7-.3 3.8-.9"></path>
+    </symbol>
+    <symbol id="icon-spark" viewBox="0 0 24 24">
+      <path d="M13 3l-1.2 5.2L7 10l4.8 1.8L13 17l1.2-5.2L19 10l-4.8-1.8L13 3z"></path>
+      <path d="M5 15l-.6 2.4L2 18l2.4.6L5 21l.6-2.4L8 18l-2.4-.6L5 15z"></path>
+    </symbol>
+  </svg>
   <main class="shell app">
     <header class="hero">
       <div class="hero-top">
         <div class="brand-row">
-          <span class="orb" aria-hidden="true"></span>
+          <span class="orb" aria-hidden="true"><svg class="icon-svg"><use href="#icon-wifi"></use></svg></span>
           <div>
             <p class="crumb">Seed-Kit &gt; Wifi-Kit</p>
             <h1>Wifi-Kit</h1>
@@ -559,16 +642,16 @@
         <p class="section-copy">Informations sans interaction. Aucun changement systeme.</p>
       </div>
       <div class="overview-grid" aria-label="Etat actuel du node">
-        <div class="status-mini"><span class="status-icon">IF</span><div><span>Interface</span><strong id="status-interface">...</strong></div></div>
-        <div class="status-mini"><span class="status-icon">IP</span><div><span>Adresse IP</span><strong id="status-ip">...</strong></div></div>
-        <div class="status-mini"><span class="status-icon">BK</span><div><span>Backend</span><strong id="status-backend">...</strong></div></div>
-        <div class="status-mini"><span class="status-icon">NW</span><div><span>Reseau actuel</span><strong id="status-ssid">...</strong></div></div>
+        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Interface</span><strong id="status-interface">...</strong></div></div>
+        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-location"></use></svg></span><div><span>Adresse IP</span><strong id="status-ip">...</strong></div></div>
+        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-server"></use></svg></span><div><span>Backend</span><strong id="status-backend">...</strong></div></div>
+        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-wifi"></use></svg></span><div><span>Reseau actuel</span><strong id="status-ssid">...</strong></div></div>
       </div>
       <div class="overview-safe">
-        <div class="safe-mini"><span class="safe-icon safe">SH</span><strong>SAFE</strong><span>Lecture seule</span></div>
-        <div class="safe-mini"><span class="safe-icon lock">LK</span><strong>Secrets</strong><span id="secret-policy">non collectes</span></div>
-        <div class="safe-mini"><span class="safe-icon mute">NW</span><strong>Reseau</strong><span id="real-apply">desactive</span></div>
-        <div class="safe-mini"><span class="safe-icon gear">SY</span><strong>Systeme</strong><span>Aucun impact</span></div>
+        <div class="safe-mini"><span class="safe-icon safe"><svg class="icon-svg"><use href="#icon-shield"></use></svg></span><strong>SAFE</strong><span>Lecture seule</span></div>
+        <div class="safe-mini"><span class="safe-icon lock"><svg class="icon-svg"><use href="#icon-lock"></use></svg></span><strong>Secrets</strong><span id="secret-policy">non collectes</span></div>
+        <div class="safe-mini"><span class="safe-icon mute"><svg class="icon-svg"><use href="#icon-eye-off"></use></svg></span><strong>Reseau</strong><span id="real-apply">desactive</span></div>
+        <div class="safe-mini"><span class="safe-icon gear"><svg class="icon-svg"><use href="#icon-gear"></use></svg></span><strong>Systeme</strong><span>Aucun impact</span></div>
       </div>
     </section>
 
@@ -579,7 +662,7 @@
           <p class="section-copy" id="scan-source">Source de scan: inconnue</p>
           <p id="scan-status" class="scan-status">Scan passif pret.</p>
         </div>
-        <button id="refresh" type="button" class="button">Scan</button>
+        <button id="refresh" type="button" class="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-refresh"></use></svg>Scan</button>
       </div>
       <div id="scan-message" class="callout" hidden></div>
       <div id="network-list" class="network-list"></div>
@@ -726,6 +809,16 @@
       return bars;
     }
 
+    function makeIcon(name) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      svg.classList.add('icon-svg');
+      svg.setAttribute('aria-hidden', 'true');
+      use.setAttribute('href', `#icon-${name}`);
+      svg.appendChild(use);
+      return svg;
+    }
+
     function describeScanReason(scan) {
       const reason = scan.reason || scan.status || 'unknown';
       if (reason === 'scan-readonly-failed') return 'Le Raspberry Pi ne peut pas lire les resultats Wi-Fi pour le moment. La connexion actuelle reste preservee.';
@@ -791,16 +884,16 @@
       const list = document.createElement('ul');
       list.className = 'safe-lines';
       [
-        ['SH', 'Votre systeme reste intact'],
-        ['LK', 'Aucun secret transmis'],
-        ['NW', `Reseau cible prepare: ${displaySsid(network)}`],
-        ['SY', 'Rollback et validation SSH requis']
-      ].forEach(([icon, text]) => {
+        ['shield', 'safe', 'Votre systeme reste intact'],
+        ['lock', 'lock', 'Aucun secret transmis'],
+        ['wifi', 'mute', `Reseau cible prepare: ${displaySsid(network)}`],
+        ['gear', 'gear', 'Rollback et validation SSH requis']
+      ].forEach(([icon, tone, text]) => {
         const li = document.createElement('li');
         const badge = document.createElement('span');
         const check = document.createElement('span');
-        badge.className = 'safe-icon safe';
-        badge.textContent = icon;
+        badge.className = `safe-icon ${tone}`;
+        badge.appendChild(makeIcon(icon));
         check.className = 'check';
         check.textContent = 'OK';
         li.append(badge, document.createTextNode(text), check);
@@ -864,6 +957,7 @@
 
         main.className = 'network-main';
         orb.className = `network-orb ${quality.tone}`;
+        orb.appendChild(makeIcon('wifi'));
         text.className = 'network-text';
         title.textContent = ssid;
         meta.className = 'network-sub';
