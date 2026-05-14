@@ -123,7 +123,7 @@ Le prototype UI telephone reste local, statique et optionnel:
 sh modules/wifi-kit/prototype/ui/render-readonly-ui.sh > /tmp/wifi-kit-ui.html
 ```
 
-La page generee embarque uniquement des donnees read-only (`safe-diagnose --json`, `scan-real --json`, `state-snapshot --simulate --json`). Elle presente un parcours type setup Wi-Fi, mais les actions de connexion restent des apercus desactives. Elle ne collecte aucun secret et ne lance aucun portail captif.
+La page generee embarque uniquement des donnees read-only (`safe-diagnose --json`, `scan-real --json`, `state-snapshot --simulate --json`). Elle presente maintenant une experience en francais orientee "choisir un Wi-Fi": etat actuel, liste de reseaux quand disponible, bouton de connexion desactive et details techniques replies. Elle ne collecte aucun secret et ne lance aucun portail captif.
 
 Backend HTTP local read-only, manuel et optionnel:
 

@@ -1,127 +1,222 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>wifi-kit read-only setup</title>
+  <title>wifi-kit - assistant Wi-Fi SAFE</title>
   <style>
     :root {
-      --bg: #f6f8f4;
-      --ink: #172116;
-      --muted: #62705f;
-      --line: #d2dccf;
-      --panel: #ffffff;
-      --soft: #edf4ea;
-      --safe: #166b42;
-      --warn: #9a5b00;
-      --code: #101713;
+      --bg: #f4f0e8;
+      --ink: #192019;
+      --muted: #667064;
+      --line: #d9d0c1;
+      --panel: #fffdf8;
+      --soft: #eef5ea;
+      --safe: #146c43;
+      --safe-2: #dff3e5;
+      --warn-2: #fff3d5;
+      --disabled: #eef0ea;
+      --code: #111713;
+      --shadow: 0 18px 50px rgba(51, 44, 32, 0.13);
     }
 
     * { box-sizing: border-box; }
 
     body {
       margin: 0;
-      background: var(--bg);
+      background:
+        radial-gradient(circle at top left, rgba(20, 108, 67, 0.14), transparent 30rem),
+        linear-gradient(180deg, #fbf8f1 0%, var(--bg) 100%);
       color: var(--ink);
       font-family: ui-sans-serif, "Segoe UI", Verdana, sans-serif;
       line-height: 1.45;
     }
 
-    header {
-      background: linear-gradient(180deg, #eaf3e7 0%, #f6f8f4 100%);
-      border-bottom: 1px solid var(--line);
-      padding: 18px 16px 16px;
+    button, input { font: inherit; }
+
+    .shell {
+      width: min(980px, 100%);
+      margin: 0 auto;
+      padding: 18px 14px 34px;
     }
 
-    main {
-      width: min(1040px, 100%);
-      margin: 0 auto;
-      padding: 16px 12px 32px;
+    .hero {
+      display: grid;
+      gap: 18px;
+      margin-bottom: 16px;
+      border: 1px solid rgba(20, 108, 67, 0.18);
+      border-radius: 28px;
+      background: rgba(255, 253, 248, 0.86);
+      box-shadow: var(--shadow);
+      padding: 22px;
     }
 
-    .topline {
-      width: min(1040px, 100%);
-      margin: 0 auto;
+    .eyebrow {
+      margin: 0 0 6px;
+      color: var(--safe);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
     }
 
     h1, h2, h3, p { margin-top: 0; }
 
     h1 {
-      margin-bottom: 8px;
-      font-size: clamp(1.45rem, 5vw, 2.35rem);
-      line-height: 1.1;
-      letter-spacing: 0;
+      margin-bottom: 10px;
+      font-size: clamp(2rem, 10vw, 4.8rem);
+      line-height: 0.92;
+      letter-spacing: -0.07em;
     }
 
     h2 {
       margin-bottom: 10px;
-      font-size: 1.05rem;
-      line-height: 1.2;
+      font-size: 1.18rem;
+      line-height: 1.15;
     }
 
     h3 {
-      margin-bottom: 4px;
-      font-size: 0.98rem;
-      line-height: 1.25;
+      margin-bottom: 5px;
+      font-size: 1rem;
+      line-height: 1.2;
     }
 
-    .subhead {
+    .lead {
       margin-bottom: 0;
       color: var(--muted);
-      max-width: 65ch;
+      max-width: 58ch;
+      font-size: 1.02rem;
     }
 
-    .badges {
+    .hero-actions {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 14px;
+      gap: 10px;
+      align-items: center;
     }
 
-    .badge {
+    .pill, .badge {
       display: inline-flex;
       align-items: center;
       min-height: 30px;
       border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--soft);
-      padding: 4px 9px;
-      font-size: 0.88rem;
-      color: var(--ink);
+      border-radius: 999px;
+      background: #fffaf1;
+      padding: 5px 10px;
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-weight: 700;
     }
 
-    .badge.safe {
-      border-color: #91c6a3;
-      background: #edf8f0;
+    .pill.safe, .badge.safe {
+      border-color: #a7d7b4;
+      background: var(--safe-2);
       color: var(--safe);
-      font-weight: 700;
+    }
+
+    .button {
+      min-height: 42px;
+      border: 1px solid var(--safe);
+      border-radius: 999px;
+      background: var(--safe);
+      color: #fff;
+      padding: 8px 16px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .button.secondary {
+      background: #fffdf8;
+      color: var(--safe);
+    }
+
+    .button:disabled {
+      border-color: var(--line);
+      background: var(--disabled);
+      color: var(--muted);
+      cursor: default;
+    }
+
+    .status-card, section, détails {
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: var(--panel);
+      padding: 16px;
+      min-width: 0;
+    }
+
+    .status-line {
+      display: grid;
+      gap: 8px;
+    }
+
+    .status-line strong {
+      overflow-wrap: anywhere;
+      font-size: 1.1rem;
     }
 
     .grid {
       display: grid;
-      grid-template-columns: repeat(12, 1fr);
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+
+    .main-card {
+      border-color: rgba(20, 108, 67, 0.28);
+    }
+
+    .network-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .network {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
       gap: 12px;
-    }
-
-    section {
-      grid-column: span 12;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
+      border-radius: 18px;
+      background: #fffaf2;
       padding: 14px;
-      min-width: 0;
     }
 
-    @media (min-width: 760px) {
-      main { padding: 20px 16px 36px; }
-      .half { grid-column: span 6; }
-      .third { grid-column: span 4; }
-      .two-thirds { grid-column: span 8; }
+    .network-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 8px;
     }
 
-    .primary { border-color: #b8d4b9; }
+    .network-action {
+      display: grid;
+      gap: 8px;
+    }
 
-    .node-state {
+    .password-mock {
+      width: 100%;
+      min-height: 42px;
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+      background: #f7f4ec;
+      padding: 9px 11px;
+      color: var(--muted);
+    }
+
+    .callout {
+      margin-bottom: 12px;
+      border: 1px solid #e0bc74;
+      border-radius: 18px;
+      background: var(--warn-2);
+      padding: 13px;
+      color: #513400;
+    }
+
+    .empty {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .mini-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
@@ -130,15 +225,17 @@
     .metric {
       min-width: 0;
       border: 1px solid var(--line);
-      border-radius: 7px;
-      background: #fbfdfa;
-      padding: 10px;
+      border-radius: 16px;
+      background: #fbf9f3;
+      padding: 11px;
     }
 
     .metric span {
       display: block;
       color: var(--muted);
-      font-size: 0.78rem;
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
     }
 
@@ -149,154 +246,112 @@
       font-size: 0.95rem;
     }
 
-    .network-list {
-      display: grid;
-      gap: 10px;
-    }
-
-    .network {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 10px;
-      align-items: center;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 11px;
-      background: #fbfdfa;
-    }
-
-    .network-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 6px;
-    }
-
-    button {
-      min-height: 34px;
-      border: 1px solid var(--safe);
-      border-radius: 6px;
-      background: var(--safe);
-      color: #ffffff;
-      padding: 6px 11px;
-      font: inherit;
-      font-size: 0.9rem;
-      cursor: pointer;
-    }
-
-    button.secondary {
-      background: #ffffff;
-      color: var(--safe);
-    }
-
-    button:disabled {
-      border-color: var(--line);
-      background: #eef1ec;
-      color: var(--muted);
-      cursor: default;
-    }
-
-    .empty {
-      margin: 0;
-      color: var(--muted);
-    }
-
-    .callout {
-      margin-bottom: 10px;
-      border: 1px solid #e1bb74;
-      border-radius: 8px;
-      background: #fff8e8;
-      padding: 11px;
-      color: #513400;
-    }
-
-    details {
-      grid-column: span 12;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      padding: 12px 14px;
+    détails {
+      background: #fbf9f4;
     }
 
     summary {
       cursor: pointer;
-      font-weight: 700;
+      color: var(--safe);
+      font-weight: 900;
+    }
+
+    .advanced-grid {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
     }
 
     pre {
-      margin: 12px 0 0;
+      margin: 8px 0 0;
       padding: 12px;
-      border-radius: 6px;
+      border-radius: 12px;
       background: var(--code);
       color: #d8eadc;
       overflow: auto;
-      font-size: 0.82rem;
-      max-height: 360px;
+      font-size: 0.8rem;
+      max-height: 330px;
+    }
+
+    @media (min-width: 760px) {
+      .shell { padding: 28px 20px 42px; }
+
+      .hero {
+        grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.6fr);
+        align-items: end;
+      }
+
+      .grid {
+        grid-template-columns: 1.45fr 0.55fr;
+      }
+
+      .advanced {
+        grid-column: 1 / -1;
+      }
+
+      .network {
+        grid-template-columns: minmax(0, 1fr) minmax(180px, 0.35fr);
+        align-items: center;
+      }
     }
   </style>
 </head>
 <body>
-  <header>
-    <div class="topline">
-      <h1>Choose Wi-Fi later</h1>
-      <p class="subhead">This screen previews nearby networks and node status. It is read-only, so it cannot change the current connection.</p>
-      <div class="badges">
-        <span class="badge safe">READ-ONLY</span>
-        <span class="badge">No Wi-Fi changes</span>
-        <span class="badge">No passwords</span>
-        <span class="badge">No hotspot</span>
-        <button id="refresh" type="button" class="secondary">Refresh</button>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Assistant Wi-Fi SAFE</p>
+        <h1>Choisir un Wi-Fi</h1>
+        <p class="lead">Cette page aide à préparer une connexion sans rien changer. Aucun mot de passe n'est envoyé, aucun réseau n'est modifié.</p>
       </div>
-    </div>
-  </header>
+      <div class="status-card" aria-labelledby="connection-title">
+        <p class="eyebrow">Connexion actuelle</p>
+        <div class="status-line">
+          <strong id="current-connection">Verification en cours</strong>
+          <span id="current-detail" class="empty">Diagnostic lecture seule.</span>
+        </div>
+        <div class="hero-actions" style="margin-top: 14px;">
+          <span class="pill safe">Lecture seule</span>
+          <button id="refresh" type="button" class="button secondary">Rafraîchir</button>
+        </div>
+      </div>
+    </header>
 
-  <main>
     <div class="grid">
-      <section class="two-thirds primary">
-        <h2>Available Networks</h2>
+      <section class="main-card" aria-labelledby="network-title">
+        <p class="eyebrow">Étape 1</p>
+        <h2 id="network-title">Reseaux disponibles</h2>
         <div id="scan-message" class="callout" hidden></div>
         <div id="network-list" class="network-list"></div>
       </section>
 
-      <section class="third">
-        <h2>Node Status</h2>
-        <div id="node-state" class="node-state"></div>
-      </section>
-
-      <section class="half">
-        <h2>Current Safety Mode</h2>
-        <div class="node-state">
-          <div class="metric">
-            <span>Real apply</span>
-            <strong id="real-apply">disabled</strong>
-          </div>
-          <div class="metric">
-            <span>Network writes</span>
-            <strong id="network-writes">disabled</strong>
-          </div>
-          <div class="metric">
-            <span>Secrets</span>
-            <strong id="secret-policy">not collected</strong>
-          </div>
-          <div class="metric">
-            <span>Connect</span>
-            <strong>future connect-safe only</strong>
-          </div>
+      <section aria-labelledby="safe-title">
+        <p class="eyebrow">Mode SAFE</p>
+        <h2 id="safe-title">Ce prototype ne connecte rien</h2>
+        <div class="mini-grid">
+          <div class="metric"><span>Connexion réelle</span><strong id="real-apply">désactivée</strong></div>
+          <div class="metric"><span>Écriture réseau</span><strong id="network-writes">désactivée</strong></div>
+          <div class="metric"><span>Secrets</span><strong id="secret-policy">non collecté</strong></div>
+          <div class="metric"><span>Action</span><strong>aucune</strong></div>
         </div>
+        <p class="empty" style="margin-top: 12px;">Le bouton de connexion reste volontairement désactivé tant que connect-safe réel n'est pas valide.</p>
       </section>
 
-      <section class="half">
-        <h2>Next Step Preview</h2>
-        <p class="empty">A future version may allow selecting one network and passing it to connect-safe. This prototype only shows what would be reviewed first.</p>
-        <button type="button" disabled>Connect later</button>
-      </section>
-
-      <details>
-        <summary>Advanced diagnostics</summary>
-        <pre id="raw-diagnose"></pre>
-        <pre id="raw-scan"></pre>
-        <pre id="raw-snapshot"></pre>
-      </details>
+      <détails class="advanced">
+        <summary>Afficher les détails techniques</summary>
+        <div class="advanced-grid">
+          <section aria-labelledby="node-title">
+            <h2 id="node-title">Diagnostic SAFE</h2>
+            <div id="node-state" class="mini-grid"></div>
+          </section>
+          <section aria-labelledby="json-title">
+            <h2 id="json-title">JSON brut</h2>
+            <pre id="raw-diagnose"></pre>
+            <pre id="raw-scan"></pre>
+            <pre id="raw-snapshot"></pre>
+          </section>
+        </div>
+      </détails>
     </div>
   </main>
 
@@ -304,7 +359,7 @@
 {
   "diagnose": {
     "mode": "safe-diagnose",
-    "timestamp": "demo",
+    "timestamp": "démo",
     "dry_run_only": true,
     "real_apply_allowed": false,
     "backend": "unknown",
@@ -332,16 +387,16 @@
     "ssh_client": "unknown",
     "ssh_route_interface": "unknown",
     "runtime_fingerprint": "unknown",
-    "timestamp": "demo",
+    "timestamp": "démo",
     "secret_policy": "no-secrets",
     "persistence": "none"
   },
   "scan": {
     "backend": "iw",
     "interface": "unknown",
-    "timestamp": "demo",
+    "timestamp": "démo",
     "status": "unavailable",
-    "reason": "demo-data",
+    "reason": "démo-data",
     "networks": []
   }
 }
@@ -350,7 +405,7 @@
     let data = JSON.parse(document.getElementById('wifi-kit-data').textContent);
 
     function value(source, key) {
-      return String(source?.[key] ?? 'unknown');
+      return String(source?.[key] ?? 'inconnu');
     }
 
     function metric(label, text) {
@@ -364,29 +419,46 @@
       return item;
     }
 
+    function yesNo(flag) {
+      return flag ? 'activée' : 'désactivée';
+    }
+
+    function describeConnection() {
+      const ssid = value(data.diagnose, 'current_ssid_state');
+      const ip = value(data.diagnose, 'current_ip');
+      const route = value(data.diagnose, 'default_route');
+      document.getElementById('current-connection').textContent = ssid === 'unknown' || ssid === 'inconnu'
+        ? 'Connexion Wi-Fi non déterminée'
+        : `Connecté à ${ssid}`;
+      document.getElementById('current-detail').textContent = `IP ${ip} - route ${route}`;
+    }
+
     function describeScanReason(scan) {
       const reason = scan.reason || scan.status || 'unknown';
       if (reason === 'iw-scan-failed') {
-        return 'Scan is not available right now. On Raspberry Pi this can happen when permissions are limited or the Wi-Fi device is busy staying connected.';
+        return 'Le Raspberry Pi ne peut pas scanner les réseaux pour le moment tout en gardant la connexion Wi-Fi actuelle.';
       }
       if (reason === 'iw-missing') {
-        return 'Scan is not available because the iw tool was not found.';
+        return "Le scan Wi-Fi n'est pas disponible car l'outil iw est absent.";
       }
       if (reason === 'no-wifi-interface') {
-        return 'No Wi-Fi interface was detected.';
+        return "Aucune interface Wi-Fi n'a été détectée.";
       }
-      return `Scan is not available: ${reason}`;
+      if (reason === 'démo-data') {
+        return 'Aucun réseau reel dans la démo. Lance le serveur local read-only pour affichér les données du Raspberry Pi.';
+      }
+      return `Le scan Wi-Fi est indisponible pour le moment (${reason}).`;
     }
 
     function renderNodeState() {
       const target = document.getElementById('node-state');
       target.replaceChildren(
         metric('Interface', value(data.diagnose, 'interface')),
-        metric('IP address', value(data.diagnose, 'current_ip')),
+        metric('Adresse IP', value(data.diagnose, 'current_ip')),
         metric('Route', value(data.diagnose, 'default_route')),
-        metric('Power save', value(data.diagnose, 'power_save')),
+        metric('Économie énergie', value(data.diagnose, 'power_save')),
         metric('Backend', value(data.diagnose, 'backend')),
-        metric('SSH path', value(data.diagnose, 'ssh_route_interface'))
+        metric('Chemin SSH', value(data.diagnose, 'ssh_route_interface'))
       );
     }
 
@@ -405,14 +477,15 @@
         const text = document.createElement('div');
         const title = document.createElement('h3');
         const body = document.createElement('p');
-        title.textContent = 'No networks shown';
+        title.textContent = 'Aucun réseau affiché';
         body.className = 'empty';
-        body.textContent = 'The current connection is left untouched. Try refresh later, or review diagnostics below.';
+        body.textContent = 'La connexion actuelle est préservée. Tu peux rafraichir plus tard ou ouvrir les détails techniques.';
         text.append(title, body);
         const action = document.createElement('button');
         action.type = 'button';
+        action.className = 'button';
         action.disabled = true;
-        action.textContent = 'Connect later';
+        action.textContent = 'Se connecter';
         placeholder.append(text, action);
         target.append(placeholder);
         return;
@@ -426,13 +499,13 @@
         const text = document.createElement('div');
         const title = document.createElement('h3');
         const meta = document.createElement('div');
-        const ssid = network.ssid_hidden ? 'Hidden network' : (network.ssid || 'Hidden network');
+        const ssid = network.ssid_hidden ? 'Réseau masqué' : (network.ssid || 'Réseau masqué');
         title.textContent = ssid;
         meta.className = 'network-meta';
         [
-          `Signal ${network.signal || 'unknown'}`,
-          `Channel ${network.channel || 'unknown'}`,
-          network.security || 'unknown security'
+          `Signal ${network.signal || 'inconnu'}`,
+          `Canal ${network.channel || 'inconnu'}`,
+          network.security || 'sécurité inconnue'
         ].forEach((label) => {
           const badge = document.createElement('span');
           badge.className = 'badge';
@@ -441,20 +514,31 @@
         });
         text.append(title, meta);
 
+        const actionWrap = document.createElement('div');
+        actionWrap.className = 'network-action';
+        const password = document.createElement('input');
+        password.className = 'password-mock';
+        password.type = 'password';
+        password.disabled = true;
+        password.placeholder = 'Mot de passe - bientôt';
         const action = document.createElement('button');
         action.type = 'button';
+        action.className = 'button';
         action.disabled = true;
-        action.textContent = 'Connect later';
+        action.textContent = 'Se connecter';
+        actionWrap.append(password, action);
 
-        row.append(text, action);
+        row.append(text, actionWrap);
         target.append(row);
       });
     }
 
     function renderSafety() {
-      document.getElementById('real-apply').textContent = data.diagnose?.real_apply_allowed ? 'enabled' : 'disabled';
-      document.getElementById('network-writes').textContent = data.diagnose?.network_writes ? 'enabled' : 'disabled';
-      document.getElementById('secret-policy').textContent = value(data.diagnose, 'secret_policy');
+      document.getElementById('real-apply').textContent = yesNo(data.diagnose?.real_apply_allowed);
+      document.getElementById('network-writes').textContent = yesNo(data.diagnose?.network_writes);
+      document.getElementById('secret-policy').textContent = value(data.diagnose, 'secret_policy') === 'no-secrets'
+        ? 'non collecté'
+        : value(data.diagnose, 'secret_policy');
     }
 
     function renderDebug() {
@@ -464,6 +548,7 @@
     }
 
     function renderAll() {
+      describeConnection();
       renderNodeState();
       renderNetworks();
       renderSafety();

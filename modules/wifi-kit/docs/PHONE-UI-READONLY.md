@@ -11,6 +11,19 @@ It does not connect Wi-Fi, write `wpa_supplicant`, start `hostapd` or
 The first UI must help an operator understand the node state before any future
 network change exists.
 
+The main screen should feel like a simple phone Wi-Fi onboarding flow, in French
+by default:
+
+- current node connection state,
+- available Wi-Fi networks when scan is possible,
+- disabled connect buttons,
+- human scan-unavailable messages,
+- clear read-only/Safe badges.
+
+Advanced diagnostics remain available, but they should be hidden behind a
+technical details section. The default view should not look like a developer
+console.
+
 It should show:
 
 - runtime state,
@@ -18,10 +31,6 @@ It should show:
 - snapshot preview,
 - `safe-diagnose` summary,
 - clear SAFE boundaries.
-
-The main screen should feel like the beginning of a Wi-Fi setup flow, not like a
-developer console. Debug JSON should stay available, but behind an advanced
-diagnostics section.
 
 It must not show:
 
@@ -50,6 +59,9 @@ Common reasons:
 The UI must explain these cases without suggesting a network restart or
 reconnection. The current link is more important than showing a perfect network
 list.
+
+The user-facing message should avoid raw reasons like `iw-scan-failed` on the
+main screen. Raw reasons can remain visible in advanced diagnostics.
 
 ## Backend inputs
 
