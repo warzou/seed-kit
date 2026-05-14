@@ -37,6 +37,7 @@ usage() {
   echo "  sh tools/profile-state.sh backup --dry-run"
   echo "  sh tools/profile-state.sh backup --local --dry-run"
   echo "  sh tools/profile-state.sh snapshot --local --dry-run --output <dir>"
+  echo "  sh tools/profile-state.sh package --local --dry-run --output <dir>"
 }
 
 show_plan() {
@@ -303,6 +304,53 @@ snapshot_local_dry_run() {
   echo "  do-not-clone files copied: no"
 }
 
+package_local_dry_run() {
+  output_dir="$1"
+
+  if ! safe_snapshot_output_dir "$output_dir"; then
+    echo "unsafe or missing --output: $output_dir" >&2
+    echo "choose an explicit test directory, for example /tmp/seed-kit-profile-state-package" >&2
+    return 2
+  fi
+
+  snapshot_local_dry_run "$output_dir"
+
+  tar_file="$output_dir/profile-state-snapshot.tar"
+  if [ -e "$tar_file" ]; then
+    echo "refusing to overwrite existing package: $tar_file" >&2
+    return 2
+  fi
+
+  (
+    cd "$output_dir"
+    tar -cf "profile-state-snapshot.tar" \
+      MANIFEST.txt \
+      SHA256SUMS \
+      inventory \
+      projects \
+      configs \
+      docker-volumes \
+      manual \
+      excluded
+  )
+
+  echo
+  echo "profile-state package local dry-run"
+  echo "mode: SAFE / DRY-RUN / UNENCRYPTED"
+  echo "package: $tar_file"
+  echo "size: $(path_size "$tar_file")"
+  echo
+  echo "summary:"
+  echo "  archive created: yes, local tar preview only"
+  echo "  compression: none"
+  echo "  encryption performed: no"
+  echo "  restore performed: no"
+  echo "  secret content read: no"
+  echo "  sensitive files copied: no"
+  echo "  do-not-clone files copied: no"
+  echo "  cloud upload: no"
+}
+
 list_inventory() {
   echo "profile-state inventory"
   echo
@@ -405,6 +453,31 @@ case "${1:-}" in
           esac
         done
         snapshot_local_dry_run "$output_dir"
+        ;;
+      *)
+        usage >&2
+        exit 2
+        ;;
+    esac
+    ;;
+  package)
+    case "${2:-} ${3:-}" in
+      "--local --dry-run")
+        output_dir=""
+        shift 3
+        while [ "$#" -gt 0 ]; do
+          case "$1" in
+            --output)
+              output_dir="${2:-}"
+              shift 2
+              ;;
+            *)
+              usage >&2
+              exit 2
+              ;;
+          esac
+        done
+        package_local_dry_run "$output_dir"
         ;;
       *)
         usage >&2
