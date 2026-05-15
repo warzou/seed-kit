@@ -35,6 +35,7 @@ usage() {
   echo
   echo "Usage:"
   echo "  sh tools/profile-state.sh plan"
+  echo "  sh tools/profile-state.sh status"
   echo "  sh tools/profile-state.sh inventory"
   echo "  sh tools/profile-state.sh backup --local --dry-run"
   echo "  sh tools/profile-state.sh snapshot --local --dry-run --output <dir>"
@@ -68,6 +69,27 @@ show_plan() {
   echo "  no cloud upload"
   echo
   echo "Encryption is required before any real backup containing private state leaves the node."
+}
+
+show_status() {
+  echo "profile-state status"
+  echo "format version: 1"
+  if command -v tar >/dev/null 2>&1; then
+    echo "tar: available"
+  else
+    echo "tar: missing"
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    echo "sha256sum: available"
+  else
+    echo "sha256sum: missing"
+  fi
+  echo "snapshot: available"
+  echo "package: available"
+  echo "verify: available"
+  echo "restore: not implemented"
+  echo "cloud: not implemented"
+  echo "secrets: refused by policy"
 }
 
 path_size() {
@@ -577,6 +599,9 @@ backup_dry_run() {
 case "${1:-}" in
   plan)
     show_plan
+    ;;
+  status)
+    show_status
     ;;
   inventory)
     list_inventory

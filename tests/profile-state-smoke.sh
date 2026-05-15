@@ -96,6 +96,17 @@ echo "profile-state smoke"
 run_ok sh -n "$profile_state"
 pass "profile-state syntax"
 
+status_output="$tmp_root/status-output.txt"
+if ! sh "$profile_state" status > "$status_output" 2>&1; then
+  fail "status command failed"
+fi
+grep -q '^profile-state status$' "$status_output" || fail "missing status title"
+grep -q '^format version: 1$' "$status_output" || fail "missing status format version"
+grep -q '^restore: not implemented$' "$status_output" || fail "missing restore status"
+grep -q '^cloud: not implemented$' "$status_output" || fail "missing cloud status"
+grep -q '^secrets: refused by policy$' "$status_output" || fail "missing secrets policy status"
+pass "profile-state status"
+
 snapshot_dir="$tmp_root/snapshot"
 run_ok sh "$profile_state" snapshot --local --dry-run --output "$snapshot_dir"
 [ -f "$snapshot_dir/MANIFEST.txt" ] || fail "missing MANIFEST.txt"
