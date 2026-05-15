@@ -63,6 +63,79 @@ at least one rediscovery path before any future real apply:
 - automatic rollback to GL-MT6000-d53;
 - physical access for the first real test.
 
+
+## Future runtime-only target profile creation
+
+Discovery on `pocket-node` showed the current rollback network in
+`wpa_cli list_networks`:
+
+```text
+network id: 0
+ssid: GL-MT6000-d53
+flags: [CURRENT]
+```
+
+This id is only a current observation. It must be revalidated immediately before
+any future apply test because backend network ids can change.
+
+The target network `SFR_7B28` is visible in scan results but is not currently
+present in `wpa_cli list_networks`. A future real test therefore needs a
+runtime-only temporary profile for B.
+
+Planned future command family, shown as documentation only:
+
+```sh
+# read-only preflight
+wpa_cli -i wlan0 list_networks
+wpa_cli -i wlan0 status
+
+# future apply phase only: create temporary B profile
+TARGET_ID="$(wpa_cli -i wlan0 add_network)"
+wpa_cli -i wlan0 set_network "$TARGET_ID" ssid '"SFR_7B28"'
+
+# future apply phase only: runtime secret, never logged
+wpa_cli -i wlan0 set_network "$TARGET_ID" psk '"<RUNTIME_SECRET_NOT_LOGGED>"'
+
+# future apply phase only: temporary attempt
+wpa_cli -i wlan0 select_network "$TARGET_ID"
+
+# future rollback
+wpa_cli -i wlan0 select_network "$ROLLBACK_ID"
+
+# future cleanup of temporary B profile
+wpa_cli -i wlan0 remove_network "$TARGET_ID"
+
+# forbidden for the first field test
+# wpa_cli -i wlan0 save_config
+```
+
+Important boundaries:
+
+- `add_network` is future apply only;
+- `set_network ssid` is future apply only;
+- `set_network psk` must receive the secret at runtime only;
+- the real passphrase must never be committed, pushed, logged, displayed in a
+  diff, written to a fixture, or stored in Wifi-Kit metadata;
+- `select_network` is future apply only;
+- rollback must target the revalidated id for `GL-MT6000-d53`;
+- `remove_network` should remove the temporary `SFR_7B28` profile after the
+  test;
+- `save_config` remains forbidden for the first field test;
+- the first field test should roll back to `GL-MT6000-d53` even if `SFR_7B28`
+  works.
+
+Operator confirmations required before any future real apply:
+
+- confirm this is `pocket-node`;
+- confirm physical access or a secondary management path exists;
+- confirm `GL-MT6000-d53` is still `[CURRENT]`;
+- confirm the rollback id was revalidated immediately before the attempt;
+- confirm `SFR_7B28` is visible or intentionally targeted;
+- confirm the target secret will be provided runtime-only;
+- confirm no `save_config` will be executed;
+- confirm the temporary target profile will be removed after the test;
+- confirm rollback to `GL-MT6000-d53` is required even on target success.
+
 ## Recommended initial timeouts
 
 ```text
