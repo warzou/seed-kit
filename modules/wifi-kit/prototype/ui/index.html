@@ -327,7 +327,7 @@
     .section-head {
       display: flex;
       gap: 10px;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
       margin-bottom: 13px;
     }
@@ -344,7 +344,7 @@
     .scan-status { margin-top: 4px; color: #cbd7e8; }
 
     .button {
-      min-height: 46px;
+      min-height: 44px;
       border: 1px solid rgba(111, 205, 255, 0.42);
       border-radius: 18px;
       background: linear-gradient(135deg, #4f72ff, #38d0c8);
@@ -354,6 +354,13 @@
       font-weight: 950;
       cursor: pointer;
       transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+    }
+
+    #refresh {
+      min-width: 118px;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.2), transparent 34%),
+        linear-gradient(135deg, rgba(79, 114, 255, 0.92), rgba(56, 208, 200, 0.9));
     }
 
     .button .icon-svg {
@@ -406,6 +413,13 @@
     }
 
     .network.selected { box-shadow: inset 0 0 0 1px rgba(45, 149, 255, 0.38), var(--glow); }
+
+    .network.selected .network-main {
+      border-radius: 18px;
+      background: linear-gradient(90deg, rgba(68, 212, 230, 0.1), transparent);
+      margin: -3px;
+      padding: 3px;
+    }
 
     .network-main {
       display: grid;
@@ -512,13 +526,17 @@
     .network-prep {
       display: grid;
       gap: 9px;
-      border-top: 1px solid rgba(255, 255, 255, 0.1);
-      padding-top: 12px;
+      border: 1px solid rgba(68, 212, 230, 0.16);
+      border-radius: 20px;
+      background:
+        radial-gradient(circle at top left, rgba(68, 212, 230, 0.12), transparent 12rem),
+        rgba(5, 13, 22, 0.38);
+      padding: 12px;
     }
 
     .field-label {
       display: grid;
-      gap: 7px;
+      gap: 8px;
       color: var(--ink);
       font-size: 0.92rem;
       font-weight: 900;
@@ -548,9 +566,9 @@
     .prepare-plan {
       display: grid;
       gap: 8px;
-      border: 1px solid rgba(68, 212, 230, 0.22);
+      border: 1px solid rgba(83, 220, 98, 0.18);
       border-radius: 20px;
-      background: rgba(68, 212, 230, 0.075);
+      background: rgba(83, 220, 98, 0.06);
       padding: 12px;
     }
 
@@ -567,10 +585,10 @@
     .safe-lines li {
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) auto;
-      gap: 10px;
+      gap: 9px;
       align-items: center;
       color: var(--soft);
-      font-size: 0.88rem;
+      font-size: 0.84rem;
     }
 
     .check { color: var(--green); font-weight: 950; }
@@ -888,7 +906,7 @@
       const suffix = networks > 1 ? 'reseaux trouves' : 'reseau trouve';
       if (scan.refresh_attempted) {
         const status = scan.refresh_status || 'unknown';
-        if (status === 'ok') return `${networks} ${suffix} apres scan`;
+        if (status === 'ok') return `${networks} ${suffix} apres actualisation`;
         if (status === 'failed-used-existing-results') return `${networks} ${suffix}; cache conserve`;
         return `${networks} ${suffix}; scan ${status}`;
       }
@@ -956,7 +974,7 @@
 
       const passwordLabel = document.createElement('label');
       passwordLabel.className = 'field-label';
-      passwordLabel.innerHTML = 'Preparer la connexion <span class="field-hint">(local uniquement)</span>';
+      passwordLabel.innerHTML = 'Preparation SAFE <span class="field-hint">Mot de passe local uniquement, jamais envoye.</span>';
       const password = document.createElement('input');
       password.className = 'password-local';
       password.type = 'password';
@@ -967,11 +985,11 @@
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'button';
-      button.textContent = 'Preparer';
+      button.textContent = 'Preparer en simulation';
 
       const summary = document.createElement('p');
       summary.className = 'prep-summary';
-      summary.textContent = 'Aucune connexion reelle. Simulation locale SAFE.';
+      summary.textContent = 'Aucune connexion reelle. Ce plan reste dans le navigateur.';
 
       const plan = document.createElement('div');
       plan.className = 'prepare-plan';
@@ -991,14 +1009,14 @@
     function renderInlinePlan(network, plan) {
       plan.replaceChildren();
       const title = document.createElement('strong');
-      title.textContent = 'Plan SAFE';
+      title.textContent = 'Plan simule';
       const list = document.createElement('ul');
       list.className = 'safe-lines';
       [
         ['shield', 'safe', 'Votre systeme reste intact'],
         ['lock', 'lock', 'Aucun secret transmis'],
         ['wifi', 'mute', `Reseau cible prepare: ${displaySsid(network)}`],
-        ['gear', 'gear', 'Rollback et validation SSH requis']
+        ['gear', 'gear', 'Rollback et validation SSH avant tout vrai essai']
       ].forEach(([icon, tone, text]) => {
         const li = document.createElement('li');
         const badge = document.createElement('span');
@@ -1054,6 +1072,7 @@
       networks.forEach((network) => {
         const row = document.createElement('div');
         row.className = 'network selectable';
+        row.setAttribute('aria-expanded', selectedNetwork === network ? 'true' : 'false');
 
         const quality = signalQuality(network.signal);
         const main = document.createElement('div');
