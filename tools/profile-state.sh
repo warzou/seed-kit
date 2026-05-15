@@ -35,6 +35,7 @@ usage() {
   echo
   echo "Usage:"
   echo "  sh tools/profile-state.sh plan"
+  echo "  sh tools/profile-state.sh reconstruction-plan"
   echo "  sh tools/profile-state.sh summary"
   echo "  sh tools/profile-state.sh status"
   echo "  sh tools/profile-state.sh inventory"
@@ -70,6 +71,26 @@ show_plan() {
   echo "  no cloud upload"
   echo
   echo "Encryption is required before any real backup containing private state leaves the node."
+}
+
+show_reconstruction_plan() {
+  echo "profile-state reconstruction plan"
+  echo "mode: manual"
+  echo "safety: no automatic restore"
+  echo
+  echo "1. install a fresh OS"
+  echo "2. install git"
+  echo "3. clone Seed-Kit"
+  echo "4. run: sh seed-kit.sh self-update --plan"
+  echo "5. run: sh seed-kit.sh modules list"
+  echo "6. verify package: sh tools/profile-state.sh package --verify --input <tar>"
+  echo "7. restore manually, one component at a time"
+  echo "8. validate before production cutover"
+  echo
+  echo "secrets are not restored"
+  echo "machine identity is not cloned"
+  echo "restore is not implemented"
+  echo "cloud is not implemented"
 }
 
 show_status() {
@@ -613,6 +634,9 @@ backup_dry_run() {
 case "${1:-}" in
   plan)
     show_plan
+    ;;
+  reconstruction-plan)
+    show_reconstruction_plan
     ;;
   summary)
     show_summary

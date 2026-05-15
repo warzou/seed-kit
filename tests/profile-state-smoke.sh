@@ -96,6 +96,16 @@ echo "profile-state smoke"
 run_ok sh -n "$profile_state"
 pass "profile-state syntax"
 
+reconstruction_output="$tmp_root/reconstruction-output.txt"
+if ! sh "$profile_state" reconstruction-plan > "$reconstruction_output" 2>&1; then
+  fail "reconstruction-plan command failed"
+fi
+grep -q '^profile-state reconstruction plan$' "$reconstruction_output" || fail "missing reconstruction title"
+grep -q '^mode: manual$' "$reconstruction_output" || fail "missing reconstruction mode"
+grep -q '^restore is not implemented$' "$reconstruction_output" || fail "missing reconstruction restore warning"
+grep -q '^machine identity is not cloned$' "$reconstruction_output" || fail "missing reconstruction identity warning"
+pass "profile-state reconstruction plan"
+
 summary_output="$tmp_root/summary-output.txt"
 if ! sh "$profile_state" summary > "$summary_output" 2>&1; then
   fail "summary command failed"
