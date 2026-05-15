@@ -1,0 +1,51 @@
+{
+  "schema": "wifi-kit.connect-safe-scenario.v0",
+  "mode": "plan-only",
+  "description": "Field scenario for a future temporary connect-safe attempt. No secrets.",
+  "current_network": {
+    "ssid": "GL-MT6000-d53",
+    "role": "current-stable",
+    "validated": true,
+    "interface": "wlan0",
+    "expected_gateway": "192.168.8.1"
+  },
+  "target_network": {
+    "ssid": "SFR_7B28",
+    "role": "temporary-target",
+    "validated": false,
+    "temporary_attempt": true,
+    "secret_source": "operator-runtime-only"
+  },
+  "rollback_network": {
+    "ssid": "GL-MT6000-d53",
+    "role": "rollback-fallback",
+    "validated": true,
+    "interface": "wlan0",
+    "expected_gateway": "192.168.8.1"
+  },
+  "timeouts": {
+    "wait_ip_seconds": 30,
+    "validation_seconds": 20,
+    "rollback_seconds": 30,
+    "rediscovery_seconds": 60
+  },
+  "persistence": {
+    "enabled": false,
+    "save_config": false,
+    "promote_on_success": false
+  },
+  "safety": {
+    "network_writes": false,
+    "real_apply_allowed": false,
+    "secrets_in_repo": false,
+    "ui_integration": false
+  },
+  "next_missing_steps": [
+    "read-only profile id discovery",
+    "runtime-only secret handling design",
+    "ssh safety validation gate",
+    "dhcp lease rediscovery procedure",
+    "rollback proof on current network",
+    "explicit operator confirmation gate"
+  ]
+}
