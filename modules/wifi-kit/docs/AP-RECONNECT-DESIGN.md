@@ -220,6 +220,54 @@ Safe V1 assumption:
 
 For pocket-node/Raspberry Pi Zero 2 W style hardware, Wifi-Kit should assume single-radio limitations unless hardware tests prove otherwise.
 
+
+## Pocket-node read-only hardware audit
+
+A read-only hardware audit was performed on `pocket-node` to prepare the
+future AP/reconnect design. No network mutation was performed during the audit.
+No hostapd, dnsmasq, connect-safe apply, network restart, reboot, or Wi-Fi
+configuration write was executed.
+
+Observed state:
+
+- host: `pocket-node`;
+- interface: `wlan0`;
+- driver: `brcmfmac`;
+- chipset: `BCM43430/2`;
+- firmware path: `brcm/brcmfmac43430b0-sdio`;
+- current mode: `managed` / client;
+- current client channel during audit: channel 6, 2437 MHz;
+- power save: off.
+
+`iw list` reports AP support and a valid interface combination that includes
+one managed interface plus one AP interface:
+
+```text
+#{ managed } <= 1, #{ AP } <= 1, #{ P2P-client } <= 1, #{ P2P-device } <= 1,
+total <= 4, #channels <= 1
+```
+
+Interpretation:
+
+- AP mode is advertised by the driver;
+- managed plus AP is advertised as possible;
+- the strong constraint is `#channels <= 1`;
+- AP plus client simultaneous mode would need to stay on the same radio channel;
+- if the client network changes channel, the AP/client combination becomes
+  fragile or unsuitable;
+- Raspberry Pi Zero 2 W class hardware should still be treated as a single-radio
+  recovery device, not as a reliable AP-plus-client router.
+
+SAFE V1 recommendation:
+
+- do not depend on simultaneous AP plus client for the main product flow;
+- try known and validated client networks first;
+- stay in client mode if one works;
+- enter temporary AP recovery only if no known network works;
+- keep AP mode bounded, explicit, and recovery-oriented;
+- prefer a second Wi-Fi adapter if reliable AP plus client mode becomes a real
+  requirement.
+
 ## UI flow
 
 The phone UI should remain read-only until connect-safe apply is implemented and reviewed separately.
