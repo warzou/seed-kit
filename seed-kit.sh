@@ -1139,6 +1139,8 @@ seed_kit_usage() {
   echo "  --fetch-module=wifi-kit [--yes|-y]  fetch one repo-backed module with git sparse checkout"
   echo "  --install-module=wifi-kit [--yes|-y]  prepare git if needed, then fetch one repo-backed module"
   echo "  --self-check     compare local Seed-Kit with public repository HEAD when git is available"
+  echo "  self-update --plan   inspect origin/main update status without changing files"
+  echo "  self-update --apply  update current branch with git pull --ff-only"
   echo "  --detect         show OS detection details"
   echo "  --uninstall-runtime [--yes|-y]  remove local Seed-Kit runtime directories (lib/modules/backends)"
 }
@@ -1190,6 +1192,143 @@ show_self_check() {
   else
     ui_line "Update status: newer remote available or local commit differs"
   fi
+}
+
+self_update_require_git_repo() {
+  if ! command -v git >/dev/null 2>&1; then
+    echo "git is required for self-update." >&2
+    return 2
+  fi
+
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "self-update requires a git checkout." >&2
+    return 2
+  fi
+
+  if ! git remote get-url origin >/dev/null 2>&1; then
+    echo "self-update requires remote origin." >&2
+    return 2
+  fi
+
+  return 0
+}
+
+self_update_branch() {
+  git symbolic-ref --quiet --short HEAD 2>/dev/null || return 1
+}
+
+self_update_fetch_origin() {
+  ui_line "[self-update] fetch origin"
+  git fetch origin
+}
+
+self_update_state() {
+  branch=$1
+  remote_ref="origin/$branch"
+
+  if ! git rev-parse --verify "$remote_ref" >/dev/null 2>&1; then
+    echo "unknown"
+    return 0
+  fi
+
+  counts=$(git rev-list --left-right --count "HEAD...$remote_ref" 2>/dev/null || echo "unknown")
+  case "$counts" in
+    "0	0"|"0 0")
+      echo "up-to-date"
+      ;;
+    0*)
+      echo "behind"
+      ;;
+    *"	0"|*" 0")
+      echo "ahead"
+      ;;
+    *)
+      echo "diverged"
+      ;;
+  esac
+}
+
+show_self_update_plan() {
+  if ! self_update_require_git_repo; then
+    return 2
+  fi
+
+  branch=$(self_update_branch || true)
+  if [ -z "$branch" ]; then
+    echo "self-update requires a named branch." >&2
+    return 2
+  fi
+
+  local_short=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
+  ui_header "Seed-Kit self-update plan"
+  ui_kv "Branch" "$branch"
+  ui_kv "Local" "$local_short"
+  ui_kv "Remote" "origin/$branch"
+
+  if ! self_update_fetch_origin; then
+    echo "self-update fetch failed." >&2
+    return 3
+  fi
+
+  if remote_short=$(git rev-parse --short "origin/$branch" 2>/dev/null); then
+    ui_kv "Remote commit" "$remote_short"
+  else
+    ui_kv "Remote commit" "unavailable"
+  fi
+
+  ui_kv "State" "$(self_update_state "$branch")"
+  ui_line "Plan mode only: no pull, checkout, stash, reset, or clean."
+}
+
+apply_self_update() {
+  if ! self_update_require_git_repo; then
+    return 2
+  fi
+
+  branch=$(self_update_branch || true)
+  if [ -z "$branch" ]; then
+    echo "self-update requires a named branch." >&2
+    return 2
+  fi
+
+  if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+    echo "self-update refused: workspace has local changes." >&2
+    return 2
+  fi
+
+  if ! self_update_fetch_origin; then
+    echo "self-update fetch failed." >&2
+    return 3
+  fi
+
+  state=$(self_update_state "$branch")
+  case "$state" in
+    up-to-date)
+      ui_line "already up-to-date"
+      return 0
+      ;;
+    behind)
+      if git pull --ff-only; then
+        ui_line "update applied"
+        return 0
+      fi
+      echo "self-update failed: git pull --ff-only failed." >&2
+      return 4
+      ;;
+    ahead)
+      echo "self-update refused: local branch is ahead of origin/$branch." >&2
+      return 2
+      ;;
+    diverged)
+      echo "self-update refused: branch has diverged from origin/$branch." >&2
+      return 2
+      ;;
+    *)
+      echo "self-update refused: unable to compare with origin/$branch." >&2
+      return 2
+      ;;
+  esac
 }
 
 profile_modules() {
@@ -1873,6 +2012,22 @@ case "${1:-}" in
     ;;
   --self-check)
     show_self_check
+    ;;
+  self-update)
+    shift
+    case "${1:-}" in
+      --plan)
+        show_self_update_plan
+        ;;
+      --apply)
+        apply_self_update
+        ;;
+      *)
+        echo "usage: sh seed-kit.sh self-update --plan" >&2
+        echo "       sh seed-kit.sh self-update --apply" >&2
+        exit 2
+        ;;
+    esac
     ;;
   --detect)
     ui_header "os detection"
