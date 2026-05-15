@@ -1,6 +1,6 @@
 # Seed-Kit
 
-Petit toolkit shell pour installer, deployer et reprendre simplement de petites machines :
+Petit toolkit shell pour installer, deployer et reprendre simplement de petites machines:
 Debian, Raspberry Pi OS, OpenWRT/Flint plus tard, mini VPS.
 
 Objectif : une commande simple, une UI texte claire, des modules faciles a ajouter.
@@ -50,19 +50,23 @@ Attendus :
 * Git deja installe : [git] already installed
 * Git absent : etapes de verification/install affichees
 
-## Direction CLI (V0)
+## Commandes utiles
 
-Conventions légères prévues :
+Commandes core legeres :
 
-- `--plan` : affichage du plan.
-- `--modules` : liste des modules disponibles.
-- `--apply [--modules=git,docker] [--yes|-y]` : affiche le preview puis applique les modules demandés.
-- Sans `--modules`, `--apply` reste en preview-only (aucune action réelle).
-- `-y` : passe la confirmation SAFE (`[y/N]`) pour accélérer l’exécution en mode apply.
+- `--plan` : affiche le plan.
+- `--modules` : liste les modules connus du runtime.
+- `modules list` : liste les scripts modules presents dans `modules/`.
+- `doctor` : diagnostic read-only court.
+- `self-update --plan` : inspecte l'ecart avec `origin`.
+- `self-update --apply` : applique uniquement un `git pull --ff-only`.
+- `--apply [--modules=git,docker] [--yes|-y]` : preview puis apply SAFE des modules demandes.
+- Sans `--modules`, `--apply` reste en preview-only.
+- `-y` : passe la confirmation SAFE (`[y/N]`) pour accelerer un apply explicite.
 
 SAFE rule :
 
-- `sh seed-kit.sh --apply` : aucune action réelle.
+- `sh seed-kit.sh --apply` : aucune action reelle.
 
 Format de progression cible (ambient) :
 

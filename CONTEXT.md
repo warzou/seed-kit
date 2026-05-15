@@ -29,6 +29,9 @@ Everything else is secondary.
 * minimal inline terminal UI
 * one real minimal apply path: `--apply --modules=git`
 * generated bootstrap runtime can be removed with `--uninstall-runtime`
+* read-only diagnostics: `doctor`, `--self-check`, `self-update --plan`
+* safe update path: `self-update --apply` uses only `git pull --ff-only`
+* profile-state supports SAFE reconstruction planning and package verification
 
 ## Architecture Direction
 

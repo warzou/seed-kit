@@ -1151,7 +1151,7 @@ show_modules_dir_list() {
 seed_kit_usage() {
   echo "Usage: sh seed-kit.sh [--plan|--detect|--ui-demo|--modules|--apply]"
   echo ""
-  echo "Planned CLI shape:"
+  echo "Commands:"
   echo "  --plan           show the full execution plan"
   echo "  --profile=<name> --plan  show recommended modules for one profile"
   echo "  --profile=<name> --apply  preview profile apply order without running modules"
