@@ -1163,6 +1163,7 @@ seed_kit_usage() {
   echo "  --install-module=wifi-kit [--yes|-y]  prepare git if needed, then fetch one repo-backed module"
   echo "  --self-check     compare local Seed-Kit with public repository HEAD when git is available"
   echo "  doctor           show a short read-only Seed-Kit diagnostic"
+  echo "  inspect          show a short read-only reconstruction-oriented report"
   echo "  self-update --plan   inspect origin/main update status without changing files"
   echo "  self-update --apply  update current branch with git pull --ff-only"
   echo "  --detect         show OS detection details"
@@ -1249,6 +1250,60 @@ show_doctor() {
   else
     echo "profile-state: missing"
   fi
+  echo
+  echo "No changes were made."
+}
+
+show_inspect() {
+  echo "Seed-Kit inspect"
+  echo "mode: read-only"
+  echo
+  echo "system:"
+  echo "  hostname: $(machine_hostname)"
+  echo "  os: ${SEED_OS_ID:-unknown}"
+  echo "  arch: $(machine_arch)"
+  echo
+  echo "runtime:"
+  echo "  git: $(command_status git)"
+  echo "  docker: $(command_status docker)"
+  echo "  tailscale: $(command_status tailscale)"
+  echo "  cloudflared: $(command_status cloudflared)"
+  echo "  caddy: $(command_status caddy)"
+  echo
+  echo "seed-kit:"
+  if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "  repo: git checkout"
+    if workspace_state=$(git status --porcelain 2>/dev/null); then
+      if [ -z "$workspace_state" ]; then
+        echo "  workspace: clean"
+      else
+        echo "  workspace: dirty"
+      fi
+    else
+      echo "  workspace: unknown"
+    fi
+  else
+    echo "  repo: not git checkout"
+    echo "  workspace: unknown"
+  fi
+  if [ -f "$ROOT_DIR/tools/profile-state.sh" ]; then
+    echo "  profile-state: available"
+  else
+    echo "  profile-state: missing"
+  fi
+  echo
+  echo "manual reconstruction required:"
+  echo "  - tailscale login/state"
+  echo "  - cloudflare authentication"
+  echo "  - ssh trust validation"
+  echo "  - hostname review"
+  echo
+  echo "not copied automatically:"
+  echo "  - machine-id"
+  echo "  - ssh host keys"
+  echo "  - tailscale state"
+  echo "  - cloudflare credentials"
+  echo "  - tokens/api keys"
   echo
   echo "No changes were made."
 }
@@ -2074,6 +2129,9 @@ case "${1:-}" in
     ;;
   doctor)
     show_doctor
+    ;;
+  inspect)
+    show_inspect
     ;;
   self-update)
     shift
