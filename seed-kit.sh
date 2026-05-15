@@ -1162,6 +1162,7 @@ seed_kit_usage() {
   echo "  --fetch-module=wifi-kit [--yes|-y]  fetch one repo-backed module with git sparse checkout"
   echo "  --install-module=wifi-kit [--yes|-y]  prepare git if needed, then fetch one repo-backed module"
   echo "  --self-check     compare local Seed-Kit with public repository HEAD when git is available"
+  echo "  doctor           show a short read-only Seed-Kit diagnostic"
   echo "  self-update --plan   inspect origin/main update status without changing files"
   echo "  self-update --apply  update current branch with git pull --ff-only"
   echo "  --detect         show OS detection details"
@@ -1215,6 +1216,41 @@ show_self_check() {
   else
     ui_line "Update status: newer remote available or local commit differs"
   fi
+}
+
+show_doctor() {
+  echo "Seed-Kit doctor"
+  echo "mode: read-only"
+  echo
+  echo "shell: OK"
+  echo "git: $(command_status git)"
+  echo "tar: $(command_status tar)"
+  echo "sha256sum: $(command_status sha256sum)"
+
+  if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "repo: git checkout"
+    if workspace_state=$(git status --porcelain 2>/dev/null); then
+      if [ -z "$workspace_state" ]; then
+        echo "workspace: clean"
+      else
+        echo "workspace: dirty"
+      fi
+    else
+      echo "workspace: unknown"
+    fi
+  else
+    echo "repo: not git checkout"
+    echo "workspace: unknown"
+  fi
+
+  echo "self-update: available"
+  if [ -f "$ROOT_DIR/tools/profile-state.sh" ]; then
+    echo "profile-state: available"
+  else
+    echo "profile-state: missing"
+  fi
+  echo
+  echo "No changes were made."
 }
 
 self_update_require_git_repo() {
@@ -2035,6 +2071,9 @@ case "${1:-}" in
     ;;
   --self-check)
     show_self_check
+    ;;
+  doctor)
+    show_doctor
     ;;
   self-update)
     shift
