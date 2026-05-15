@@ -9,6 +9,7 @@ Le contexte et les limites du projet sont dans [CONTEXT.md](CONTEXT.md).
 Architecture monorepo: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 Conventions modules: [docs/MODULES.md](docs/MODULES.md).
 Reconstruction SAFE: [docs/RECONSTRUCT-NODE-SAFE.md](docs/RECONSTRUCT-NODE-SAFE.md).
+Doctrine reconstruction services: [docs/SERVICE-RECONSTRUCTION.md](docs/SERVICE-RECONSTRUCTION.md).
 
 ## Installation
 
