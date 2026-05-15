@@ -52,3 +52,20 @@ The prototype:
 - does not write configuration;
 - does not store or print secrets;
 - does not expose UI actions.
+## Real scan export conversion
+
+A future field test can use an already exported `wpa_cli scan_results` text file
+without triggering a new scan. The converter is intentionally file-only:
+
+```sh
+wpa_cli -i wlan0 scan_results > /tmp/wifi-kit-scan-results.txt
+sh modules/wifi-kit/prototype/wpa-cli-scan-results-to-json.sh \
+  --input /tmp/wifi-kit-scan-results.txt \
+  > /tmp/wifi-kit-scan-results.json
+sh modules/wifi-kit/prototype/candidate-match-plan.sh \
+  --scan /tmp/wifi-kit-scan-results.json
+```
+
+The converter does not call `wpa_cli`, does not trigger `wpa_cli scan`, does not
+read `/etc`, and does not modify networking. It only parses a text file that was
+exported beforehand.

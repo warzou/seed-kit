@@ -1,0 +1,6 @@
+bssid / frequency / signal level / flags / ssid
+00:11:22:33:44:55	2437	-47	[WPA3-SAE-CCMP][ESS]	GL-MT6000-d53
+66:77:88:99:aa:bb	2437	-51	[WPA2-PSK-CCMP][ESS]	SFR 7B28
+cc:dd:ee:ff:00:11	2437	-62	[WPA2-PSK-CCMP][ESS]	Flint-Fallback
+22:33:44:55:66:77	2462	-70	[WPA2-PSK-CCMP][ESS]	Guest Unknown
+33:44:55:66:77:88	2412	-74	[WPA2-PSK-CCMP][ESS]	
