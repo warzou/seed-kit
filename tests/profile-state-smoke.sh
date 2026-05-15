@@ -96,6 +96,18 @@ echo "profile-state smoke"
 run_ok sh -n "$profile_state"
 pass "profile-state syntax"
 
+summary_output="$tmp_root/summary-output.txt"
+if ! sh "$profile_state" summary > "$summary_output" 2>&1; then
+  fail "summary command failed"
+fi
+grep -q '^profile-state summary$' "$summary_output" || fail "missing summary title"
+grep -q '^mode: read-only$' "$summary_output" || fail "missing summary mode"
+grep -q '^format version: 1$' "$summary_output" || fail "missing summary format version"
+grep -q '^restore: not implemented$' "$summary_output" || fail "missing summary restore status"
+grep -q '^cloud: not implemented$' "$summary_output" || fail "missing summary cloud status"
+grep -q '^secrets: refused by policy$' "$summary_output" || fail "missing summary secrets policy"
+pass "profile-state summary"
+
 status_output="$tmp_root/status-output.txt"
 if ! sh "$profile_state" status > "$status_output" 2>&1; then
   fail "status command failed"

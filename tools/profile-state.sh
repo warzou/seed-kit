@@ -35,6 +35,7 @@ usage() {
   echo
   echo "Usage:"
   echo "  sh tools/profile-state.sh plan"
+  echo "  sh tools/profile-state.sh summary"
   echo "  sh tools/profile-state.sh status"
   echo "  sh tools/profile-state.sh inventory"
   echo "  sh tools/profile-state.sh backup --local --dry-run"
@@ -84,6 +85,18 @@ show_status() {
   else
     echo "sha256sum: missing"
   fi
+  echo "snapshot: available"
+  echo "package: available"
+  echo "verify: available"
+  echo "restore: not implemented"
+  echo "cloud: not implemented"
+  echo "secrets: refused by policy"
+}
+
+show_summary() {
+  echo "profile-state summary"
+  echo "mode: read-only"
+  echo "format version: 1"
   echo "snapshot: available"
   echo "package: available"
   echo "verify: available"
@@ -542,20 +555,21 @@ package_verify() {
 
 list_inventory() {
   echo "profile-state inventory"
+  echo "mode: read-only"
   echo
-  echo "public-project:"
+  echo "== public-project =="
   show_paths "public-project" "$public_project_paths" "repo-backed project files; review before backup"
   echo
-  echo "manual-restore:"
+  echo "== manual-restore =="
   show_paths "manual-restore" "$manual_restore_paths" "restore manually and validate before production cutover"
   echo
-  echo "sensitive:"
+  echo "== sensitive =="
   show_paths "sensitive" "$sensitive_candidate_paths" "encrypted backup candidate only; do not print contents"
   echo
-  echo "docker-volume:"
+  echo "== docker-volume =="
   show_docker_volumes
   echo
-  echo "do-not-clone:"
+  echo "== do-not-clone =="
   show_paths "do-not-clone" "$do_not_clone_paths" "unique node identity; do not duplicate blindly"
 }
 
@@ -599,6 +613,9 @@ backup_dry_run() {
 case "${1:-}" in
   plan)
     show_plan
+    ;;
+  summary)
+    show_summary
     ;;
   status)
     show_status
