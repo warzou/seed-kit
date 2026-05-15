@@ -1,0 +1,65 @@
+{
+  "schema": "wifi-kit.registry.v0",
+  "metadata": {
+    "description": "Fixture-only Wifi-Kit registry metadata. No secrets.",
+    "generated_for": "plan-only prototype",
+    "secrets_allowed": false
+  },
+  "known_networks": [
+    {
+      "ssid": "GL-MT6000-d53",
+      "ssid_hash": "sha256-demo-gl-mt6000-d53",
+      "priority": 10,
+      "favorite": true,
+      "validated": true,
+      "role": "primary",
+      "backend": "rpios-wpa",
+      "interface": "wlan0",
+      "expected_gateway": "192.168.8.1",
+      "last_success": "2026-05-15T10:20:00Z",
+      "last_failure": null,
+      "retry_count": 0
+    },
+    {
+      "ssid": "Flint-Fallback",
+      "ssid_hash": "sha256-demo-flint-fallback",
+      "priority": 90,
+      "favorite": false,
+      "validated": true,
+      "role": "fallback",
+      "backend": "rpios-wpa",
+      "interface": "wlan0",
+      "expected_gateway": "192.168.8.1",
+      "last_success": "2026-05-14T08:30:00Z",
+      "last_failure": null,
+      "retry_count": 1
+    },
+    {
+      "ssid": "Lab-Test-Wifi",
+      "ssid_hash": "sha256-demo-lab-test-wifi",
+      "priority": 50,
+      "favorite": false,
+      "validated": false,
+      "role": "candidate",
+      "backend": "rpios-wpa",
+      "interface": "wlan0",
+      "expected_gateway": null,
+      "last_success": null,
+      "last_failure": "2026-05-13T15:00:00Z",
+      "retry_count": 2
+    }
+  ],
+  "last_success": {
+    "ssid": "GL-MT6000-d53",
+    "ssid_hash": "sha256-demo-gl-mt6000-d53",
+    "interface": "wlan0",
+    "validated_at": "2026-05-15T10:20:00Z",
+    "gateway": "192.168.8.1"
+  },
+  "fallback_network": {
+    "ssid": "Flint-Fallback",
+    "ssid_hash": "sha256-demo-flint-fallback",
+    "role": "fallback",
+    "validated": true
+  }
+}
