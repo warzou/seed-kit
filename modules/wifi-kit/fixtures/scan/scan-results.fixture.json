@@ -1,0 +1,57 @@
+{
+  "schema": "wifi-kit.scan.v0",
+  "metadata": {
+    "description": "Fixture-only Wifi-Kit scan results. No secrets.",
+    "source": "read-only sample",
+    "backend": "wpa_cli",
+    "interface": "wlan0",
+    "refresh_attempted": false
+  },
+  "networks": [
+    {
+      "ssid": "GL-MT6000-d53",
+      "ssid_hash": "sha256-demo-gl-mt6000-d53",
+      "signal_dbm": -47,
+      "channel": 6,
+      "frequency": 2437,
+      "security": "WPA3",
+      "hidden": false
+    },
+    {
+      "ssid": "SFR_7B28",
+      "ssid_hash": "sha256-demo-sfr-7b28",
+      "signal_dbm": -51,
+      "channel": 6,
+      "frequency": 2437,
+      "security": "WPA/WPA2",
+      "hidden": false
+    },
+    {
+      "ssid": "Flint-Fallback",
+      "ssid_hash": "sha256-demo-flint-fallback",
+      "signal_dbm": -62,
+      "channel": 6,
+      "frequency": 2437,
+      "security": "WPA2",
+      "hidden": false
+    },
+    {
+      "ssid": "Guest-Unknown",
+      "ssid_hash": "sha256-demo-guest-unknown",
+      "signal_dbm": -70,
+      "channel": 11,
+      "frequency": 2462,
+      "security": "WPA2",
+      "hidden": false
+    },
+    {
+      "ssid": "",
+      "ssid_hash": "sha256-demo-hidden",
+      "signal_dbm": -74,
+      "channel": 1,
+      "frequency": 2412,
+      "security": "WPA2",
+      "hidden": true
+    }
+  ]
+}
