@@ -1126,6 +1126,28 @@ show_modules_list() {
   done
 }
 
+show_modules_dir_list() {
+  ui_line "Available modules:"
+  found=0
+
+  for module_file in "$ROOT_DIR"/modules/*.sh; do
+    [ -f "$module_file" ] || continue
+    module_name=${module_file##*/}
+    module_name=${module_name%.sh}
+    case "$module_name" in
+      wifi-kit)
+        continue
+        ;;
+    esac
+    ui_line "  $module_name"
+    found=1
+  done
+
+  if [ "$found" -eq 0 ]; then
+    ui_line "  none"
+  fi
+}
+
 seed_kit_usage() {
   echo "Usage: sh seed-kit.sh [--plan|--detect|--ui-demo|--modules|--apply]"
   echo ""
@@ -1134,6 +1156,7 @@ seed_kit_usage() {
   echo "  --profile=<name> --plan  show recommended modules for one profile"
   echo "  --profile=<name> --apply  preview profile apply order without running modules"
   echo "  --modules        list available modules"
+  echo "  modules list     list module scripts available in modules/"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --apply-module=<module> [--yes|-y]  apply one module only"
   echo "  --fetch-module=wifi-kit [--yes|-y]  fetch one repo-backed module with git sparse checkout"
@@ -2038,6 +2061,18 @@ case "${1:-}" in
   --modules)
     ui_header "modules"
     show_modules_list
+    ;;
+  modules)
+    shift
+    case "${1:-}" in
+      list)
+        show_modules_dir_list
+        ;;
+      *)
+        echo "usage: sh seed-kit.sh modules list" >&2
+        exit 2
+        ;;
+    esac
     ;;
   --ui-demo)
     show_ui_demo

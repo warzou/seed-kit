@@ -42,6 +42,7 @@ echo
 run_test "seed-kit syntax" "cd '$repo_dir' && sh -n seed-kit.sh"
 run_test "seed-kit self-update help" "cd '$repo_dir' && sh seed-kit.sh --help | grep -q 'self-update --plan'"
 run_test "seed-kit self-update usage" "cd '$repo_dir' && out=\$(sh seed-kit.sh self-update 2>&1) && exit 1 || printf '%s\n' \"\$out\" | grep -q 'usage: sh seed-kit.sh self-update --plan'"
+run_test "seed-kit modules list" "cd '$repo_dir' && sh seed-kit.sh modules list | grep -q 'Available modules'"
 run_test "profile-state syntax" "cd '$repo_dir' && sh -n tools/profile-state.sh"
 run_test "profile-state smoke syntax" "cd '$repo_dir' && sh -n tests/profile-state-smoke.sh"
 run_test "profile-state" "cd '$repo_dir' && sh tests/profile-state-smoke.sh"
