@@ -12,8 +12,10 @@ Usage:
   wifi-kit-deps.sh install --dry-run [--backend auto|raspberrypi-networkmanager|raspberrypi-wpa]
   wifi-kit-deps.sh install --apply
 
-Dependency audit and planning only. The current implementation never installs
-packages, never starts services, never changes Wi-Fi, and never reads secrets.
+Declarative dependency audit and planning only. Wifi-Kit declares what it
+needs; Seed-Kit core will orchestrate any future real package installation.
+The current implementation never installs packages, never starts services,
+never changes Wi-Fi, and never reads secrets.
 EOF
 }
 
@@ -181,6 +183,9 @@ cmd_check() {
   selected_backend="$(detect_backend)"
   printf '[wifi-kit-deps] check\n'
   printf 'mode=read-only\n'
+  printf 'module=wifi-kit\n'
+  printf 'dependency_contract=declarative\n'
+  printf 'install_orchestrator=seed-kit-core\n'
   printf 'network_writes=false\n'
   printf 'packages_installed=false\n'
   printf 'backend=%s\n' "$selected_backend"
@@ -193,6 +198,9 @@ cmd_plan() {
   selected_backend="$(detect_backend)"
   printf '[wifi-kit-deps] plan\n'
   printf 'mode=plan-only\n'
+  printf 'module=wifi-kit\n'
+  printf 'dependency_contract=declarative\n'
+  printf 'install_orchestrator=seed-kit-core\n'
   printf 'packages_installed=false\n'
   printf 'backend=%s\n' "$selected_backend"
   emit_all_tools "$selected_backend" | while IFS= read -r line; do
@@ -209,7 +217,7 @@ cmd_plan() {
         ;;
     esac
   done
-  printf 'install_apply=not-implemented\n'
+  printf 'install_apply=refused-until-seed-kit-core-orchestration\n'
 }
 
 cmd_install() {
@@ -219,7 +227,7 @@ cmd_install() {
       cmd_plan
       ;;
     apply)
-      fail "install --apply is intentionally not implemented yet"
+      fail "install --apply is intentionally refused; Seed-Kit core must orchestrate future real installs"
       ;;
     *)
       fail "install requires --dry-run; --apply is reserved for a future reviewed implementation"

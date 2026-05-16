@@ -1,10 +1,11 @@
 # Wifi-Kit runtime dependencies
 
 Status: audit and plan only. No dependency installation is implemented here.
+The current module dependency contract is summarized in `DEPENDENCIES.md`.
 
 This document records the tools and services currently used or assumed by the
-Wifi-Kit prototype so a future `wifi-kit doctor` and `wifi-kit install-deps`
-flow can manage them explicitly.
+Wifi-Kit prototype so Wifi-Kit can declare and check them explicitly. Seed-Kit
+core will orchestrate any future real installation flow.
 
 ## Runtime classes
 
@@ -154,10 +155,11 @@ Recommended commands:
   - prints which packages would be installed later;
   - keeps `hostapd` and `dnsmasq` in `future-ap` while AP mode is not active.
 - `wifi-kit install-deps --backend raspberrypi`
-  - explicit operator confirmation
-  - installs only missing packages for the selected backend
-  - does not start AP services
-  - disables or masks auto-start for AP services when safe and expected
+  - future module hook only;
+  - invoked by Seed-Kit core after explicit operator confirmation;
+  - installs only missing packages for the selected backend when implemented;
+  - does not start AP services;
+  - disables or masks auto-start for AP services when safe and expected.
 - `wifi-kit deps plan`
   - prints package names per backend without installing
 
@@ -187,10 +189,12 @@ Install policy:
 
 Seed-Kit integration path:
 
-- Seed-Kit should call Wifi-Kit's dependency script from the Wifi-Kit module
-  boundary, for example `modules/wifi-kit/prototype/wifi-kit-deps.sh check`
-  or a later stable `modules/wifi-kit/deps.sh check`;
-- Seed-Kit should display the plan first and require explicit operator
-  confirmation before any future `install --apply`;
-- package installation should remain backend-specific and owned by Wifi-Kit, so
-  Seed-Kit does not need to know Raspberry Pi OS NetworkManager details.
+- Wifi-Kit should expose dependency declarations and read-only checks from the
+  Wifi-Kit module boundary, for example
+  `modules/wifi-kit/prototype/wifi-kit-deps.sh check` or a later stable
+  `modules/wifi-kit/deps.sh check`;
+- Seed-Kit core should display the combined module plan first and require
+  explicit operator confirmation before any future install phase;
+- package installation policy should be orchestrated by Seed-Kit core, while
+  Wifi-Kit keeps backend-specific knowledge about which packages and services
+  belong to Raspberry Pi OS NetworkManager, legacy WPA, or future AP support.
