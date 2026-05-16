@@ -14,6 +14,7 @@ Reconnexion identites PRA: [docs/IDENTITY-RECONNECTION.md](docs/IDENTITY-RECONNE
 Service packages PRA: [docs/SERVICE-PACKAGES.md](docs/SERVICE-PACKAGES.md).
 Format minimal service package: [docs/SERVICE-PACKAGE-FORMAT.md](docs/SERVICE-PACKAGE-FORMAT.md).
 Premier service package concret: [docs/service-packages/rpi-edge-vps.md](docs/service-packages/rpi-edge-vps.md).
+Premier test PRA package: [docs/pra-tests/rpi-edge-vps-on-rpi3-edge-audit.md](docs/pra-tests/rpi-edge-vps-on-rpi3-edge-audit.md).
 Premier audit node-specific: [docs/nodes/rpi-edge.md](docs/nodes/rpi-edge.md).
 
 ## Installation
