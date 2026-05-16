@@ -102,6 +102,40 @@ No target passphrase was committed, logged, written to a fixture, or stored in
 Wifi-Kit metadata. The target secret was provided as runtime-only operator
 input for the temporary test.
 
+## Successful 900 second stay-on-target field test
+
+The temporary stay-on-target test validated that `pocket-node` can remain on
+`SFR_7B28` for a bounded 900 second window before automatic rollback and
+cleanup.
+
+Target stay validation:
+
+```text
+stay_on_target_seconds=900
+target_ssid=SFR_7B28
+target_ip=192.168.1.37
+target_gateway=192.168.1.1
+gateway_ping=OK
+internet_ping=OK
+checkpoints=every-30-seconds
+stability_900_seconds=validated
+```
+
+Rollback and cleanup after the 900 second window:
+
+```text
+automatic_rollback=OK
+rollback_ssid=GL-MT6000-d53
+rollback_profile_current=yes
+cleanup_temporary_profile=done
+target_profile_present_final=no
+save_config=not-called
+final_readiness=OK
+```
+
+The target passphrase remained runtime-only and was not written to this
+document, fixtures, logs intended for commit, or Wifi-Kit metadata.
+
 ## Rediscovery strategy
 
 Because the IP may change after moving to SFR_7B28, the operator should prepare
