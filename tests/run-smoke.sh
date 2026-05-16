@@ -39,6 +39,8 @@ run_fail_test() {
 echo "Seed-Kit smoke tests"
 echo
 
+run_test "bootstrap syntax" "cd '$repo_dir' && sh -n bootstrap.sh"
+run_test "bootstrap help" "cd '$repo_dir' && sh bootstrap.sh --help | grep -q 'Seed-Kit bootstrap'"
 run_test "seed-kit syntax" "cd '$repo_dir' && sh -n seed-kit.sh"
 run_test "seed-kit self-update help" "cd '$repo_dir' && sh seed-kit.sh --help | grep -q 'self-update --plan'"
 run_test "seed-kit self-update usage" "cd '$repo_dir' && out=\$(sh seed-kit.sh self-update 2>&1) && exit 1 || printf '%s\n' \"\$out\" | grep -q 'usage: sh seed-kit.sh self-update --plan'"

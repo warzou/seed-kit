@@ -21,7 +21,6 @@ Premier audit node-specific: [docs/nodes/rpi-edge.md](docs/nodes/rpi-edge.md).
 ## Installation
 
 Target flow: copy `seed-kit.sh`, run `sh seed-kit.sh`.
-Bootstrap runtime fetch is not implemented yet.
 
 For the concrete fresh-node SSH flow (bootstrap + plan/modules/apply), see:
 docs/FRESH-NODE-FLOW.md
@@ -29,6 +28,25 @@ docs/FRESH-NODE-FLOW.md
 ```sh
 sh seed-kit.sh
 ```
+
+## Bootstrap minimal
+
+Commande cible future pour une machine fraiche :
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/warzou/seed-kit/main/bootstrap.sh | sh
+```
+
+Puis :
+
+```sh
+cd ~/seed-kit
+sh seed-kit.sh doctor
+```
+
+Le bootstrap V1 installe seulement `git` si absent, via `apt` et confirmation
+interactive, puis clone ou met a jour `~/seed-kit`. Il ne configure pas Docker,
+Tailscale, Cloudflare, le reseau, les secrets, ni de restore.
 
 ## Test rapide
 
