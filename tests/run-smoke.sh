@@ -45,6 +45,7 @@ run_test "seed-kit fresh-node help" "cd '$repo_dir' && sh seed-kit.sh --help | g
 run_test "seed-kit self-update help" "cd '$repo_dir' && sh seed-kit.sh --help | grep -q 'self-update --plan'"
 run_test "seed-kit self-update usage" "cd '$repo_dir' && out=\$(sh seed-kit.sh self-update 2>&1) && exit 1 || printf '%s\n' \"\$out\" | grep -q 'usage: sh seed-kit.sh self-update --plan'"
 run_test "seed-kit modules list" "cd '$repo_dir' && sh seed-kit.sh modules list | grep -q 'Available modules'"
+run_test "seed-kit docker dependencies" "cd '$repo_dir' && out=\$(sh seed-kit.sh modules deps docker) && printf '%s\n' \"\$out\" | grep -q 'package: docker-ce'"
 run_test "seed-kit docker plan" "cd '$repo_dir' && out=\$(sh seed-kit.sh --plan --modules=docker) && printf '%s\n' \"\$out\" | grep -q 'install Docker Engine from the official Docker apt repository'"
 run_test "seed-kit package plan preview" "cd '$repo_dir' && pkg=\$(mktemp -t seed-kit-package-plan.XXXXXX) && out=\$(sh seed-kit.sh --plan --package \"\$pkg\") && rm -f \"\$pkg\" && printf '%s\n' \"\$out\" | grep -q 'package-driven PRA'"
 run_fail_test "seed-kit package apply preview refused" "cd '$repo_dir' && pkg=\$(mktemp -t seed-kit-package-apply.XXXXXX) && sh seed-kit.sh --apply --package \"\$pkg\" --components docker >/tmp/seed-kit-package-apply.out 2>&1; rc=\$?; rm -f \"\$pkg\" /tmp/seed-kit-package-apply.out; exit \$rc"

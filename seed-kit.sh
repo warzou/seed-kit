@@ -1457,6 +1457,35 @@ show_modules_dir_list() {
   fi
 }
 
+show_module_dependencies() {
+  module=$1
+  module_file="$ROOT_DIR/modules/$module.sh"
+  dependency_base="$(printf '%s' "$module" | tr '-' '_')"
+  dependency_fn="module_${dependency_base}_dependencies"
+
+  case " $MODULES " in
+    *" $module "*) ;;
+    *)
+      echo "unknown module: $module" >&2
+      return 2
+      ;;
+  esac
+
+  if [ ! -f "$module_file" ]; then
+    echo "missing module file: $module_file" >&2
+    return 2
+  fi
+
+  . "$module_file"
+
+  ui_header "module dependencies" "$module"
+  if command -v "$dependency_fn" >/dev/null 2>&1; then
+    "$dependency_fn"
+  else
+    ui_line "no dependency declaration"
+  fi
+}
+
 seed_kit_usage() {
   echo "Usage: sh seed-kit.sh [--plan|--detect|--ui-demo|--modules|--apply]"
   echo ""
@@ -1472,6 +1501,7 @@ seed_kit_usage() {
   echo "  --profile=<name> --apply  preview profile apply order without running modules"
   echo "  --modules        list available modules"
   echo "  modules list     list module scripts available in modules/"
+  echo "  modules deps <module>  show read-only module dependency declaration"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --apply --package <file> [--components=a,b]  preview package apply only"
   echo "  --apply-module=<module> [--yes|-y]  apply one module only"
@@ -2623,8 +2653,17 @@ case "${1:-}" in
       list)
         show_modules_dir_list
         ;;
+      deps)
+        shift
+        if [ -z "${1:-}" ]; then
+          echo "usage: sh seed-kit.sh modules deps <module>" >&2
+          exit 2
+        fi
+        show_module_dependencies "$1"
+        ;;
       *)
         echo "usage: sh seed-kit.sh modules list" >&2
+        echo "       sh seed-kit.sh modules deps <module>" >&2
         exit 2
         ;;
     esac
