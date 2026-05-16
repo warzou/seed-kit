@@ -6,6 +6,9 @@ iface=""
 from_ssid=""
 to_ssid=""
 gateway=""
+preflight_host="pocket-node.lan"
+preflight_user="warzy"
+preflight_identity="$HOME/.ssh/id_ed25519_pocket_node_codex"
 reachability_probe="1.1.1.1"
 ip_timeout="30"
 validation_timeout="20"
@@ -23,6 +26,9 @@ Usage:
   sh modules/wifi-kit/prototype/connect-safe-apply.sh \
     --dry-run
 
+  sh modules/wifi-kit/prototype/connect-safe-apply.sh \
+    --preflight-readonly
+
 Optional:
   --iface <name>                Future interface name. Default: <interface>
   --from <current-ssid>         Future rollback profile A. Default: <profile-a>
@@ -32,6 +38,9 @@ Optional:
   --ip-timeout <seconds>         Future DHCP/IP wait timeout. Default: 30
   --validation-timeout <seconds> Future validation timeout. Default: 20
   --rollback-timeout <seconds>   Future rollback timeout. Default: 30
+  --preflight-host <host>        Read-only SSH host. Default: pocket-node.lan
+  --preflight-user <user>        Read-only SSH user. Default: warzy
+  --identity <path>              SSH identity for preflight.
 
 Forbidden:
   --apply
@@ -51,11 +60,128 @@ section() {
   printf '\n[%s]\n' "$1"
 }
 
+run_preflight_readonly() {
+  [ -n "$iface" ] || iface="wlan0"
+
+  ssh -i "$preflight_identity" \
+    -o BatchMode=yes \
+    -o StrictHostKeyChecking=yes \
+    "$preflight_user@$preflight_host" \
+    "IFACE='$iface' sh -s" <<'REMOTE'
+set -u
+
+PATH="/usr/sbin:/sbin:/usr/bin:/bin:$PATH"
+IFACE=${IFACE:-wlan0}
+ROLLBACK_SSID="GL-MT6000-d53"
+TARGET_SSID="SFR_7B28"
+readiness="OK"
+
+kv() {
+  printf '%s=%s\n' "$1" "$2"
+}
+
+mark_ko() {
+  readiness="KO"
+}
+
+hostname_value=$(hostname 2>&1)
+hostname_status=$?
+user_value=$(whoami 2>&1)
+user_status=$?
+uptime_value=$(uptime 2>&1)
+uptime_status=$?
+ip_addr_output=$(ip addr show "$IFACE" 2>&1)
+ip_addr_status=$?
+ip_route_output=$(ip route 2>&1)
+ip_route_status=$?
+iw_info_output=$(iw dev "$IFACE" info 2>&1)
+iw_info_status=$?
+power_save_output=$(iw dev "$IFACE" get power_save 2>&1)
+power_save_status=$?
+wpa_status_output=$(wpa_cli -i "$IFACE" status 2>&1)
+wpa_status_status=$?
+wpa_networks_output=$(wpa_cli -i "$IFACE" list_networks 2>&1)
+wpa_networks_status=$?
+
+current_ssid=$(printf '%s\n' "$wpa_status_output" | awk -F= '$1 == "ssid" {print $2; exit}')
+current_ip=$(printf '%s\n' "$wpa_status_output" | awk -F= '$1 == "ip_address" {print $2; exit}')
+[ -n "$current_ip" ] || current_ip=$(printf '%s\n' "$ip_addr_output" | awk '/inet / {sub(/\/.*/, "", $2); print $2; exit}')
+gateway_value=$(printf '%s\n' "$ip_route_output" | awk '$1 == "default" {print $3; exit}')
+power_save_value=$(printf '%s\n' "$power_save_output" | awk -F: '/Power save/ {gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}')
+rollback_line=$(printf '%s\n' "$wpa_networks_output" | awk -F '\t' -v ssid="$ROLLBACK_SSID" '$2 == ssid {print; exit}')
+rollback_id=$(printf '%s\n' "$rollback_line" | awk -F '\t' '{print $1}')
+rollback_flags=$(printf '%s\n' "$rollback_line" | awk -F '\t' '{print $4}')
+target_line=$(printf '%s\n' "$wpa_networks_output" | awk -F '\t' -v ssid="$TARGET_SSID" '$2 == ssid {print; exit}')
+
+[ "$hostname_value" = "pocket-node" ] || mark_ko
+[ "$user_value" = "warzy" ] || mark_ko
+[ "$hostname_status" -eq 0 ] || mark_ko
+[ "$user_status" -eq 0 ] || mark_ko
+[ "$uptime_status" -eq 0 ] || mark_ko
+[ "$ip_addr_status" -eq 0 ] || mark_ko
+[ "$ip_route_status" -eq 0 ] || mark_ko
+[ "$iw_info_status" -eq 0 ] || mark_ko
+[ "$power_save_status" -eq 0 ] || mark_ko
+[ "$wpa_status_status" -eq 0 ] || mark_ko
+[ "$wpa_networks_status" -eq 0 ] || mark_ko
+[ -n "$current_ssid" ] || mark_ko
+[ -n "$current_ip" ] || mark_ko
+[ -n "$gateway_value" ] || mark_ko
+[ "$power_save_value" = "off" ] || mark_ko
+[ -n "$rollback_line" ] || mark_ko
+case "$rollback_flags" in
+  *"[CURRENT]"*) ;;
+  *) mark_ko ;;
+esac
+
+printf '[wifi-kit] connect-safe apply preflight readonly\n'
+kv "mode" "preflight-readonly"
+kv "network_writes" "false"
+kv "secrets" "not-read-not-written-not-logged"
+kv "wpa_cli_commands" "status,list_networks"
+kv "hostname_status" "$hostname_status"
+kv "whoami_status" "$user_status"
+kv "uptime_status" "$uptime_status"
+kv "ip_addr_status" "$ip_addr_status"
+kv "ip_route_status" "$ip_route_status"
+kv "iw_info_status" "$iw_info_status"
+kv "power_save_status" "$power_save_status"
+kv "wpa_status_status" "$wpa_status_status"
+kv "wpa_list_networks_status" "$wpa_networks_status"
+kv "hostname" "$hostname_value"
+kv "user" "$user_value"
+kv "uptime" "$uptime_value"
+kv "interface" "$IFACE"
+kv "current_ssid" "${current_ssid:-missing}"
+kv "current_ip" "${current_ip:-missing}"
+kv "gateway" "${gateway_value:-missing}"
+kv "power_save" "${power_save_value:-missing}"
+kv "rollback_ssid" "$ROLLBACK_SSID"
+kv "rollback_present" "$([ -n "$rollback_line" ] && printf yes || printf no)"
+kv "rollback_current" "$(printf '%s\n' "$rollback_flags" | grep -q '\[CURRENT\]' && printf yes || printf no)"
+kv "rollback_id" "${rollback_id:-missing}"
+kv "target_ssid" "$TARGET_SSID"
+kv "target_profile_present" "$([ -n "$target_line" ] && printf yes || printf no)"
+kv "readiness" "$readiness"
+
+printf '\n[raw-ip-addr-show-%s]\n%s\n' "$IFACE" "$ip_addr_output"
+printf '\n[raw-ip-route]\n%s\n' "$ip_route_output"
+printf '\n[raw-iw-dev-%s-info]\n%s\n' "$IFACE" "$iw_info_output"
+printf '\n[raw-iw-dev-%s-get-power_save]\n%s\n' "$IFACE" "$power_save_output"
+printf '\n[raw-wpa-cli-status]\n%s\n' "$wpa_status_output"
+printf '\n[raw-wpa-cli-list-networks]\n%s\n' "$wpa_networks_output"
+REMOTE
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --dry-run)
       [ -z "$mode" ] || fail "choose only one mode"
       mode="dry-run"
+      ;;
+    --preflight-readonly)
+      [ -z "$mode" ] || fail "choose only one mode"
+      mode="preflight-readonly"
       ;;
     --apply)
       fail "apply locked"
@@ -100,6 +226,21 @@ while [ "$#" -gt 0 ]; do
       rollback_timeout="$2"
       shift
       ;;
+    --preflight-host)
+      [ "$#" -gt 1 ] || fail "--preflight-host requires a value"
+      preflight_host="$2"
+      shift
+      ;;
+    --preflight-user)
+      [ "$#" -gt 1 ] || fail "--preflight-user requires a value"
+      preflight_user="$2"
+      shift
+      ;;
+    --identity)
+      [ "$#" -gt 1 ] || fail "--identity requires a value"
+      preflight_identity="$2"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -111,7 +252,14 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
-[ "$mode" = "dry-run" ] || fail "explicit --dry-run is required"
+case "$mode" in
+  dry-run) ;;
+  preflight-readonly)
+    run_preflight_readonly
+    exit $?
+    ;;
+  *) fail "explicit --dry-run or --preflight-readonly is required" ;;
+esac
 iface=${iface:-"<interface>"}
 from_ssid=${from_ssid:-"<profile-a>"}
 to_ssid=${to_ssid:-"<profile-b>"}
