@@ -363,6 +363,12 @@ unset WIFI_KIT_TARGET_PSK
 
 log_step "select-target"
 select_start=$(now_epoch)
+previous_status=$(wpa_cli -i "$IFACE" status 2>&1 || true)
+previous_route=$(ip route 2>&1 || true)
+previous_ip=$(printf '%s\n' "$previous_status" | awk -F= '$1 == "ip_address" {print $2; exit}')
+previous_gateway=$(printf '%s\n' "$previous_route" | awk '$1 == "default" {print $3; exit}')
+kv "previous_ip" "${previous_ip:-missing}"
+kv "previous_gateway" "${previous_gateway:-missing}"
 snapshot_status "before_select_target"
 wpa_cli -i "$IFACE" select_network "$target_id" >/dev/null || fail_apply "select-target-failed"
 snapshot_status "after_select_target"
@@ -407,6 +413,60 @@ dhcp_end=$(now_epoch)
 kv "dhcp_elapsed_seconds" "$((dhcp_end - dhcp_start))"
 kv "target_wpa_state" "$target_state"
 kv "target_confirmed_ssid" "$target_seen_ssid"
+
+log_step "wait-target-dhcp-route"
+route_deadline=$(( $(date +%s) + IP_TIMEOUT ))
+route_start=$(now_epoch)
+route_poll_count=0
+stale_ip_detected="no"
+stale_gateway_detected="no"
+while [ "$(date +%s)" -lt "$route_deadline" ]; do
+  target_status=$(wpa_cli -i "$IFACE" status 2>&1 || true)
+  target_route=$(ip route 2>&1 || true)
+  target_state=$(printf '%s\n' "$target_status" | status_field wpa_state)
+  target_seen_ssid=$(printf '%s\n' "$target_status" | status_field ssid)
+  target_ip=$(printf '%s\n' "$target_status" | awk -F= '$1 == "ip_address" {print $2; exit}')
+  target_gateway=$(printf '%s\n' "$target_route" | awk '$1 == "default" {print $3; exit}')
+  route_poll_count=$((route_poll_count + 1))
+
+  if [ -n "$previous_ip" ] && [ "$target_ip" = "$previous_ip" ]; then
+    stale_ip_detected="yes"
+  fi
+  if [ -n "$previous_gateway" ] && [ "$target_gateway" = "$previous_gateway" ]; then
+    stale_gateway_detected="yes"
+  fi
+
+  kv "route_poll_${route_poll_count}_timestamp" "$(now_iso)"
+  kv "route_poll_${route_poll_count}_wpa_state" "$target_state"
+  kv "route_poll_${route_poll_count}_ssid" "$target_seen_ssid"
+  kv "route_poll_${route_poll_count}_ip" "${target_ip:-missing}"
+  kv "route_poll_${route_poll_count}_gateway" "${target_gateway:-missing}"
+  kv "route_poll_${route_poll_count}_default_route" "$(printf '%s\n' "$target_route" | awk '$1 == "default" {print $0; exit}')"
+
+  if [ "$target_state" = "COMPLETED" ] &&
+    [ "$target_seen_ssid" = "$TARGET_SSID" ] &&
+    [ -n "$target_ip" ] &&
+    [ -n "$target_gateway" ] &&
+    { [ -z "$previous_ip" ] || [ "$target_ip" != "$previous_ip" ] || [ "$target_gateway" != "$previous_gateway" ]; } &&
+    { [ -z "$previous_gateway" ] || [ "$target_gateway" != "$previous_gateway" ]; }; then
+    break
+  fi
+  sleep 1
+done
+route_end=$(now_epoch)
+[ "$target_state" = "COMPLETED" ] || fail_apply "target-state-not-completed-after-route-wait"
+[ "$target_seen_ssid" = "$TARGET_SSID" ] || fail_apply "target-ssid-not-confirmed-after-route-wait"
+[ -n "$target_ip" ] || fail_apply "target-ip-missing-after-route-wait"
+[ -n "$target_gateway" ] || fail_apply "target-gateway-missing-after-route-wait"
+if [ -n "$previous_ip" ] && [ "$target_ip" = "$previous_ip" ] && [ "$target_gateway" = "$previous_gateway" ]; then
+  fail_apply "target-dhcp-route-timeout"
+fi
+if [ -n "$previous_gateway" ] && [ "$target_gateway" = "$previous_gateway" ]; then
+  fail_apply "target-dhcp-route-timeout"
+fi
+kv "stale_ip_detected" "$stale_ip_detected"
+kv "stale_gateway_detected" "$stale_gateway_detected"
+kv "dhcp_route_elapsed_seconds" "$((route_end - route_start))"
 kv "target_ip" "$target_ip"
 kv "target_gateway" "$target_gateway"
 snapshot_status "before_validation"
