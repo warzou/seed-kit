@@ -1,9 +1,10 @@
 # Wifi-Kit connect-safe field scenario: GL-MT6000-d53 to SFR_7B28
 
-Status: plan-only. No real Wi-Fi connection is performed by this scenario.
+Status: first temporary field test succeeded. The target profile remained
+runtime-only and was removed after forced rollback.
 
-This document prepares the first future field scenario for connect-safe without
-executing it.
+This document records the first field scenario for connect-safe and keeps the
+runtime-only safety boundaries explicit.
 
 ## Scenario
 
@@ -51,6 +52,55 @@ The first real test must remain temporary and rollbackable:
 8. Roll back automatically to A for the first field test.
 9. Validate rollback to A.
 10. Do not persist and do not promote B during the first apply test.
+
+## First successful temporary field test
+
+The first successful temporary A -> B -> rollback test was performed on
+`pocket-node` with rollback forced even though the target network validated.
+
+Observed networks:
+
+```text
+A / rollback: GL-MT6000-d53
+B / target:   SFR_7B28
+```
+
+Target validation:
+
+```text
+target_ssid=SFR_7B28
+target_ip=192.168.1.37
+target_gateway=192.168.1.1
+gateway_ping=OK
+reachability_ping=OK
+```
+
+The apply instrumentation detected stale A-side network state during the
+transition and waited for fresh B-side DHCP/route data before validation:
+
+```text
+stale_ip_detected=yes
+stale_gateway_detected=yes
+previous_ip=192.168.8.163
+previous_gateway=192.168.8.1
+fresh_target_ip=192.168.1.37
+fresh_target_gateway=192.168.1.1
+```
+
+Rollback and cleanup:
+
+```text
+rollback_ssid=GL-MT6000-d53
+rollback_validated=yes
+cleanup_temporary_profile=done
+target_profile_present_final=no
+save_config=not-called
+final_readiness=OK
+```
+
+No target passphrase was committed, logged, written to a fixture, or stored in
+Wifi-Kit metadata. The target secret was provided as runtime-only operator
+input for the temporary test.
 
 ## Rediscovery strategy
 
