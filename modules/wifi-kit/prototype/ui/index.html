@@ -568,6 +568,35 @@
       box-shadow: 0 0 0 4px rgba(68, 212, 230, 0.12);
     }
 
+    .option-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      border: 1px solid rgba(221, 234, 255, 0.12);
+      border-radius: 17px;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 11px;
+      color: var(--ink);
+      font-size: 0.9rem;
+      font-weight: 900;
+    }
+
+    .option-row input {
+      width: 20px;
+      height: 20px;
+      margin: 1px 0 0;
+      accent-color: var(--green);
+    }
+
+    .option-row span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-top: 3px;
+    }
+
     .prepare-plan {
       display: grid;
       gap: 8px;
@@ -863,6 +892,11 @@
     "secret_policy": "no-secrets",
     "persistence": "none"
   },
+  "connect_options": {
+    "keep_ap_active_default": true,
+    "apply_endpoint": "not-implemented",
+    "ap_services_started": false
+  },
   "scan": {
     "backend": "wpa_cli",
     "interface": "unknown",
@@ -995,6 +1029,16 @@
       password.placeholder = 'Mot de passe';
       passwordLabel.appendChild(password);
 
+      const keepApOption = document.createElement('label');
+      keepApOption.className = 'option-row';
+      const keepAp = document.createElement('input');
+      keepAp.type = 'checkbox';
+      keepAp.checked = data.connect_options?.keep_ap_active_default !== false;
+      keepAp.dataset.option = 'keep-ap-active';
+      const keepApText = document.createElement('div');
+      keepApText.innerHTML = 'Garder le point d&rsquo;acces SeedKit actif apres connexion <span>Option de plan uniquement: aucun AP n&rsquo;est lance dans ce prototype.</span>';
+      keepApOption.append(keepAp, keepApText);
+
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'button';
@@ -1010,16 +1054,18 @@
 
       button.addEventListener('click', (event) => {
         event.stopPropagation();
-        renderInlinePlan(network, plan);
+        renderInlinePlan(network, plan, keepAp.checked);
       });
       password.addEventListener('click', (event) => event.stopPropagation());
       password.addEventListener('keydown', (event) => event.stopPropagation());
+      keepApOption.addEventListener('click', (event) => event.stopPropagation());
+      keepApOption.addEventListener('keydown', (event) => event.stopPropagation());
 
-      prep.append(passwordLabel, button, summary, plan);
+      prep.append(passwordLabel, keepApOption, button, summary, plan);
       return prep;
     }
 
-    function renderInlinePlan(network, plan) {
+    function renderInlinePlan(network, plan, keepApActive) {
       plan.replaceChildren();
       const title = document.createElement('strong');
       title.textContent = 'Plan simule';
@@ -1029,6 +1075,7 @@
         ['shield', 'safe', 'Votre systeme reste intact'],
         ['lock', 'lock', 'Aucun secret transmis'],
         ['wifi', 'mute', `Reseau cible prepare: ${displaySsid(network)}`],
+        ['server', keepApActive ? 'safe' : 'gear', keepApActive ? 'Point d acces SeedKit demande actif apres validation' : 'Point d acces SeedKit pourra etre arrete apres validation'],
         ['gear', 'gear', 'Rollback et validation SSH avant tout vrai essai']
       ].forEach(([icon, tone, text]) => {
         const li = document.createElement('li');

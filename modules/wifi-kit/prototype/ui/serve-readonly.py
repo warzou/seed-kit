@@ -66,6 +66,11 @@ def ui_data() -> dict:
             "source": "state-snapshot --simulate --json",
             "data": snapshot,
         },
+        "connect_options": {
+            "keep_ap_active_default": True,
+            "apply_endpoint": "not-implemented",
+            "ap_services_started": False,
+        },
         "scan": scan(),
     }
 
