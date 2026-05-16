@@ -5,6 +5,7 @@ WIFI_KIT_STATE_ROOT="${WIFI_KIT_STATE_ROOT:-/tmp/wifi-kit-sim-state}"
 WIFI_KIT_STATE_FILE="${WIFI_KIT_STATE_ROOT}/state.conf"
 WIFI_KIT_KNOWN_FILE="${WIFI_KIT_STATE_ROOT}/known_networks.txt"
 WIFI_KIT_SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+WIFI_KIT_NM_BACKEND="$WIFI_KIT_SCRIPT_DIR/backends/raspberrypi-networkmanager.sh"
 
 # shellcheck source=helpers.sh
 . "$WIFI_KIT_SCRIPT_DIR/helpers.sh"
@@ -79,13 +80,51 @@ recommended_backend() {
   backend="generic-readonly"
   case "$os_id $os_name $os_like" in
     *raspbian*|*raspberry*|*debian*)
-      if has_tool wpa_supplicant || has_tool wpa_cli; then
+      if networkmanager_active; then
+        backend="raspberrypi-networkmanager"
+      elif has_tool wpa_supplicant || has_tool wpa_cli; then
         backend="rpios-wpa"
       fi
       ;;
   esac
 
   printf '%s\n' "$backend"
+}
+
+networkmanager_active() {
+  if has_tool nmcli; then
+    nm_state="$(nmcli -t -f RUNNING general 2>/dev/null | sed -n '1p' || true)"
+    [ "$nm_state" = "running" ] && return 0
+  fi
+
+  systemctl_bin="$(find_tool systemctl 2>/dev/null || true)"
+  if [ -n "$systemctl_bin" ]; then
+    "$systemctl_bin" is-active --quiet NetworkManager 2>/dev/null && return 0
+  fi
+
+  return 1
+}
+
+networkmanager_state() {
+  if networkmanager_active; then
+    printf 'active\n'
+  elif has_tool nmcli || has_tool systemctl; then
+    printf 'inactive-or-unavailable\n'
+  else
+    printf 'unknown-tools-missing\n'
+  fi
+}
+
+networkmanager_helper_available() {
+  [ -x "$WIFI_KIT_NM_BACKEND" ] || [ -f "$WIFI_KIT_NM_BACKEND" ]
+}
+
+run_networkmanager_helper() {
+  if networkmanager_helper_available; then
+    sh "$WIFI_KIT_NM_BACKEND" "$@"
+    return $?
+  fi
+  return 127
 }
 
 current_ip_for_iface() {
@@ -158,11 +197,18 @@ cmd_backend_detect() {
   tool_state ip || true
   tool_state wpa_cli || true
   tool_state wpa_supplicant || true
+  tool_state nmcli || true
+  tool_state systemctl || true
   tool_state dhcpcd || true
   tool_state dhclient || true
   tool_state busybox || true
 
+  ui "networkmanager_state=$(networkmanager_state)"
   ui "recommended_backend=$(recommended_backend)"
+  if networkmanager_active && networkmanager_helper_available; then
+    ui "networkmanager_fingerprint:"
+    run_networkmanager_helper fingerprint "$(first_wifi_interface || printf wlan0)" | sed 's/^/  /'
+  fi
 }
 
 cmd_status_real() {
@@ -212,7 +258,12 @@ cmd_runtime_state_show() {
   ui "hostname=$(hostname 2>/dev/null || echo unknown)"
   ui "os_id=$(os_field ID || echo unknown)"
   ui "os_like=$(os_field ID_LIKE || echo unknown)"
+  ui "networkmanager_state=$(networkmanager_state)"
   ui "backend_hint=$(recommended_backend)"
+  if networkmanager_active && networkmanager_helper_available; then
+    ui "networkmanager_fingerprint:"
+    run_networkmanager_helper fingerprint "$(first_wifi_interface || printf wlan0)" | sed 's/^/  /'
+  fi
 
   ssh_client="unknown"
   if [ -n "${SSH_CONNECTION:-}" ]; then

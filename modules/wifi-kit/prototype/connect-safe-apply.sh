@@ -14,10 +14,12 @@ ip_timeout="30"
 validation_timeout="20"
 rollback_timeout="30"
 stay_on_target_seconds="0"
+keep_ap_active="1"
 dangerous_real_apply=0
 apply_confirm=""
 target_ssid="SFR_7B28"
 rollback_ssid="GL-MT6000-d53"
+allow_wpa_cli_with_networkmanager=0
 
 usage() {
   cat <<'EOF'
@@ -50,10 +52,14 @@ Optional:
   --validation-timeout <seconds> Future validation timeout. Default: 20
   --rollback-timeout <seconds>   Future rollback timeout. Default: 30
   --stay-on-target-seconds <sec> Stay on target before forced rollback. Default: 0
+  --keep-ap-active              Future AP policy: keep setup AP active after validation. Default.
+  --no-keep-ap-active           Future AP policy: allow stopping setup AP after validation.
   --preflight-host <host>        Read-only SSH host. Default: pocket-node.lan
   --preflight-user <user>        Read-only SSH user. Default: warzy
   --identity <path>              SSH identity for preflight.
   --dangerous-real-apply         Required for the experimental apply path.
+  --allow-wpa-cli-with-networkmanager
+                                  Future lab override placeholder. Refuses for now.
   --confirm <text>               Must equal WIFI-KIT TEMP APPLY ROLLBACK.
 
 Safety:
@@ -192,12 +198,52 @@ printf '\n[raw-wpa-cli-list-networks]\n%s\n' "$wpa_networks_output"
 REMOTE
 }
 
+assert_wpa_cli_apply_allowed() {
+  [ "$allow_wpa_cli_with_networkmanager" -eq 0 ] || fail "NetworkManager wpa_cli override is not implemented yet"
+
+  ssh -i "$preflight_identity" \
+    -o BatchMode=yes \
+    -o StrictHostKeyChecking=yes \
+    "$preflight_user@$preflight_host" \
+    "IFACE='$iface' sh -s" <<'REMOTE'
+set -u
+PATH="/usr/sbin:/sbin:/usr/bin:/bin:$PATH"
+IFACE=${IFACE:-wlan0}
+
+if command -v nmcli >/dev/null 2>&1; then
+  nm_running=$(nmcli -t -f RUNNING general 2>/dev/null | sed -n '1p' || true)
+  nm_connection=$(nmcli -t -f DEVICE,CONNECTION device status 2>/dev/null |
+    awk -F: -v iface="$IFACE" '$1 == iface { print $2; exit }')
+  if [ "$nm_running" = "running" ] && [ -n "$nm_connection" ] && [ "$nm_connection" != "--" ]; then
+    printf 'NetworkManager owns %s; wpa_cli apply is refused. Use raspberrypi-networkmanager backend.\n' "$IFACE" >&2
+    printf 'networkmanager_connection=%s\n' "$nm_connection" >&2
+    exit 42
+  fi
+fi
+
+if command -v systemctl >/dev/null 2>&1 &&
+  systemctl is-active --quiet NetworkManager 2>/dev/null &&
+  command -v nmcli >/dev/null 2>&1; then
+  nm_connection=$(nmcli -t -f DEVICE,CONNECTION device status 2>/dev/null |
+    awk -F: -v iface="$IFACE" '$1 == iface { print $2; exit }')
+  if [ -n "$nm_connection" ] && [ "$nm_connection" != "--" ]; then
+    printf 'NetworkManager owns %s; wpa_cli apply is refused. Use raspberrypi-networkmanager backend.\n' "$IFACE" >&2
+    printf 'networkmanager_connection=%s\n' "$nm_connection" >&2
+    exit 42
+  fi
+fi
+
+exit 0
+REMOTE
+}
+
 run_apply_experimental() {
   [ "$dangerous_real_apply" -eq 1 ] || fail "apply locked: missing --dangerous-real-apply"
   [ "$apply_confirm" = "WIFI-KIT TEMP APPLY ROLLBACK" ] || fail "apply locked: confirmation mismatch"
+  [ -n "$iface" ] || iface="wlan0"
+  assert_wpa_cli_apply_allowed
   [ "${WIFI_KIT_TARGET_PSK+x}" = "x" ] || fail "apply locked: WIFI_KIT_TARGET_PSK is required"
   [ -n "$WIFI_KIT_TARGET_PSK" ] || fail "apply locked: WIFI_KIT_TARGET_PSK is empty"
-  [ -n "$iface" ] || iface="wlan0"
 
   script_path=$(mktemp)
   trap 'rm -f "$script_path"' EXIT INT TERM
@@ -321,6 +367,8 @@ kv "save_config" "not-called"
 kv "target_ssid" "$TARGET_SSID"
 kv "rollback_ssid" "$ROLLBACK_SSID"
 kv "stay_on_target_seconds" "$STAY_ON_TARGET_SECONDS"
+kv "keep_ap_active_requested" "$KEEP_AP_ACTIVE"
+kv "ap_runtime" "not-implemented-not-started"
 
 log_step "preflight-readonly"
 hostname_value=$(hostname 2>&1) || fail_apply "hostname-failed"
@@ -540,6 +588,7 @@ REMOTE
     printf 'ROLLBACK_TIMEOUT=%s\n' "$(shell_quote "$rollback_timeout")"
     printf 'REACHABILITY_PROBE=%s\n' "$(shell_quote "$reachability_probe")"
     printf 'STAY_ON_TARGET_SECONDS=%s\n' "$(shell_quote "$stay_on_target_seconds")"
+    printf 'KEEP_AP_ACTIVE=%s\n' "$(shell_quote "$keep_ap_active")"
     cat "$script_path"
   } | ssh -i "$preflight_identity" \
       -o BatchMode=yes \
@@ -564,6 +613,9 @@ while [ "$#" -gt 0 ]; do
       ;;
     --dangerous-real-apply)
       dangerous_real_apply=1
+      ;;
+    --allow-wpa-cli-with-networkmanager)
+      allow_wpa_cli_with_networkmanager=1
       ;;
     --confirm)
       [ "$#" -gt 1 ] || fail "--confirm requires a value"
@@ -614,6 +666,12 @@ while [ "$#" -gt 0 ]; do
       [ "$#" -gt 1 ] || fail "--stay-on-target-seconds requires a value"
       stay_on_target_seconds="$2"
       shift
+      ;;
+    --keep-ap-active)
+      keep_ap_active="1"
+      ;;
+    --no-keep-ap-active)
+      keep_ap_active="0"
       ;;
     --preflight-host)
       [ "$#" -gt 1 ] || fail "--preflight-host requires a value"
@@ -668,6 +726,10 @@ kv "interface" "$iface"
 kv "current_profile_a" "$from_ssid"
 kv "temporary_target_profile_b" "$to_ssid"
 kv "stay_on_target_seconds" "$stay_on_target_seconds"
+kv "keep_ap_active_default" "true"
+kv "keep_ap_active_requested" "$keep_ap_active"
+kv "ap_runtime" "not-implemented-not-started"
+kv "wpa_cli_apply_policy" "refuse-when-networkmanager-owns-interface"
 kv "no_save_config" "true"
 
 section "future-transaction-plan"
@@ -680,9 +742,10 @@ kv "06.temporary_select_target" "future temporary select target B"
 kv "07.wait_ip" "future wait up to ${ip_timeout}s for target IP"
 kv "08.validate_gateway" "future validate gateway ${gateway:-operator-provided-or-discovered}"
 kv "09.validate_reachability" "future validate reachability to $reachability_probe within ${validation_timeout}s"
-kv "10.rollback_to_a" "future select previous A profile after validation window or on any failure"
-kv "11.cleanup_temporary_profile" "future remove transient B profile"
-kv "12.no_save_config" "never persist during this prototype flow"
+kv "10.ap_policy_after_success" "future keep setup AP active when keep_ap_active=1; allow stopping it only after validation when keep_ap_active=0"
+kv "11.rollback_to_a" "future select previous A profile after validation window or on any failure"
+kv "12.cleanup_temporary_profile" "future remove transient B profile"
+kv "13.no_save_config" "never persist during this prototype flow"
 
 section "locked-commands"
 kv "add_network" "not-executed"
@@ -692,6 +755,8 @@ kv "remove_network" "not-executed"
 kv "save_config" "not-executed"
 kv "restart_network" "not-executed"
 kv "hostapd_dnsmasq" "not-touched"
+kv "ap_keep_stop" "not-executed"
+kv "networkmanager_guard" "checked-before-secret-and-before-wpa-cli-apply"
 
 section "rollback-contract"
 kv "rollback_source" "snapshot profile A"
