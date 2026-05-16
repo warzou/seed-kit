@@ -193,32 +193,181 @@ run_apply_experimental() {
   [ -n "$WIFI_KIT_TARGET_PSK" ] || fail "apply locked: WIFI_KIT_TARGET_PSK is empty"
   [ -n "$iface" ] || iface="wlan0"
 
-  printf '[wifi-kit] connect-safe experimental apply gate\n'
-  kv "mode" "dangerous-real-apply"
-  kv "dangerous_real_apply" "confirmed"
-  kv "confirmation" "matched"
-  kv "runtime_secret" "present-not-read-not-logged"
-  kv "target_ssid" "$target_ssid"
-  kv "rollback_ssid" "$rollback_ssid"
-  kv "preflight_required" "true"
-  kv "save_config" "forbidden"
-  kv "forced_rollback" "true"
-  kv "cleanup_temporary_profile" "required"
+  script_path=$(mktemp)
+  trap 'rm -f "$script_path"' EXIT INT TERM
+  cat >"$script_path" <<'REMOTE'
+set -u
 
-  section "future-apply-flow"
-  kv "01.preflight_readonly" "must return readiness=OK immediately before apply"
-  kv "02.add_network" "create temporary target profile"
-  kv "03.set_network_ssid" "$target_ssid"
-  kv "04.set_network_psk" "from WIFI_KIT_TARGET_PSK without logging"
-  kv "05.select_network_target" "temporary target attempt"
-  kv "06.wait_ip" "bounded wait using --ip-timeout"
-  kv "07.validate_gateway_or_reachability" "bounded validation using --validation-timeout"
-  kv "08.rollback_forced" "select rollback_id for $rollback_ssid even on target success"
-  kv "09.cleanup" "remove temporary target profile"
-  kv "10.verify_return" "confirm current ssid is $rollback_ssid"
-  kv "11.save_config" "never"
+PATH="/usr/sbin:/sbin:/usr/bin:/bin:$PATH"
+IFACE=${IFACE:-wlan0}
+TARGET_SSID=${TARGET_SSID:-SFR_7B28}
+ROLLBACK_SSID=${ROLLBACK_SSID:-GL-MT6000-d53}
+IP_TIMEOUT=${IP_TIMEOUT:-30}
+VALIDATION_TIMEOUT=${VALIDATION_TIMEOUT:-20}
+ROLLBACK_TIMEOUT=${ROLLBACK_TIMEOUT:-30}
+REACHABILITY_PROBE=${REACHABILITY_PROBE:-1.1.1.1}
+target_id=""
+rollback_id=""
+rollback_attempted="no"
+cleanup_attempted="no"
 
-  fail "apply locked: execution skeleton prepared but real apply is not enabled in this revision"
+kv() {
+  printf '%s=%s\n' "$1" "$2"
+}
+
+log_step() {
+  printf 'step=%s\n' "$1"
+}
+
+rollback_and_cleanup() {
+  if [ -n "$rollback_id" ]; then
+    rollback_attempted="yes"
+    wpa_cli -i "$IFACE" select_network "$rollback_id" >/dev/null 2>&1 || true
+  fi
+  if [ -n "$target_id" ]; then
+    cleanup_attempted="yes"
+    wpa_cli -i "$IFACE" remove_network "$target_id" >/dev/null 2>&1 || true
+    target_id=""
+  fi
+}
+
+fail_apply() {
+  rollback_and_cleanup
+  kv "status" "failed"
+  kv "reason" "$1"
+  kv "rollback_attempted" "$rollback_attempted"
+  kv "cleanup_attempted" "$cleanup_attempted"
+  kv "save_config" "not-called"
+  exit 1
+}
+
+wait_for_ssid() {
+  expected_ssid=$1
+  timeout_seconds=$2
+  deadline=$(( $(date +%s) + timeout_seconds ))
+  seen_ssid=""
+
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    status_output=$(wpa_cli -i "$IFACE" status 2>&1 || true)
+    seen_ssid=$(printf '%s\n' "$status_output" | awk -F= '$1 == "ssid" {print $2; exit}')
+    [ "$seen_ssid" = "$expected_ssid" ] && return 0
+    sleep 1
+  done
+
+  return 1
+}
+
+[ -n "$WIFI_KIT_TARGET_PSK" ] || fail_apply "secret-empty"
+
+printf '[wifi-kit] connect-safe experimental apply\n'
+kv "mode" "dangerous-real-apply"
+kv "secret" "runtime-only-not-logged"
+kv "save_config" "not-called"
+kv "target_ssid" "$TARGET_SSID"
+kv "rollback_ssid" "$ROLLBACK_SSID"
+
+log_step "preflight-readonly"
+hostname_value=$(hostname 2>&1) || fail_apply "hostname-failed"
+user_value=$(whoami 2>&1) || fail_apply "whoami-failed"
+ip_route_output=$(ip route 2>&1) || fail_apply "ip-route-failed"
+power_save_output=$(iw dev "$IFACE" get power_save 2>&1) || fail_apply "power-save-read-failed"
+wpa_status_output=$(wpa_cli -i "$IFACE" status 2>&1) || fail_apply "wpa-status-failed"
+wpa_networks_output=$(wpa_cli -i "$IFACE" list_networks 2>&1) || fail_apply "wpa-list-networks-failed"
+current_ssid=$(printf '%s\n' "$wpa_status_output" | awk -F= '$1 == "ssid" {print $2; exit}')
+current_ip=$(printf '%s\n' "$wpa_status_output" | awk -F= '$1 == "ip_address" {print $2; exit}')
+gateway_value=$(printf '%s\n' "$ip_route_output" | awk '$1 == "default" {print $3; exit}')
+power_save_value=$(printf '%s\n' "$power_save_output" | awk -F: '/Power save/ {gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}')
+rollback_line=$(printf '%s\n' "$wpa_networks_output" | awk -F '\t' -v ssid="$ROLLBACK_SSID" '$2 == ssid {print; exit}')
+rollback_id=$(printf '%s\n' "$rollback_line" | awk -F '\t' '{print $1}')
+rollback_flags=$(printf '%s\n' "$rollback_line" | awk -F '\t' '{print $4}')
+target_line=$(printf '%s\n' "$wpa_networks_output" | awk -F '\t' -v ssid="$TARGET_SSID" '$2 == ssid {print; exit}')
+
+[ "$hostname_value" = "pocket-node" ] || fail_apply "preflight-hostname-not-pocket-node"
+[ "$user_value" = "warzy" ] || fail_apply "preflight-user-not-warzy"
+[ "$current_ssid" = "$ROLLBACK_SSID" ] || fail_apply "preflight-current-ssid-not-rollback"
+[ -n "$current_ip" ] || fail_apply "preflight-current-ip-missing"
+[ -n "$gateway_value" ] || fail_apply "preflight-gateway-missing"
+[ "$power_save_value" = "off" ] || fail_apply "preflight-power-save-not-off"
+[ -n "$rollback_id" ] || fail_apply "preflight-rollback-id-missing"
+case "$rollback_flags" in
+  *"[CURRENT]"*) ;;
+  *) fail_apply "preflight-rollback-not-current" ;;
+esac
+[ -z "$target_line" ] || fail_apply "preflight-target-profile-already-present"
+kv "preflight_readiness" "OK"
+kv "rollback_id" "$rollback_id"
+kv "current_ip" "$current_ip"
+kv "gateway" "$gateway_value"
+
+log_step "add-network"
+target_id=$(wpa_cli -i "$IFACE" add_network) || fail_apply "add-network-failed"
+[ -n "$target_id" ] || fail_apply "add-network-empty-id"
+kv "temporary_target_id" "$target_id"
+
+log_step "set-network-ssid"
+wpa_cli -i "$IFACE" set_network "$target_id" ssid "\"$TARGET_SSID\"" >/dev/null || fail_apply "set-network-ssid-failed"
+
+log_step "set-network-psk"
+wpa_cli -i "$IFACE" set_network "$target_id" psk "\"$WIFI_KIT_TARGET_PSK\"" >/dev/null || fail_apply "set-network-psk-failed"
+unset WIFI_KIT_TARGET_PSK
+
+log_step "select-target"
+wpa_cli -i "$IFACE" select_network "$target_id" >/dev/null || fail_apply "select-target-failed"
+
+log_step "wait-ip"
+deadline=$(( $(date +%s) + IP_TIMEOUT ))
+target_ip=""
+while [ "$(date +%s)" -lt "$deadline" ]; do
+  target_status=$(wpa_cli -i "$IFACE" status 2>&1 || true)
+  target_ip=$(printf '%s\n' "$target_status" | awk -F= '$1 == "ip_address" {print $2; exit}')
+  [ -n "$target_ip" ] && break
+  sleep 1
+done
+[ -n "$target_ip" ] || fail_apply "target-ip-timeout"
+kv "target_ip" "$target_ip"
+
+log_step "validate-gateway"
+target_gateway=$(ip route | awk '$1 == "default" {print $3; exit}')
+[ -n "$target_gateway" ] || fail_apply "target-gateway-missing"
+ping -c 1 -W "$VALIDATION_TIMEOUT" "$target_gateway" >/dev/null 2>&1 || fail_apply "target-gateway-unreachable"
+kv "target_gateway" "$target_gateway"
+
+log_step "validate-reachability"
+ping -c 1 -W "$VALIDATION_TIMEOUT" "$REACHABILITY_PROBE" >/dev/null 2>&1 || fail_apply "target-reachability-failed"
+
+log_step "forced-rollback"
+wpa_cli -i "$IFACE" select_network "$rollback_id" >/dev/null || fail_apply "rollback-select-failed"
+rollback_attempted="yes"
+wait_for_ssid "$ROLLBACK_SSID" "$ROLLBACK_TIMEOUT" || fail_apply "rollback-validation-failed"
+kv "rollback_validated" "yes"
+
+log_step "cleanup-temporary-profile"
+wpa_cli -i "$IFACE" remove_network "$target_id" >/dev/null || fail_apply "cleanup-remove-target-failed"
+target_id=""
+cleanup_attempted="yes"
+
+kv "cleanup_temporary_profile" "done"
+kv "save_config" "not-called"
+kv "status" "rolled-back-cleaned"
+exit 0
+REMOTE
+
+  {
+    printf '%s\n' "$WIFI_KIT_TARGET_PSK"
+    cat "$script_path"
+  } | env \
+      IFACE="$iface" \
+      TARGET_SSID="$target_ssid" \
+      ROLLBACK_SSID="$rollback_ssid" \
+      IP_TIMEOUT="$ip_timeout" \
+      VALIDATION_TIMEOUT="$validation_timeout" \
+      ROLLBACK_TIMEOUT="$rollback_timeout" \
+      REACHABILITY_PROBE="$reachability_probe" \
+      ssh -i "$preflight_identity" \
+      -o BatchMode=yes \
+      -o StrictHostKeyChecking=yes \
+      "$preflight_user@$preflight_host" \
+      'read -r WIFI_KIT_TARGET_PSK && export WIFI_KIT_TARGET_PSK && sh -s'
 }
 
 while [ "$#" -gt 0 ]; do
