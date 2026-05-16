@@ -21,7 +21,7 @@ Node remplacement PRA: [docs/nodes/rpi3-edge.md](docs/nodes/rpi3-edge.md).
 
 ## Installation
 
-Target flow: copy `seed-kit.sh`, run `sh seed-kit.sh`.
+Target flow: download `seed-kit.sh`, run `sh seed-kit.sh`.
 
 For the concrete fresh-node SSH flow (bootstrap + plan/modules/apply), see:
 docs/FRESH-NODE-FLOW.md
@@ -32,10 +32,11 @@ sh seed-kit.sh
 
 ## Bootstrap minimal
 
-Commande cible future pour une machine fraiche :
+Commande cible pour une machine fraiche :
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/warzou/seed-kit/main/bootstrap.sh | sh
+wget https://raw.githubusercontent.com/warzou/seed-kit/main/seed-kit.sh
+sh seed-kit.sh
 ```
 
 Puis :

@@ -205,6 +205,145 @@ is_full_repo_mode() {
   [ -f "$ROOT_DIR/docs/ARCHITECTURE.md" ]
 }
 
+fresh_bootstrap_usage() {
+  echo "Seed-Kit fresh-node bootstrap"
+  echo
+  echo "Fresh-node:"
+  echo "  wget https://raw.githubusercontent.com/warzou/seed-kit/main/seed-kit.sh"
+  echo "  sh seed-kit.sh [--yes] [--target <dir>]"
+  echo
+  echo "Usage:"
+  echo "  sh seed-kit.sh [--yes] [--target <dir>]"
+  echo "  sh seed-kit.sh --help"
+  echo
+  echo "What it does:"
+  echo "  - installs git with apt if git is missing"
+  echo "  - clones Seed-Kit to ~/seed-kit if absent"
+  echo "  - updates Seed-Kit with git fetch + git pull --ff-only if present"
+  echo
+  echo "Scope:"
+  echo "  - Raspberry Pi OS / Debian apt only for V1"
+  echo "  - no Docker"
+  echo "  - no Tailscale"
+  echo "  - no Cloudflare"
+  echo "  - no restore"
+  echo "  - no secrets"
+  echo "  - no cloud sync"
+  echo "  - no orchestration"
+}
+
+fresh_bootstrap_confirm_git_install() {
+  if [ "$FRESH_BOOTSTRAP_YES" = "yes" ]; then
+    return 0
+  fi
+
+  echo "git is missing."
+  echo "Seed-Kit can install git with:"
+  echo "  sudo apt update"
+  echo "  sudo apt install -y git"
+  printf "Continue? [y/N] "
+  IFS= read -r answer || answer=
+  case "$answer" in
+    y|Y|yes|YES)
+      return 0
+      ;;
+    *)
+      echo "aborted: git is required"
+      return 1
+      ;;
+  esac
+}
+
+fresh_bootstrap_install_git_if_missing() {
+  if command -v git >/dev/null 2>&1; then
+    echo "git: present"
+    return 0
+  fi
+
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "sudo is required to install git" >&2
+    return 2
+  fi
+
+  if ! command -v apt >/dev/null 2>&1; then
+    echo "apt is required to install git in Seed-Kit V1 bootstrap" >&2
+    return 2
+  fi
+
+  fresh_bootstrap_confirm_git_install
+  echo "running: sudo apt update"
+  sudo apt update
+  echo "running: sudo apt install -y git"
+  sudo apt install -y git
+}
+
+fresh_bootstrap_clone_or_update() {
+  if [ -d "$FRESH_BOOTSTRAP_TARGET/.git" ]; then
+    echo "Seed-Kit repo: $FRESH_BOOTSTRAP_TARGET"
+    (
+      cd "$FRESH_BOOTSTRAP_TARGET"
+      git fetch origin
+      git pull --ff-only
+    )
+    return 0
+  fi
+
+  if [ -e "$FRESH_BOOTSTRAP_TARGET" ]; then
+    echo "target exists but is not a git checkout: $FRESH_BOOTSTRAP_TARGET" >&2
+    return 2
+  fi
+
+  echo "cloning Seed-Kit to: $FRESH_BOOTSTRAP_TARGET"
+  git clone "https://github.com/warzou/seed-kit.git" "$FRESH_BOOTSTRAP_TARGET"
+}
+
+fresh_bootstrap_main() {
+  FRESH_BOOTSTRAP_TARGET="$HOME/seed-kit"
+  FRESH_BOOTSTRAP_YES="no"
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --yes|-y)
+        FRESH_BOOTSTRAP_YES="yes"
+        shift
+        ;;
+      --target)
+        FRESH_BOOTSTRAP_TARGET="${2:-}"
+        if [ -z "$FRESH_BOOTSTRAP_TARGET" ]; then
+          echo "missing value for --target" >&2
+          exit 2
+        fi
+        shift 2
+        ;;
+      --help|-h|help)
+        fresh_bootstrap_usage
+        exit 0
+        ;;
+      *)
+        echo "unknown option: $1" >&2
+        fresh_bootstrap_usage >&2
+        exit 2
+        ;;
+    esac
+  done
+
+  fresh_bootstrap_install_git_if_missing
+  fresh_bootstrap_clone_or_update
+
+  echo
+  echo "Seed-Kit is ready."
+  echo "Next commands:"
+  echo "  cd $FRESH_BOOTSTRAP_TARGET"
+  echo "  sh seed-kit.sh doctor"
+  echo "  sh seed-kit.sh inspect"
+  echo "  sh seed-kit.sh --modules"
+}
+
+if [ ! -f "$RUNTIME_OS" ] && ! is_full_repo_mode; then
+  fresh_bootstrap_main "$@"
+  exit $?
+fi
+
 seed_detect_os_builtin() {
   if is_full_repo_mode; then
     SEED_RUNTIME_MODE="full repo"
@@ -228,31 +367,6 @@ seed_detect_os_builtin() {
     fi
   fi
 }
-
-if [ ! -f "$RUNTIME_OS" ] && ! is_full_repo_mode; then
-  echo "Seed-Kit"
-  echo "Small shell bootstrap toolkit"
-  echo ""
-  echo "System: runtime missing"
-
-  printf "initialize local runtime structure? [y/N]: "
-  if ! IFS= read -r bootstrap_answer; then
-    bootstrap_answer=
-  fi
-
-  case "$bootstrap_answer" in
-    y|Y)
-      bootstrap_init_runtime
-      echo "runtime initialized in: $(pwd)"
-      echo "runtime files ready (OS/backend/modules)"
-      echo "rerun seed-kit.sh for normal mode"
-      exit 0
-      ;;
-    *)
-      exit 0
-      ;;
-  esac
-fi
 
 if [ -f "$RUNTIME_OS" ]; then
   . "$RUNTIME_OS"
@@ -1150,6 +1264,11 @@ show_modules_dir_list() {
 
 seed_kit_usage() {
   echo "Usage: sh seed-kit.sh [--plan|--detect|--ui-demo|--modules|--apply]"
+  echo ""
+  echo "Fresh-node bootstrap:"
+  echo "  wget https://raw.githubusercontent.com/warzou/seed-kit/main/seed-kit.sh"
+  echo "  sh seed-kit.sh [--yes] [--target <dir>]"
+  echo "  installs git when needed, then clones/updates Seed-Kit"
   echo ""
   echo "Commands:"
   echo "  --plan           show the full execution plan"
