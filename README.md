@@ -10,6 +10,7 @@ Architecture monorepo: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 Conventions modules: [docs/MODULES.md](docs/MODULES.md).
 Reconstruction SAFE: [docs/RECONSTRUCT-NODE-SAFE.md](docs/RECONSTRUCT-NODE-SAFE.md).
 Doctrine reconstruction services: [docs/SERVICE-RECONSTRUCTION.md](docs/SERVICE-RECONSTRUCTION.md).
+Reconnexion identites PRA: [docs/IDENTITY-RECONNECTION.md](docs/IDENTITY-RECONNECTION.md).
 Service packages PRA: [docs/SERVICE-PACKAGES.md](docs/SERVICE-PACKAGES.md).
 Format minimal service package: [docs/SERVICE-PACKAGE-FORMAT.md](docs/SERVICE-PACKAGE-FORMAT.md).
 Premier service package concret: [docs/service-packages/rpi-edge-vps.md](docs/service-packages/rpi-edge-vps.md).
