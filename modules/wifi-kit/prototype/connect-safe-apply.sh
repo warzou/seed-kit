@@ -215,8 +215,52 @@ kv() {
   printf '%s=%s\n' "$1" "$2"
 }
 
+now_epoch() {
+  date +%s
+}
+
+now_iso() {
+  date -u '+%Y-%m-%dT%H:%M:%SZ'
+}
+
 log_step() {
   printf 'step=%s\n' "$1"
+  kv "step_timestamp" "$(now_iso)"
+}
+
+status_field() {
+  field=$1
+  awk -F= -v field="$field" '$1 == field {print $2; exit}'
+}
+
+snapshot_status() {
+  label=$1
+  status_output=$(wpa_cli -i "$IFACE" status 2>&1 || true)
+  route_output=$(ip route 2>&1 || true)
+  kv "${label}_timestamp" "$(now_iso)"
+  kv "${label}_wpa_state" "$(printf '%s\n' "$status_output" | status_field wpa_state)"
+  kv "${label}_ssid" "$(printf '%s\n' "$status_output" | status_field ssid)"
+  kv "${label}_bssid" "$(printf '%s\n' "$status_output" | status_field bssid)"
+  kv "${label}_freq" "$(printf '%s\n' "$status_output" | status_field freq)"
+  kv "${label}_ip" "$(printf '%s\n' "$status_output" | status_field ip_address)"
+  kv "${label}_default_route" "$(printf '%s\n' "$route_output" | awk '$1 == "default" {print $0; exit}')"
+}
+
+snapshot_networks() {
+  label=$1
+  printf '\n[%s-list-networks]\n' "$label"
+  wpa_cli -i "$IFACE" list_networks 2>&1 || true
+}
+
+ping_probe() {
+  label=$1
+  target=$2
+  output=$(ping -c 1 -W "$VALIDATION_TIMEOUT" "$target" 2>&1)
+  status=$?
+  kv "${label}_target" "$target"
+  kv "${label}_status" "$status"
+  kv "${label}_output" "$(printf '%s\n' "$output" | tr '\n' ' ' | sed 's/[[:space:]][[:space:]]*/ /g')"
+  return "$status"
 }
 
 rollback_and_cleanup() {
@@ -232,7 +276,10 @@ rollback_and_cleanup() {
 }
 
 fail_apply() {
+  snapshot_status "failure_before_rollback_cleanup"
   rollback_and_cleanup
+  snapshot_status "failure_after_rollback_cleanup"
+  snapshot_networks "failure-after-cleanup"
   kv "status" "failed"
   kv "reason" "$1"
   kv "rollback_attempted" "$rollback_attempted"
@@ -261,6 +308,7 @@ wait_for_ssid() {
 
 printf '[wifi-kit] connect-safe experimental apply\n'
 kv "mode" "dangerous-real-apply"
+kv "apply_start_timestamp" "$(now_iso)"
 kv "secret" "runtime-only-not-logged"
 kv "save_config" "not-called"
 kv "target_ssid" "$TARGET_SSID"
@@ -298,6 +346,8 @@ kv "preflight_readiness" "OK"
 kv "rollback_id" "$rollback_id"
 kv "current_ip" "$current_ip"
 kv "gateway" "$gateway_value"
+snapshot_networks "before-apply"
+snapshot_status "before_apply"
 
 log_step "add-network"
 target_id=$(wpa_cli -i "$IFACE" add_network) || fail_apply "add-network-failed"
@@ -312,39 +362,63 @@ wpa_cli -i "$IFACE" set_network "$target_id" psk "\"$WIFI_KIT_TARGET_PSK\"" >/de
 unset WIFI_KIT_TARGET_PSK
 
 log_step "select-target"
+select_start=$(now_epoch)
+snapshot_status "before_select_target"
 wpa_cli -i "$IFACE" select_network "$target_id" >/dev/null || fail_apply "select-target-failed"
+snapshot_status "after_select_target"
 
 log_step "wait-ip"
 deadline=$(( $(date +%s) + IP_TIMEOUT ))
 target_ip=""
+dhcp_start=$select_start
+poll_count=0
 while [ "$(date +%s)" -lt "$deadline" ]; do
   target_status=$(wpa_cli -i "$IFACE" status 2>&1 || true)
+  target_route=$(ip route 2>&1 || true)
+  poll_count=$((poll_count + 1))
+  kv "dhcp_poll_${poll_count}_timestamp" "$(now_iso)"
+  kv "dhcp_poll_${poll_count}_wpa_state" "$(printf '%s\n' "$target_status" | status_field wpa_state)"
+  kv "dhcp_poll_${poll_count}_ssid" "$(printf '%s\n' "$target_status" | status_field ssid)"
+  kv "dhcp_poll_${poll_count}_bssid" "$(printf '%s\n' "$target_status" | status_field bssid)"
+  kv "dhcp_poll_${poll_count}_freq" "$(printf '%s\n' "$target_status" | status_field freq)"
   target_ip=$(printf '%s\n' "$target_status" | awk -F= '$1 == "ip_address" {print $2; exit}')
+  kv "dhcp_poll_${poll_count}_ip" "${target_ip:-missing}"
+  kv "dhcp_poll_${poll_count}_default_route" "$(printf '%s\n' "$target_route" | awk '$1 == "default" {print $0; exit}')"
   [ -n "$target_ip" ] && break
   sleep 1
 done
 [ -n "$target_ip" ] || fail_apply "target-ip-timeout"
+dhcp_end=$(now_epoch)
+kv "dhcp_elapsed_seconds" "$((dhcp_end - dhcp_start))"
 kv "target_ip" "$target_ip"
+snapshot_status "before_validation"
 
 log_step "validate-gateway"
 target_gateway=$(ip route | awk '$1 == "default" {print $3; exit}')
 [ -n "$target_gateway" ] || fail_apply "target-gateway-missing"
-ping -c 1 -W "$VALIDATION_TIMEOUT" "$target_gateway" >/dev/null 2>&1 || fail_apply "target-gateway-unreachable"
+ping_probe "gateway_ping" "$target_gateway" || fail_apply "target-gateway-unreachable"
 kv "target_gateway" "$target_gateway"
 
 log_step "validate-reachability"
-ping -c 1 -W "$VALIDATION_TIMEOUT" "$REACHABILITY_PROBE" >/dev/null 2>&1 || fail_apply "target-reachability-failed"
+ping_probe "reachability_ping" "$REACHABILITY_PROBE" || fail_apply "target-reachability-failed"
 
 log_step "forced-rollback"
+snapshot_status "before_rollback"
+rollback_start=$(now_epoch)
 wpa_cli -i "$IFACE" select_network "$rollback_id" >/dev/null || fail_apply "rollback-select-failed"
 rollback_attempted="yes"
 wait_for_ssid "$ROLLBACK_SSID" "$ROLLBACK_TIMEOUT" || fail_apply "rollback-validation-failed"
+rollback_end=$(now_epoch)
+kv "select_target_to_rollback_seconds" "$((rollback_start - select_start))"
+kv "rollback_elapsed_seconds" "$((rollback_end - rollback_start))"
+snapshot_status "after_rollback"
 kv "rollback_validated" "yes"
 
 log_step "cleanup-temporary-profile"
 wpa_cli -i "$IFACE" remove_network "$target_id" >/dev/null || fail_apply "cleanup-remove-target-failed"
 target_id=""
 cleanup_attempted="yes"
+snapshot_networks "after-cleanup"
 
 kv "cleanup_temporary_profile" "done"
 kv "save_config" "not-called"
