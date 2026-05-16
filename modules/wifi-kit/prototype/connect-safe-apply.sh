@@ -13,6 +13,7 @@ reachability_probe="1.1.1.1"
 ip_timeout="30"
 validation_timeout="20"
 rollback_timeout="30"
+stay_on_target_seconds="0"
 dangerous_real_apply=0
 apply_confirm=""
 target_ssid="SFR_7B28"
@@ -48,6 +49,7 @@ Optional:
   --ip-timeout <seconds>         Future DHCP/IP wait timeout. Default: 30
   --validation-timeout <seconds> Future validation timeout. Default: 20
   --rollback-timeout <seconds>   Future rollback timeout. Default: 30
+  --stay-on-target-seconds <sec> Stay on target before forced rollback. Default: 0
   --preflight-host <host>        Read-only SSH host. Default: pocket-node.lan
   --preflight-user <user>        Read-only SSH user. Default: warzy
   --identity <path>              SSH identity for preflight.
@@ -206,6 +208,7 @@ IP_TIMEOUT=${IP_TIMEOUT:-30}
 VALIDATION_TIMEOUT=${VALIDATION_TIMEOUT:-20}
 ROLLBACK_TIMEOUT=${ROLLBACK_TIMEOUT:-30}
 REACHABILITY_PROBE=${REACHABILITY_PROBE:-1.1.1.1}
+STAY_ON_TARGET_SECONDS=${STAY_ON_TARGET_SECONDS:-0}
 target_id=""
 rollback_id=""
 rollback_attempted="no"
@@ -477,6 +480,27 @@ ping_probe "gateway_ping" "$target_gateway" || fail_apply "target-gateway-unreac
 log_step "validate-reachability"
 ping_probe "reachability_ping" "$REACHABILITY_PROBE" || fail_apply "target-reachability-failed"
 
+if [ "$STAY_ON_TARGET_SECONDS" -gt 0 ]; then
+  log_step "stay-on-target"
+  kv "stay_on_target_seconds" "$STAY_ON_TARGET_SECONDS"
+  kv "stay_target_ip" "$target_ip"
+  kv "stay_target_gateway" "$target_gateway"
+  stay_elapsed=0
+  while [ "$stay_elapsed" -lt "$STAY_ON_TARGET_SECONDS" ]; do
+    remaining=$((STAY_ON_TARGET_SECONDS - stay_elapsed))
+    if [ "$remaining" -gt 30 ]; then
+      sleep_for=30
+    else
+      sleep_for=$remaining
+    fi
+    sleep "$sleep_for"
+    stay_elapsed=$((stay_elapsed + sleep_for))
+    kv "stay_elapsed_seconds" "$stay_elapsed"
+    kv "stay_remaining_seconds" "$((STAY_ON_TARGET_SECONDS - stay_elapsed))"
+    snapshot_status "stay_target"
+  done
+fi
+
 log_step "forced-rollback"
 snapshot_status "before_rollback"
 rollback_start=$(now_epoch)
@@ -512,6 +536,7 @@ REMOTE
       VALIDATION_TIMEOUT="$validation_timeout" \
       ROLLBACK_TIMEOUT="$rollback_timeout" \
       REACHABILITY_PROBE="$reachability_probe" \
+      STAY_ON_TARGET_SECONDS="$stay_on_target_seconds" \
       ssh -i "$preflight_identity" \
       -o BatchMode=yes \
       -o StrictHostKeyChecking=yes \
@@ -579,6 +604,11 @@ while [ "$#" -gt 0 ]; do
     --rollback-timeout)
       [ "$#" -gt 1 ] || fail "--rollback-timeout requires a value"
       rollback_timeout="$2"
+      shift
+      ;;
+    --stay-on-target-seconds)
+      [ "$#" -gt 1 ] || fail "--stay-on-target-seconds requires a value"
+      stay_on_target_seconds="$2"
       shift
       ;;
     --preflight-host)
