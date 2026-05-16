@@ -569,6 +569,10 @@ apply_skip() {
   ui_warning "[skip] $*"
 }
 
+ui_rule() {
+  ui_line "========================================"
+}
+
 require_network_for_apply() {
   label=${1:-apply}
 
@@ -591,7 +595,19 @@ apply_safe_confirm() {
     return 0
   fi
 
-  ui_prompt "confirm safe action: continue [y/N]:"
+  ui_rule
+  ui_line "SAFE APPLY CONFIRMATION"
+  ui_line "Target: ${APPLY_CONFIRM_TARGET:-modules=$APPLY_MODULES}"
+  ui_line "Will:"
+  ui_line "  - run only explicitly selected Seed-Kit apply steps"
+  ui_line "  - show package manager and system command output"
+  ui_line "Will NOT:"
+  ui_line "  - start application containers"
+  ui_line "  - write secrets"
+  ui_line "  - restore a full machine"
+  ui_line "  - reboot or restart networking"
+  ui_rule
+  ui_prompt "Continue? [y/N]:"
   IFS= read -r answer || return 1
   case "$answer" in
     y|Y)
@@ -1451,11 +1467,13 @@ seed_kit_usage() {
   echo ""
   echo "Commands:"
   echo "  --plan [--modules=git,docker]  show the execution plan"
+  echo "  --plan --package <file>  preview package-driven PRA design only"
   echo "  --profile=<name> --plan  show recommended modules for one profile"
   echo "  --profile=<name> --apply  preview profile apply order without running modules"
   echo "  --modules        list available modules"
   echo "  modules list     list module scripts available in modules/"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
+  echo "  --apply --package <file> [--components=a,b]  preview package apply only"
   echo "  --apply-module=<module> [--yes|-y]  apply one module only"
   echo "  --fetch-module=wifi-kit [--yes|-y]  fetch one repo-backed module with git sparse checkout"
   echo "  --install-module=wifi-kit [--yes|-y]  prepare git if needed, then fetch one repo-backed module"
@@ -2088,45 +2106,107 @@ parse_apply_modules() {
 parse_apply_options() {
   APPLY_AUTO=0
   APPLY_MODULES_FILTER=""
-  for arg in "$@"; do
-    case "$arg" in
+  APPLY_PACKAGE_FILE=""
+  APPLY_COMPONENTS_FILTER=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
       -y|--yes)
         APPLY_AUTO=1
+        shift
         ;;
       --modules=*)
-        APPLY_MODULES_FILTER="${arg#--modules=}"
+        APPLY_MODULES_FILTER="${1#--modules=}"
+        shift
+        ;;
+      --package=*)
+        APPLY_PACKAGE_FILE="${1#--package=}"
+        shift
+        ;;
+      --components=*)
+        APPLY_COMPONENTS_FILTER="${1#--components=}"
+        shift
         ;;
       --modules)
         echo "unknown option: --modules (use --modules=<comma-separated> instead)" >&2
         return 2
         ;;
+      --package)
+        APPLY_PACKAGE_FILE="${2:-}"
+        if [ -z "$APPLY_PACKAGE_FILE" ]; then
+          echo "missing value for --package" >&2
+          return 2
+        fi
+        shift 2
+        ;;
+      --components)
+        APPLY_COMPONENTS_FILTER="${2:-}"
+        if [ -z "$APPLY_COMPONENTS_FILTER" ]; then
+          echo "missing value for --components" >&2
+          return 2
+        fi
+        shift 2
+        ;;
       *)
-        echo "unknown option: $arg" >&2
+        echo "unknown option: $1" >&2
         return 2
         ;;
     esac
   done
+
+  if [ -n "$APPLY_PACKAGE_FILE" ] && [ -n "$APPLY_MODULES_FILTER" ]; then
+    echo "use either --package or --modules, not both" >&2
+    return 2
+  fi
+
+  if [ -n "$APPLY_COMPONENTS_FILTER" ] && [ -z "$APPLY_PACKAGE_FILE" ]; then
+    echo "--components requires --package=<file>" >&2
+    return 2
+  fi
 
   parse_apply_modules "$APPLY_MODULES_FILTER"
 }
 
 parse_plan_options() {
   PLAN_MODULES_FILTER=""
-  for arg in "$@"; do
-    case "$arg" in
+  PLAN_PACKAGE_FILE=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
       --modules=*)
-        PLAN_MODULES_FILTER="${arg#--modules=}"
+        PLAN_MODULES_FILTER="${1#--modules=}"
+        shift
+        ;;
+      --package=*)
+        PLAN_PACKAGE_FILE="${1#--package=}"
+        shift
         ;;
       --modules)
         echo "unknown option: --modules (use --modules=<comma-separated> instead)" >&2
         return 2
         ;;
+      --package)
+        PLAN_PACKAGE_FILE="${2:-}"
+        if [ -z "$PLAN_PACKAGE_FILE" ]; then
+          echo "missing value for --package" >&2
+          return 2
+        fi
+        shift 2
+        ;;
       *)
-        echo "unknown option: $arg" >&2
+        echo "unknown option: $1" >&2
         return 2
         ;;
     esac
   done
+
+  if [ -n "$PLAN_PACKAGE_FILE" ] && [ -n "$PLAN_MODULES_FILTER" ]; then
+    echo "use either --package or --modules, not both" >&2
+    return 2
+  fi
+
+  if [ -n "$PLAN_PACKAGE_FILE" ]; then
+    PLAN_MODULES=""
+    return 0
+  fi
 
   if [ -z "$PLAN_MODULES_FILTER" ]; then
     PLAN_MODULES="$MODULES"
@@ -2152,6 +2232,40 @@ parse_apply_module_options() {
         ;;
     esac
   done
+}
+
+show_package_plan() {
+  package_file=$1
+
+  ui_header "package-driven PRA" "design/preview only"
+  ui_line "Package: $package_file"
+  if [ -f "$package_file" ]; then
+    ui_line "Status: present"
+  else
+    echo "package not found: $package_file" >&2
+    return 2
+  fi
+  ui_line "Mode: verify/plan preview only"
+  ui_line "No extraction, staging, restore, service start, secret write, reboot, or DNS cutover."
+  ui_line "Future package must embed its profile."
+  ui_line "Docs: docs/PACKAGE-DRIVEN-PRA.md"
+}
+
+show_package_apply_preview_only() {
+  package_file=$1
+  components=${2:-all}
+
+  if [ ! -f "$package_file" ]; then
+    echo "package not found: $package_file" >&2
+    return 2
+  fi
+
+  ui_header "package-driven PRA apply" "preview only"
+  ui_line "Package: $package_file"
+  ui_line "Components: $components"
+  ui_line "No package apply is implemented in V1."
+  ui_line "No extraction, staging, restore, service start, secret write, reboot, or DNS cutover."
+  return 2
 }
 
 run_single_module_apply() {
@@ -2275,6 +2389,7 @@ uninstall_seed_runtime() {
 }
 
 show_apply_preview() {
+  ui_rule
   ui_header "apply mode preview"
   ui_whisper "minimal actions in V0"
   ui_line "selected modules: $1"
@@ -2283,6 +2398,7 @@ show_apply_preview() {
   ui_line "[2/4] prepare plan"
   ui_line "[3/4] confirm safe steps"
   ui_line "[4/4] apply"
+  ui_rule
 }
 
 run_apply_modules() {
@@ -2395,6 +2511,10 @@ case "${1:-}" in
     if ! parse_plan_options "$@"; then
       exit 2
     fi
+    if [ -n "$PLAN_PACKAGE_FILE" ]; then
+      show_package_plan "$PLAN_PACKAGE_FILE"
+      exit $?
+    fi
     show_plan "$PLAN_MODULES"
     ;;
   --apply)
@@ -2405,11 +2525,16 @@ case "${1:-}" in
     if [ "$APPLY_AUTO" -eq 1 ]; then
       ui_whisper "auto-confirm mode requested"
     fi
+    if [ -n "$APPLY_PACKAGE_FILE" ]; then
+      show_package_apply_preview_only "$APPLY_PACKAGE_FILE" "${APPLY_COMPONENTS_FILTER:-all}"
+      exit $?
+    fi
     show_apply_preview "$APPLY_MODULES"
     if [ -z "$APPLY_MODULES" ]; then
       ui_line "no modules selected for apply: use --modules=git"
       exit 0
     fi
+    APPLY_CONFIRM_TARGET="modules=$APPLY_MODULES"
     run_apply_modules
     ;;
   --apply-module=*)
