@@ -49,10 +49,25 @@ copy_allowed_path() {
     return 0
   fi
 
-  mkdir -p "$(dirname "$target_path")"
   if [ -d "$source_path" ]; then
-    cp -R "$source_path" "$target_path"
+    (
+      cd "$source_path"
+      find . \
+        \( -name log -o -name logs -o -name cache -o -name caches \) -prune \
+        -o -type f ! -name .env ! -name '*.log' -print | while IFS= read -r item; do
+          clean_item="${item#./}"
+          mkdir -p "$(dirname "$target_path/$clean_item")"
+          cp "$clean_item" "$target_path/$clean_item"
+        done
+    )
   else
+    case "$source_path" in
+      *.log)
+        echo "skipped runtime: $rel_path"
+        return 0
+        ;;
+    esac
+    mkdir -p "$(dirname "$target_path")"
     cp "$source_path" "$target_path"
   fi
   echo "copied: $rel_path"

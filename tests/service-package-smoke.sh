@@ -40,10 +40,12 @@ source_dir="$tmp_root/source"
 output_dir="$tmp_root/output"
 staging_dir="$output_dir/rpi-edge-vps-service"
 
-mkdir -p "$source_dir/compose" "$source_dir/config/caddy" "$source_dir/config/homepage" "$output_dir"
+mkdir -p "$source_dir/compose" "$source_dir/config/caddy" "$source_dir/config/homepage/logs" "$source_dir/config/homepage/cache" "$output_dir"
 printf '%s\n' "services: {}" > "$source_dir/compose/docker-compose.yml"
 printf '%s\n' ":80" > "$source_dir/config/caddy/Caddyfile"
 printf '%s\n' "title: rpi-edge" > "$source_dir/config/homepage/settings.yaml"
+printf '%s\n' "runtime log" > "$source_dir/config/homepage/logs/homepage.log"
+printf '%s\n' "runtime cache" > "$source_dir/config/homepage/cache/data.txt"
 printf '%s\n' "SECRET=refused" > "$source_dir/.env"
 
 echo "service-package smoke"
@@ -73,6 +75,8 @@ pass "create dry-run"
 [ -f "$staging_dir/compose/docker-compose.yml" ] || fail "missing compose file"
 [ -f "$staging_dir/config/caddy/Caddyfile" ] || fail "missing caddy config"
 [ -f "$staging_dir/config/homepage/settings.yaml" ] || fail "missing homepage config"
+[ ! -e "$staging_dir/config/homepage/logs/homepage.log" ] || fail "homepage log was included"
+[ ! -e "$staging_dir/config/homepage/cache/data.txt" ] || fail "homepage cache was included"
 [ -f "$staging_dir/notes/reconstruction.txt" ] || fail "missing reconstruction notes"
 pass "expected files generated"
 
@@ -90,23 +94,21 @@ if find "$staging_dir" -name .env -type f | grep -q .; then
 fi
 pass ".env excluded"
 
-for forbidden in log logs cache caches access.log; do
-  bad_source="$tmp_root/source-$forbidden"
-  bad_output="$tmp_root/output-$forbidden"
-  mkdir -p "$bad_source/compose" "$bad_source/config/caddy/$forbidden" "$bad_source/config/homepage" "$bad_output"
-  printf '%s\n' "services: {}" > "$bad_source/compose/docker-compose.yml"
-  printf '%s\n' "runtime" > "$bad_source/config/caddy/$forbidden/file.txt"
-  printf '%s\n' "title: rpi-edge" > "$bad_source/config/homepage/settings.yaml"
-  if sh "$service_package" create --service rpi-edge-vps --dry-run --output "$bad_output" --source "$bad_source" >/dev/null 2>&1; then
-    fail "$forbidden path should be refused"
-  fi
-done
-pass "logs/cache refused"
+bad_output="$tmp_root/output-residual-forbidden"
+mkdir -p "$bad_output/rpi-edge-vps-service/logs"
+printf '%s\n' "leftover" > "$bad_output/rpi-edge-vps-service/logs/homepage.log"
+if sh "$service_package" create --service rpi-edge-vps --dry-run --output "$bad_output" --source "$source_dir" >/dev/null 2>&1; then
+  fail "residual forbidden path should be refused"
+fi
+pass "residual forbidden paths refused"
 
 if [ -f "$output_dir/rpi-edge-vps-service.tar.gz" ]; then
   tar -tzf "$output_dir/rpi-edge-vps-service.tar.gz" | grep -q 'rpi-edge-vps-service/MANIFEST.txt' || fail "archive missing manifest"
   if tar -tzf "$output_dir/rpi-edge-vps-service.tar.gz" | grep -q '\.env$'; then
     fail ".env was included in archive"
+  fi
+  if tar -tzf "$output_dir/rpi-edge-vps-service.tar.gz" | grep -q 'logs/homepage\.log$'; then
+    fail "homepage log was included in archive"
   fi
   pass "archive content"
 else
