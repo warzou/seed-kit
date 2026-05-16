@@ -145,6 +145,14 @@ Recommended commands:
   - prints OS, backend, interface, service state, required tools, optional tools,
     missing packages, and risk flags
   - never installs or starts services
+- `modules/wifi-kit/prototype/wifi-kit-deps.sh check`
+  - current prototype dependency audit;
+  - classifies tools as `required`, `optional`, or `future-ap`;
+  - prints `present` / `missing` without installing anything.
+- `modules/wifi-kit/prototype/wifi-kit-deps.sh plan`
+  - current prototype install plan;
+  - prints which packages would be installed later;
+  - keeps `hostapd` and `dnsmasq` in `future-ap` while AP mode is not active.
 - `wifi-kit install-deps --backend raspberrypi`
   - explicit operator confirmation
   - installs only missing packages for the selected backend
@@ -176,3 +184,13 @@ Install policy:
 - never start `hostapd` or `dnsmasq` as part of dependency installation;
 - never call `save_config` as part of dependency management;
 - never store Wi-Fi secrets in Wifi-Kit files, logs, or package plans.
+
+Seed-Kit integration path:
+
+- Seed-Kit should call Wifi-Kit's dependency script from the Wifi-Kit module
+  boundary, for example `modules/wifi-kit/prototype/wifi-kit-deps.sh check`
+  or a later stable `modules/wifi-kit/deps.sh check`;
+- Seed-Kit should display the plan first and require explicit operator
+  confirmation before any future `install --apply`;
+- package installation should remain backend-specific and owned by Wifi-Kit, so
+  Seed-Kit does not need to know Raspberry Pi OS NetworkManager details.
