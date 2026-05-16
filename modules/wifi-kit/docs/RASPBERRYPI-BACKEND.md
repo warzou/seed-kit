@@ -126,3 +126,32 @@ Only after that should Wifi-Kit design a NetworkManager-specific temporary
 connect-safe transaction. Direct `wpa_cli` apply should be treated as a
 backend-specific legacy path and should refuse by default when NetworkManager
 owns `wlan0`.
+
+## NetworkManager connect-safe dry-run
+
+The first NetworkManager connect-safe prototype is simulation-only:
+
+```text
+modules/wifi-kit/prototype/connect-safe-networkmanager.sh preflight
+modules/wifi-kit/prototype/connect-safe-networkmanager.sh --dry-run
+```
+
+`preflight` is read-only and checks NetworkManager ownership, the active
+connection, current SSID, gateway, SSH route hints, and residual temporary
+profiles before any future apply is considered.
+
+It plans the future transaction without running `nmcli connection add`,
+`nmcli connection up`, `nmcli connection delete`, or `nmcli connection modify`.
+
+Future transaction shape:
+
+1. Detect the active NetworkManager connection for `wlan0`.
+2. Snapshot the active profile metadata without reading secrets.
+3. Create a temporary profile with autoconnect disabled.
+4. Attach the PSK from runtime-only input.
+5. Bring up the temporary profile.
+6. Validate gateway and internet reachability.
+7. Stay on target for a bounded duration if requested.
+8. Roll back to the original active connection.
+9. Delete the temporary profile.
+10. Report final active connection and device state.
