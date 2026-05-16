@@ -75,6 +75,10 @@ section() {
   printf '\n[%s]\n' "$1"
 }
 
+shell_quote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
 run_preflight_readonly() {
   [ -n "$iface" ] || iface="wlan0"
 
@@ -316,6 +320,7 @@ kv "secret" "runtime-only-not-logged"
 kv "save_config" "not-called"
 kv "target_ssid" "$TARGET_SSID"
 kv "rollback_ssid" "$ROLLBACK_SSID"
+kv "stay_on_target_seconds" "$STAY_ON_TARGET_SECONDS"
 
 log_step "preflight-readonly"
 hostname_value=$(hostname 2>&1) || fail_apply "hostname-failed"
@@ -527,17 +532,16 @@ REMOTE
 
   {
     printf '%s\n' "$WIFI_KIT_TARGET_PSK"
+    printf 'IFACE=%s\n' "$(shell_quote "$iface")"
+    printf 'TARGET_SSID=%s\n' "$(shell_quote "$target_ssid")"
+    printf 'ROLLBACK_SSID=%s\n' "$(shell_quote "$rollback_ssid")"
+    printf 'IP_TIMEOUT=%s\n' "$(shell_quote "$ip_timeout")"
+    printf 'VALIDATION_TIMEOUT=%s\n' "$(shell_quote "$validation_timeout")"
+    printf 'ROLLBACK_TIMEOUT=%s\n' "$(shell_quote "$rollback_timeout")"
+    printf 'REACHABILITY_PROBE=%s\n' "$(shell_quote "$reachability_probe")"
+    printf 'STAY_ON_TARGET_SECONDS=%s\n' "$(shell_quote "$stay_on_target_seconds")"
     cat "$script_path"
-  } | env \
-      IFACE="$iface" \
-      TARGET_SSID="$target_ssid" \
-      ROLLBACK_SSID="$rollback_ssid" \
-      IP_TIMEOUT="$ip_timeout" \
-      VALIDATION_TIMEOUT="$validation_timeout" \
-      ROLLBACK_TIMEOUT="$rollback_timeout" \
-      REACHABILITY_PROBE="$reachability_probe" \
-      STAY_ON_TARGET_SECONDS="$stay_on_target_seconds" \
-      ssh -i "$preflight_identity" \
+  } | ssh -i "$preflight_identity" \
       -o BatchMode=yes \
       -o StrictHostKeyChecking=yes \
       "$preflight_user@$preflight_host" \
@@ -663,6 +667,7 @@ kv "wpa_cli" "not-called"
 kv "interface" "$iface"
 kv "current_profile_a" "$from_ssid"
 kv "temporary_target_profile_b" "$to_ssid"
+kv "stay_on_target_seconds" "$stay_on_target_seconds"
 kv "no_save_config" "true"
 
 section "future-transaction-plan"
