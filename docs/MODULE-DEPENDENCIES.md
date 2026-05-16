@@ -15,6 +15,10 @@ A module may expose:
 module_<name>_dependencies
 ```
 
+Each module may provide an equivalent declaration for its own domain. The
+declaration belongs to the module, but Seed-Kit core remains the SAFE engine that
+decides how declarations are displayed, checked, or used later.
+
 The function prints plain lines:
 
 ```text
@@ -31,12 +35,14 @@ manual: add user to docker group only if explicitly desired
 ## Rules
 
 - read-only output only
+- V1 stays a simple shell declaration
 - no package install
 - no service start
 - no secret handling
 - no automatic dependency resolution
 - no profile orchestration
 - no rollback engine
+- modules must not reimplement package managers such as apt, apk, or opkg
 
 ## CLI preview
 
