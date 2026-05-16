@@ -13,6 +13,10 @@ reachability_probe="1.1.1.1"
 ip_timeout="30"
 validation_timeout="20"
 rollback_timeout="30"
+dangerous_real_apply=0
+apply_confirm=""
+target_ssid="SFR_7B28"
+rollback_ssid="GL-MT6000-d53"
 
 usage() {
   cat <<'EOF'
@@ -29,6 +33,12 @@ Usage:
   sh modules/wifi-kit/prototype/connect-safe-apply.sh \
     --preflight-readonly
 
+  WIFI_KIT_TARGET_PSK=<runtime-only-secret> \
+    sh modules/wifi-kit/prototype/connect-safe-apply.sh \
+      --apply \
+      --dangerous-real-apply \
+      --confirm "WIFI-KIT TEMP APPLY ROLLBACK"
+
 Optional:
   --iface <name>                Future interface name. Default: <interface>
   --from <current-ssid>         Future rollback profile A. Default: <profile-a>
@@ -41,9 +51,12 @@ Optional:
   --preflight-host <host>        Read-only SSH host. Default: pocket-node.lan
   --preflight-user <user>        Read-only SSH user. Default: warzy
   --identity <path>              SSH identity for preflight.
+  --dangerous-real-apply         Required for the experimental apply path.
+  --confirm <text>               Must equal WIFI-KIT TEMP APPLY ROLLBACK.
 
-Forbidden:
-  --apply
+Safety:
+  --apply refuses unless every explicit gate is satisfied. It never calls
+  save_config and always rolls back to GL-MT6000-d53 before cleanup.
 EOF
 }
 
@@ -173,6 +186,41 @@ printf '\n[raw-wpa-cli-list-networks]\n%s\n' "$wpa_networks_output"
 REMOTE
 }
 
+run_apply_experimental() {
+  [ "$dangerous_real_apply" -eq 1 ] || fail "apply locked: missing --dangerous-real-apply"
+  [ "$apply_confirm" = "WIFI-KIT TEMP APPLY ROLLBACK" ] || fail "apply locked: confirmation mismatch"
+  [ "${WIFI_KIT_TARGET_PSK+x}" = "x" ] || fail "apply locked: WIFI_KIT_TARGET_PSK is required"
+  [ -n "$WIFI_KIT_TARGET_PSK" ] || fail "apply locked: WIFI_KIT_TARGET_PSK is empty"
+  [ -n "$iface" ] || iface="wlan0"
+
+  printf '[wifi-kit] connect-safe experimental apply gate\n'
+  kv "mode" "dangerous-real-apply"
+  kv "dangerous_real_apply" "confirmed"
+  kv "confirmation" "matched"
+  kv "runtime_secret" "present-not-read-not-logged"
+  kv "target_ssid" "$target_ssid"
+  kv "rollback_ssid" "$rollback_ssid"
+  kv "preflight_required" "true"
+  kv "save_config" "forbidden"
+  kv "forced_rollback" "true"
+  kv "cleanup_temporary_profile" "required"
+
+  section "future-apply-flow"
+  kv "01.preflight_readonly" "must return readiness=OK immediately before apply"
+  kv "02.add_network" "create temporary target profile"
+  kv "03.set_network_ssid" "$target_ssid"
+  kv "04.set_network_psk" "from WIFI_KIT_TARGET_PSK without logging"
+  kv "05.select_network_target" "temporary target attempt"
+  kv "06.wait_ip" "bounded wait using --ip-timeout"
+  kv "07.validate_gateway_or_reachability" "bounded validation using --validation-timeout"
+  kv "08.rollback_forced" "select rollback_id for $rollback_ssid even on target success"
+  kv "09.cleanup" "remove temporary target profile"
+  kv "10.verify_return" "confirm current ssid is $rollback_ssid"
+  kv "11.save_config" "never"
+
+  fail "apply locked: execution skeleton prepared but real apply is not enabled in this revision"
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --dry-run)
@@ -184,7 +232,16 @@ while [ "$#" -gt 0 ]; do
       mode="preflight-readonly"
       ;;
     --apply)
-      fail "apply locked"
+      [ -z "$mode" ] || fail "choose only one mode"
+      mode="apply"
+      ;;
+    --dangerous-real-apply)
+      dangerous_real_apply=1
+      ;;
+    --confirm)
+      [ "$#" -gt 1 ] || fail "--confirm requires a value"
+      apply_confirm="$2"
+      shift
       ;;
     --iface)
       [ "$#" -gt 1 ] || fail "--iface requires a value"
@@ -258,7 +315,11 @@ case "$mode" in
     run_preflight_readonly
     exit $?
     ;;
-  *) fail "explicit --dry-run or --preflight-readonly is required" ;;
+  apply)
+    run_apply_experimental
+    exit $?
+    ;;
+  *) fail "explicit --dry-run, --preflight-readonly, or --apply is required" ;;
 esac
 iface=${iface:-"<interface>"}
 from_ssid=${from_ssid:-"<profile-a>"}
