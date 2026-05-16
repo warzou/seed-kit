@@ -21,34 +21,48 @@ Node remplacement PRA: [docs/nodes/rpi3-edge.md](docs/nodes/rpi3-edge.md).
 
 ## Installation
 
-Target flow: download `seed-kit.sh`, run `sh seed-kit.sh`.
+Target flow: download `install-seed-kit.sh`, inspect it, run it.
 
 For the concrete fresh-node SSH flow (bootstrap + plan/modules/apply), see:
 docs/FRESH-NODE-FLOW.md
 
 ```sh
-sh seed-kit.sh
+wget https://raw.githubusercontent.com/warzou/seed-kit/main/install-seed-kit.sh
+less install-seed-kit.sh
+sh install-seed-kit.sh
 ```
 
-## Bootstrap minimal
-
-Commande cible pour une machine fraiche :
-
-```sh
-wget https://raw.githubusercontent.com/warzou/seed-kit/main/seed-kit.sh
-sh seed-kit.sh
-```
-
-Puis :
+Then:
 
 ```sh
 cd ~/seed-kit
 sh seed-kit.sh doctor
 ```
 
-Le bootstrap V1 installe seulement `git` si absent, via `apt` et confirmation
-interactive, puis clone ou met a jour `~/seed-kit`. Il ne configure pas Docker,
-Tailscale, Cloudflare, le reseau, les secrets, ni de restore.
+## Installer minimal
+
+Commande cible pour une machine fraiche :
+
+```sh
+wget https://raw.githubusercontent.com/warzou/seed-kit/main/install-seed-kit.sh
+less install-seed-kit.sh
+sh install-seed-kit.sh
+```
+
+`install-seed-kit.sh` installe seulement les prerequis minimaux absents
+(`git`, `ca-certificates`, et `wget` ou `curl` si necessaire), puis clone ou
+met a jour `~/seed-kit` avec un `git pull --ff-only` si le checkout est propre.
+Il lance ensuite `~/seed-kit/seed-kit.sh`.
+
+Il ne configure pas Docker, Tailscale, Cloudflare, le reseau, les secrets, ni de
+restore.
+
+Usage Seed-Kit ensuite :
+
+```sh
+cd ~/seed-kit
+sh seed-kit.sh doctor
+```
 
 ## Test rapide
 
