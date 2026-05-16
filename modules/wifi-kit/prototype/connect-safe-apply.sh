@@ -367,37 +367,52 @@ snapshot_status "before_select_target"
 wpa_cli -i "$IFACE" select_network "$target_id" >/dev/null || fail_apply "select-target-failed"
 snapshot_status "after_select_target"
 
-log_step "wait-ip"
+log_step "wait-target-complete"
 deadline=$(( $(date +%s) + IP_TIMEOUT ))
 target_ip=""
+target_gateway=""
 dhcp_start=$select_start
 poll_count=0
 while [ "$(date +%s)" -lt "$deadline" ]; do
   target_status=$(wpa_cli -i "$IFACE" status 2>&1 || true)
   target_route=$(ip route 2>&1 || true)
+  target_state=$(printf '%s\n' "$target_status" | status_field wpa_state)
+  target_seen_ssid=$(printf '%s\n' "$target_status" | status_field ssid)
   poll_count=$((poll_count + 1))
   kv "dhcp_poll_${poll_count}_timestamp" "$(now_iso)"
-  kv "dhcp_poll_${poll_count}_wpa_state" "$(printf '%s\n' "$target_status" | status_field wpa_state)"
-  kv "dhcp_poll_${poll_count}_ssid" "$(printf '%s\n' "$target_status" | status_field ssid)"
+  kv "dhcp_poll_${poll_count}_wpa_state" "$target_state"
+  kv "dhcp_poll_${poll_count}_ssid" "$target_seen_ssid"
   kv "dhcp_poll_${poll_count}_bssid" "$(printf '%s\n' "$target_status" | status_field bssid)"
   kv "dhcp_poll_${poll_count}_freq" "$(printf '%s\n' "$target_status" | status_field freq)"
   target_ip=$(printf '%s\n' "$target_status" | awk -F= '$1 == "ip_address" {print $2; exit}')
+  target_gateway=$(printf '%s\n' "$target_route" | awk '$1 == "default" {print $3; exit}')
   kv "dhcp_poll_${poll_count}_ip" "${target_ip:-missing}"
   kv "dhcp_poll_${poll_count}_default_route" "$(printf '%s\n' "$target_route" | awk '$1 == "default" {print $0; exit}')"
-  [ -n "$target_ip" ] && break
+  if [ "$target_state" = "COMPLETED" ] && [ "$target_seen_ssid" = "$TARGET_SSID" ] && [ -n "$target_ip" ] && [ -n "$target_gateway" ]; then
+    break
+  fi
   sleep 1
 done
+target_status=$(wpa_cli -i "$IFACE" status 2>&1 || true)
+target_route=$(ip route 2>&1 || true)
+target_state=$(printf '%s\n' "$target_status" | status_field wpa_state)
+target_seen_ssid=$(printf '%s\n' "$target_status" | status_field ssid)
+target_ip=$(printf '%s\n' "$target_status" | awk -F= '$1 == "ip_address" {print $2; exit}')
+target_gateway=$(printf '%s\n' "$target_route" | awk '$1 == "default" {print $3; exit}')
+[ "$target_state" = "COMPLETED" ] || fail_apply "target-state-not-completed"
+[ "$target_seen_ssid" = "$TARGET_SSID" ] || fail_apply "target-ssid-not-confirmed"
 [ -n "$target_ip" ] || fail_apply "target-ip-timeout"
+[ -n "$target_gateway" ] || fail_apply "target-gateway-missing-after-completion"
 dhcp_end=$(now_epoch)
 kv "dhcp_elapsed_seconds" "$((dhcp_end - dhcp_start))"
+kv "target_wpa_state" "$target_state"
+kv "target_confirmed_ssid" "$target_seen_ssid"
 kv "target_ip" "$target_ip"
+kv "target_gateway" "$target_gateway"
 snapshot_status "before_validation"
 
 log_step "validate-gateway"
-target_gateway=$(ip route | awk '$1 == "default" {print $3; exit}')
-[ -n "$target_gateway" ] || fail_apply "target-gateway-missing"
 ping_probe "gateway_ping" "$target_gateway" || fail_apply "target-gateway-unreachable"
-kv "target_gateway" "$target_gateway"
 
 log_step "validate-reachability"
 ping_probe "reachability_ping" "$REACHABILITY_PROBE" || fail_apply "target-reachability-failed"
