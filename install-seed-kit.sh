@@ -129,6 +129,11 @@ run_seed_kit() {
   script="$TARGET_DIR/seed-kit.sh"
 
   log
+  log "----------------------------------------"
+  log "Seed-Kit ready"
+  log "Location: $TARGET_DIR"
+  log "Launching runtime..."
+  log "----------------------------------------"
   log "[run] sh $script"
   if [ "$DRY_RUN" = "yes" ]; then
     return 0

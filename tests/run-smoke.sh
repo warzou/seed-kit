@@ -45,6 +45,7 @@ run_test "seed-kit fresh-node help" "cd '$repo_dir' && sh seed-kit.sh --help | g
 run_test "seed-kit self-update help" "cd '$repo_dir' && sh seed-kit.sh --help | grep -q 'self-update --plan'"
 run_test "seed-kit self-update usage" "cd '$repo_dir' && out=\$(sh seed-kit.sh self-update 2>&1) && exit 1 || printf '%s\n' \"\$out\" | grep -q 'usage: sh seed-kit.sh self-update --plan'"
 run_test "seed-kit modules list" "cd '$repo_dir' && sh seed-kit.sh modules list | grep -q 'Available modules'"
+run_test "seed-kit docker plan" "cd '$repo_dir' && out=\$(sh seed-kit.sh --plan --modules=docker) && printf '%s\n' \"\$out\" | grep -q 'install Docker Engine from the official Docker apt repository'"
 run_test "seed-kit doctor" "cd '$repo_dir' && out=\$(sh seed-kit.sh doctor) && printf '%s\n' \"\$out\" | grep -q 'Seed-Kit doctor' && printf '%s\n' \"\$out\" | grep -q 'mode: read-only' && printf '%s\n' \"\$out\" | grep -q 'No changes were made.'"
 run_test "seed-kit inspect" "cd '$repo_dir' && out=\$(sh seed-kit.sh inspect) && printf '%s\n' \"\$out\" | grep -q 'Seed-Kit inspect' && printf '%s\n' \"\$out\" | grep -q 'mode: read-only' && printf '%s\n' \"\$out\" | grep -q 'No changes were made.'"
 run_test "profile-state syntax" "cd '$repo_dir' && sh -n tools/profile-state.sh"

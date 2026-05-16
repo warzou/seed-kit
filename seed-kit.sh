@@ -550,7 +550,7 @@ status_word() {
 
 is_debian_like() {
   case "$SEED_OS_ID" in
-    debian|ubuntu|raspberrypi)
+    debian|ubuntu|raspberrypi|raspbian)
       return 0
       ;;
   esac
@@ -685,6 +685,185 @@ apply_module_git() {
 
   echo "[git] post-install check failed: binary not found" >&2
   return 6
+}
+
+docker_repo_family() {
+  docker_arch=$1
+  docker_codename=$2
+
+  case "$SEED_OS_ID" in
+    raspberrypi|raspbian)
+      case "$docker_arch" in
+        arm64)
+          echo "debian"
+          ;;
+        armhf)
+          case "$docker_codename" in
+            bookworm|bullseye)
+              echo "raspbian"
+              ;;
+            *)
+              echo ""
+              ;;
+          esac
+          ;;
+        *)
+          echo "debian"
+          ;;
+      esac
+      return 0
+      ;;
+  esac
+
+  echo "debian"
+}
+
+docker_repo_codename() {
+  if [ -r /etc/os-release ]; then
+    (
+      . /etc/os-release
+      printf '%s\n' "${VERSION_CODENAME:-}"
+    )
+    return 0
+  fi
+
+  echo ""
+}
+
+apply_module_docker() {
+  apply_step "docker: checking installation"
+  if module_is_installed docker; then
+    apply_skip "docker already installed"
+    docker --version || true
+    if docker compose version >/dev/null 2>&1; then
+      docker compose version
+    else
+      ui_line "docker compose plugin: unavailable"
+    fi
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl is-active docker || true
+    fi
+    ui_line "Optional manual step: add your user to the docker group only if you choose passwordless docker."
+    return 0
+  fi
+
+  if ! is_debian_like; then
+    echo "[docker] unsupported OS for apply: $SEED_OS_NAME" >&2
+    return 2
+  fi
+
+  if ! apply_safe_confirm; then
+    return 2
+  fi
+
+  if ! require_network_for_apply "docker package install"; then
+    return 2
+  fi
+
+  if ! require_sudo_for_system_action "docker package install" "sh seed-kit.sh --apply --modules=docker"; then
+    return 2
+  fi
+
+  docker_codename=$(docker_repo_codename)
+  if [ -z "$docker_codename" ]; then
+    echo "[docker] unable to detect VERSION_CODENAME from /etc/os-release" >&2
+    return 2
+  fi
+  docker_arch=$(dpkg --print-architecture)
+  docker_family=$(docker_repo_family "$docker_arch" "$docker_codename")
+  if [ -z "$docker_family" ]; then
+    echo "[docker] unsupported Raspberry Pi OS Docker apt repository for $docker_arch/$docker_codename" >&2
+    echo "[docker] official Docker docs support Raspberry Pi OS 32-bit for bookworm/bullseye; use Raspberry Pi OS 64-bit arm64 with the Debian repository for trixie." >&2
+    return 2
+  fi
+
+  if [ "$(id -u)" -eq 0 ]; then
+    SUDO=
+  else
+    SUDO=sudo
+  fi
+
+  docker_repo_url="https://download.docker.com/linux/$docker_family"
+  docker_key_tmp="${TMPDIR:-/tmp}/seed-kit-docker-keyring.$$"
+  docker_list_tmp="${TMPDIR:-/tmp}/seed-kit-docker-list.$$"
+
+  apply_step "docker: install apt prerequisites"
+  if ! $SUDO apt-get update; then
+    echo "[docker] apt-get update failed" >&2
+    return 4
+  fi
+  if ! $SUDO apt-get install -y ca-certificates curl; then
+    echo "[docker] prerequisite install failed" >&2
+    return 5
+  fi
+
+  apply_step "docker: download official apt key"
+  if ! curl -fsSL "$docker_repo_url/gpg" -o "$docker_key_tmp"; then
+    rm -f "$docker_key_tmp" "$docker_list_tmp"
+    echo "[docker] failed to download apt key: $docker_repo_url/gpg" >&2
+    return 6
+  fi
+  if ! chmod 0644 "$docker_key_tmp"; then
+    rm -f "$docker_key_tmp" "$docker_list_tmp"
+    echo "[docker] failed to prepare apt key permissions" >&2
+    return 7
+  fi
+
+  apply_step "docker: prepare official apt source"
+  {
+    printf '%s\n' "Types: deb"
+    printf '%s\n' "URIs: $docker_repo_url"
+    printf '%s\n' "Suites: $docker_codename"
+    printf '%s\n' "Components: stable"
+    printf '%s\n' "Architectures: $docker_arch"
+    printf '%s\n' "Signed-By: /etc/apt/keyrings/docker.asc"
+  } > "$docker_list_tmp"
+
+  apply_step "docker: configure apt source"
+  if ! $SUDO install -m 0755 -d /etc/apt/keyrings; then
+    rm -f "$docker_key_tmp" "$docker_list_tmp"
+    echo "[docker] failed to create keyring directory" >&2
+    return 8
+  fi
+  if ! $SUDO cp "$docker_key_tmp" /etc/apt/keyrings/docker.asc; then
+    rm -f "$docker_key_tmp" "$docker_list_tmp"
+    echo "[docker] failed to install apt key" >&2
+    return 9
+  fi
+  if ! $SUDO cp "$docker_list_tmp" /etc/apt/sources.list.d/docker.sources; then
+    rm -f "$docker_key_tmp" "$docker_list_tmp"
+    echo "[docker] failed to install apt source" >&2
+    return 10
+  fi
+  rm -f "$docker_key_tmp" "$docker_list_tmp"
+
+  apply_step "docker: install packages"
+  if ! $SUDO apt-get update; then
+    echo "[docker] apt-get update failed after adding repository" >&2
+    return 11
+  fi
+  if ! $SUDO apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
+    echo "[docker] apt-get install docker packages failed" >&2
+    return 12
+  fi
+
+  apply_step "docker: verifying installation"
+  if ! module_is_installed docker; then
+    echo "[docker] post-install check failed: binary not found" >&2
+    return 13
+  fi
+
+  docker --version || true
+  if docker compose version >/dev/null 2>&1; then
+    docker compose version
+  else
+    ui_line "docker compose plugin: unavailable"
+  fi
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl is-active docker || true
+  fi
+  ui_line "No containers or compose stacks were started."
+  ui_line "Optional manual step: add your user to the docker group only if you choose passwordless docker."
 }
 
 is_raspberry_pi() {
@@ -1271,7 +1450,7 @@ seed_kit_usage() {
   echo "  installs git when needed, then clones/updates Seed-Kit"
   echo ""
   echo "Commands:"
-  echo "  --plan           show the full execution plan"
+  echo "  --plan [--modules=git,docker]  show the execution plan"
   echo "  --profile=<name> --plan  show recommended modules for one profile"
   echo "  --profile=<name> --apply  preview profile apply order without running modules"
   echo "  --modules        list available modules"
@@ -1931,6 +2110,35 @@ parse_apply_options() {
   parse_apply_modules "$APPLY_MODULES_FILTER"
 }
 
+parse_plan_options() {
+  PLAN_MODULES_FILTER=""
+  for arg in "$@"; do
+    case "$arg" in
+      --modules=*)
+        PLAN_MODULES_FILTER="${arg#--modules=}"
+        ;;
+      --modules)
+        echo "unknown option: --modules (use --modules=<comma-separated> instead)" >&2
+        return 2
+        ;;
+      *)
+        echo "unknown option: $arg" >&2
+        return 2
+        ;;
+    esac
+  done
+
+  if [ -z "$PLAN_MODULES_FILTER" ]; then
+    PLAN_MODULES="$MODULES"
+    return 0
+  fi
+
+  if ! parse_apply_modules "$PLAN_MODULES_FILTER"; then
+    return 2
+  fi
+  PLAN_MODULES="$APPLY_MODULES"
+}
+
 parse_apply_module_options() {
   APPLY_AUTO=0
   for arg in "$@"; do
@@ -2084,7 +2292,7 @@ run_apply_modules() {
         apply_module_git
         ;;
       docker)
-        ui_line "[docker] not implemented in V0"
+        apply_module_docker
         ;;
       tailscale)
         apply_module_tailscale
@@ -2119,6 +2327,8 @@ show_ui_demo() {
 }
 
 show_plan() {
+  plan_modules=${1:-$MODULES}
+
   show_dashboard
 
   if [ "${SEED_RUNTIME_MODE:-}" = "bootstrap" ]; then
@@ -2131,7 +2341,7 @@ show_plan() {
   echo
 
   ui_section "modules"
-  for module in $MODULES; do
+  for module in $plan_modules; do
     ui_line "[$module]"
     run_module_plan "$module" | sed 's/^/  /'
     echo
@@ -2181,7 +2391,11 @@ load_backend
 
 case "${1:-}" in
   --plan)
-    show_plan
+    shift
+    if ! parse_plan_options "$@"; then
+      exit 2
+    fi
+    show_plan "$PLAN_MODULES"
     ;;
   --apply)
     shift
