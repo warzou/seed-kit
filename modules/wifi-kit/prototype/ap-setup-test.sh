@@ -6,7 +6,10 @@ iface="wlan0"
 ap_ssid=""
 ap_channel=""
 ap_duration_seconds="30"
+ap_max_seconds="300"
 temporary_hostapd_conf="/tmp/wifi-kit-hostapd-test.conf"
+temporary_hostapd_log="/tmp/wifi-kit-hostapd-test.log"
+temporary_hostapd_pid="/tmp/wifi-kit-hostapd-test.pid"
 confirm_phrase=""
 dangerous_real_apply="0"
 
@@ -24,13 +27,19 @@ Usage:
   sh modules/wifi-kit/prototype/ap-setup-test.sh apply
   sh modules/wifi-kit/prototype/ap-setup-test.sh apply-short-test \
     --confirm "WIFI-KIT AP SHORT TEST"
+  sh modules/wifi-kit/prototype/ap-setup-test.sh apply-manual-test \
+    --confirm "WIFI-KIT AP MANUAL TEST"
+  sh modules/wifi-kit/prototype/ap-setup-test.sh status
+  sh modules/wifi-kit/prototype/ap-setup-test.sh stop
 
 Options:
   --iface <name>           Wi-Fi interface. Default: wlan0
   --ssid <name>            Future AP SSID. Default: Wifi-Kit-<hostname>
   --channel <number>       Future AP channel. Default: current wlan0 channel if detected
   --duration-seconds <n>   Future short AP test duration. Default: 30
+  --max-seconds <n>        Future manual AP max duration. Default: 300
   --confirm <phrase>       Required for apply-short-test: WIFI-KIT AP SHORT TEST
+                            Required for apply-manual-test: WIFI-KIT AP MANUAL TEST
   --dangerous-real-apply   Future execution gate. Do not use without a separate validation prompt.
 EOF
 }
@@ -73,6 +82,24 @@ find_tool() {
     fi
   done
   return 1
+}
+
+is_test_hostapd_pid() {
+  pid=$1
+  [ -n "$pid" ] || return 1
+  case "$pid" in *[!0-9]*|'') return 1 ;; esac
+  [ -d "/proc/$pid" ] || return 1
+  cmdline="$(tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null || true)"
+  case "$cmdline" in
+    *hostapd*" $temporary_hostapd_conf"*) return 0 ;;
+    *hostapd*"$temporary_hostapd_conf"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+test_pid_from_file() {
+  [ -r "$temporary_hostapd_pid" ] || return 0
+  sed -n '1p' "$temporary_hostapd_pid" 2>/dev/null || true
 }
 
 host_label() {
@@ -200,6 +227,7 @@ cmd_plan() {
   kv "future_ap_ssid" "$ssid"
   kv "future_ap_channel" "$ap_channel"
   kv "duration_seconds" "$ap_duration_seconds"
+  kv "manual_max_seconds" "$ap_max_seconds"
   kv "ap_sta_same_channel_constraint" "yes"
   kv "recommended_first_test" "ap-only-short-duration"
 
@@ -212,6 +240,16 @@ cmd_plan() {
   kv "06.stop_hostapd" "terminate foreground hostapd after ${ap_duration_seconds}s or manual stop"
   kv "07.cleanup" "remove $temporary_hostapd_conf"
   kv "08.verify" "iw dev; nmcli device status; SSH route still expected via wlan0"
+
+  section "future-ap-manual-test"
+  kv "01.preflight" "sh modules/wifi-kit/prototype/ap-setup-test.sh preflight"
+  kv "02.write_temp_hostapd_config" "create $temporary_hostapd_conf with ssid=$ssid channel=$ap_channel wpa=2"
+  kv "03.runtime_secret" "WPA2 passphrase supplied at runtime only; never repo/log/diff"
+  kv "04.start_hostapd" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh apply-manual-test --dangerous-real-apply --confirm \"WIFI-KIT AP MANUAL TEST\""
+  kv "05.observe_phone_visibility" "confirm SSID appears from phone and Windows scan"
+  kv "06.logs" "$temporary_hostapd_log"
+  kv "07.stop" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
+  kv "08.auto_stop" "after ${ap_max_seconds}s if not stopped earlier"
 
   section "future-ap-sta-test"
   kv "01.require_same_channel" "AP channel must match STA channel on Raspberry Pi Zero 2 W"
@@ -227,6 +265,49 @@ cmd_plan() {
   kv "reboot" "no"
   kv "save_config" "no"
   kv "captive_portal" "no"
+}
+
+cmd_status() {
+  pid="$(test_pid_from_file || true)"
+
+  printf '[wifi-kit] AP setup test status\n'
+  kv "mode" "status-readonly"
+  kv "pidfile" "$temporary_hostapd_pid"
+  kv "log_path" "$temporary_hostapd_log"
+  kv "temporary_hostapd_conf" "$temporary_hostapd_conf"
+  if [ -n "$pid" ] && is_test_hostapd_pid "$pid"; then
+    kv "test_hostapd_running" "yes"
+    kv "pid" "$pid"
+    kv "stop_command" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
+  else
+    kv "test_hostapd_running" "no"
+    kv "pid" "${pid:-missing}"
+  fi
+}
+
+cmd_stop() {
+  pid="$(test_pid_from_file || true)"
+
+  printf '[wifi-kit] AP setup test stop\n'
+  kv "mode" "stop"
+  kv "pidfile" "$temporary_hostapd_pid"
+  if [ -z "$pid" ]; then
+    kv "stop_status" "no-pidfile"
+    rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid" 2>/dev/null || true
+    return 0
+  fi
+  if ! is_test_hostapd_pid "$pid"; then
+    kv "stop_status" "pid-not-matching-wifi-kit-hostapd"
+    kv "pid" "$pid"
+    return 1
+  fi
+  if kill "$pid" 2>/dev/null; then
+    kv "stop_status" "signal-sent"
+    kv "pid" "$pid"
+    rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid" 2>/dev/null || true
+    return 0
+  fi
+  fail "could not stop test hostapd pid $pid; run with sudo if it was started as root"
 }
 
 write_hostapd_config_plan() {
@@ -319,6 +400,8 @@ cmd_apply_short_test() {
   kv "ap_channel" "$ap_channel"
   kv "duration_seconds" "$ap_duration_seconds"
   kv "temporary_hostapd_conf" "$temporary_hostapd_conf"
+  kv "log_path" "$temporary_hostapd_log"
+  kv "pidfile" "$temporary_hostapd_pid"
   kv "hostapd_present" "$(find_tool hostapd >/dev/null 2>&1 && printf yes || printf no)"
   kv "hostapd_command" "$hostapd_bin $temporary_hostapd_conf"
 
@@ -401,9 +484,145 @@ cmd_apply_short_test() {
   return "$hostapd_rc"
 }
 
+cmd_apply_manual_test() {
+  [ "$confirm_phrase" = "WIFI-KIT AP MANUAL TEST" ] ||
+    fail "apply-manual-test requires --confirm \"WIFI-KIT AP MANUAL TEST\""
+
+  channel="$(current_channel || true)"
+  ssid="$(effective_ap_ssid)"
+  if [ -z "$ap_channel" ]; then
+    ap_channel="${channel:-6}"
+  fi
+  require_number "--max-seconds" "$ap_max_seconds"
+  if [ "$ap_max_seconds" -lt 1 ]; then
+    fail "--max-seconds must be greater than 0"
+  fi
+
+  hostapd_bin="$(find_tool hostapd 2>/dev/null || true)"
+  if [ -z "$hostapd_bin" ]; then
+    hostapd_bin="hostapd"
+  fi
+
+  printf '[wifi-kit] AP setup manual test gated plan\n'
+  kv "mode" "apply-manual-test-plan"
+  kv "real_apply_requested" "$dangerous_real_apply"
+  kv "network_writes" "false"
+  kv "hostapd_started" "false"
+  kv "dnsmasq_started" "false"
+  kv "networkmanager_modified" "false"
+  kv "save_config" "not-called"
+  kv "interface" "$iface"
+  kv "ap_ssid" "$ssid"
+  kv "ap_channel" "$ap_channel"
+  kv "max_seconds" "$ap_max_seconds"
+  kv "temporary_hostapd_conf" "$temporary_hostapd_conf"
+  kv "log_path" "$temporary_hostapd_log"
+  kv "pidfile" "$temporary_hostapd_pid"
+  kv "hostapd_present" "$(find_tool hostapd >/dev/null 2>&1 && printf yes || printf no)"
+  kv "hostapd_command" "$hostapd_bin $temporary_hostapd_conf"
+
+  section "temporary-hostapd-config"
+  write_hostapd_config_plan "$ssid" "$ap_channel"
+
+  section "exact-command"
+  kv "01.write_config" "create $(shell_quote "$temporary_hostapd_conf") mode 600 with runtime-only passphrase"
+  kv "02.run_hostapd" "$hostapd_bin $temporary_hostapd_conf > $(shell_quote "$temporary_hostapd_log") 2>&1"
+  kv "03.pidfile" "$temporary_hostapd_pid"
+  kv "04.stop" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
+  kv "05.auto_stop" "after ${ap_max_seconds}s if not manually stopped"
+  kv "06.status" "sh modules/wifi-kit/prototype/ap-setup-test.sh status"
+
+  section "guards"
+  kv "apply_without_extra_gate" "plan-only"
+  kv "real_execution_requires" "--dangerous-real-apply plus separate explicit validation"
+  kv "root_required" "yes"
+  kv "dnsmasq" "not-used"
+  kv "captive_portal" "not-used"
+  kv "networkmanager_changes" "none"
+  kv "persistent_system_files" "none"
+  kv "save_config" "not-called"
+
+  if [ "$dangerous_real_apply" != "1" ]; then
+    section "apply"
+    kv "apply_status" "refused-plan-only"
+    return 0
+  fi
+
+  if [ "$(id -u 2>/dev/null || printf 1)" != "0" ]; then
+    fail "real AP manual test requires root; run: sudo sh modules/wifi-kit/prototype/ap-setup-test.sh apply-manual-test --dangerous-real-apply --confirm \"WIFI-KIT AP MANUAL TEST\""
+  fi
+  find_tool hostapd >/dev/null 2>&1 || fail "hostapd is required"
+
+  existing_pid="$(test_pid_from_file || true)"
+  if [ -n "$existing_pid" ] && is_test_hostapd_pid "$existing_pid"; then
+    fail "wifi-kit test hostapd already running with pid $existing_pid"
+  fi
+
+  passphrase="$(runtime_ap_passphrase)"
+  case "$passphrase" in
+    ????????*) ;;
+    *) fail "runtime AP passphrase must be at least 8 characters" ;;
+  esac
+
+  hostapd_pid=""
+  cleanup_manual() {
+    if [ -n "${hostapd_pid:-}" ] && is_test_hostapd_pid "$hostapd_pid"; then
+      kill "$hostapd_pid" 2>/dev/null || true
+      wait "$hostapd_pid" 2>/dev/null || true
+    fi
+    rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid"
+  }
+  trap cleanup_manual EXIT INT TERM HUP
+  rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid"
+  : >"$temporary_hostapd_log"
+  chmod 600 "$temporary_hostapd_log"
+
+  umask 077
+  write_hostapd_config_real "$ssid" "$ap_channel" "$passphrase"
+
+  section "real-apply"
+  kv "apply_status" "starting"
+  kv "ap_ssid" "$ssid"
+  kv "ap_channel" "$ap_channel"
+  kv "max_seconds" "$ap_max_seconds"
+  kv "log_path" "$temporary_hostapd_log"
+  kv "pidfile" "$temporary_hostapd_pid"
+  kv "runtime_secret" "not-logged"
+  kv "phone_check" "look for SSID $ssid now"
+  kv "stop_command" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
+
+  "$hostapd_bin" "$temporary_hostapd_conf" >"$temporary_hostapd_log" 2>&1 &
+  hostapd_pid=$!
+  printf '%s\n' "$hostapd_pid" >"$temporary_hostapd_pid"
+  kv "hostapd_pid" "$hostapd_pid"
+
+  elapsed=0
+  while is_test_hostapd_pid "$hostapd_pid"; do
+    if [ "$elapsed" -ge "$ap_max_seconds" ]; then
+      kv "auto_stop" "max-seconds-reached"
+      break
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+
+  if is_test_hostapd_pid "$hostapd_pid"; then
+    kill "$hostapd_pid" 2>/dev/null || true
+    wait "$hostapd_pid" 2>/dev/null || true
+  fi
+
+  section "post-check"
+  kv "elapsed_seconds" "$elapsed"
+  kv "log_path" "$temporary_hostapd_log"
+  kv "config_cleanup" "done"
+  rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid"
+  trap - EXIT INT TERM HUP
+  kv "apply_status" "completed-or-stopped"
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    preflight|plan|apply|apply-short-test)
+    preflight|plan|apply|apply-short-test|apply-manual-test|status|stop)
       [ -z "$mode" ] || fail "choose only one mode"
       mode="$1"
       ;;
@@ -425,6 +644,11 @@ while [ "$#" -gt 0 ]; do
     --duration-seconds)
       [ "$#" -gt 1 ] || fail "--duration-seconds requires a value"
       ap_duration_seconds="$2"
+      shift
+      ;;
+    --max-seconds)
+      [ "$#" -gt 1 ] || fail "--max-seconds requires a value"
+      ap_max_seconds="$2"
       shift
       ;;
     --confirm)
@@ -451,6 +675,9 @@ case "${mode:-}" in
   plan) cmd_plan ;;
   apply) fail "AP setup apply is intentionally refused; run a reviewed real AP test separately" ;;
   apply-short-test) cmd_apply_short_test ;;
+  apply-manual-test) cmd_apply_manual_test ;;
+  status) cmd_status ;;
+  stop) cmd_stop ;;
   *)
     usage
     exit 2
