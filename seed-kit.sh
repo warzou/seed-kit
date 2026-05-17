@@ -1555,7 +1555,7 @@ seed_kit_usage() {
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
   echo "  package inspect-stage <dir>  inspect staged package without applying it"
-  echo "  package apply-guided <file> [--step install-modules|review-configs|validate-services]  guided SAFE package assistant"
+  echo "  package apply-guided <file> [--step install-modules|review-configs|validate-services|deploy-configs]  guided SAFE package assistant"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --apply --package <file> [--components=a,b]  preview package apply only"
   echo "  --apply-module=<module> [--yes|-y]  apply one module only"
@@ -2932,12 +2932,167 @@ apply_guided_validate_services() {
   ui_line "No compose up/pull, Caddy reload, secrets, DNS/cutover, reboot, or network restart was attempted."
 }
 
+deploy_config_confirm() {
+  prompt=$1
+
+  ui_prompt "$prompt [y/N]:"
+  IFS= read -r answer || return 1
+  case "$answer" in
+    y|Y)
+      return 0
+      ;;
+    *)
+      ui_line "  skipped"
+      return 1
+      ;;
+  esac
+}
+
+deploy_config_copy_file() {
+  label=$1
+  src=$2
+  dest_dir=$3
+  dest=$4
+
+  [ -f "$src" ] || return 0
+  if ! deploy_config_confirm "Copy $label to $dest?"; then
+    return 0
+  fi
+  if [ -e "$dest" ]; then
+    ui_line "  skipped existing: $dest"
+    return 0
+  fi
+  if ! mkdir -p "$dest_dir"; then
+    ui_line "  failed: unable to create $dest_dir"
+    return 2
+  fi
+  if ! cp "$src" "$dest"; then
+    ui_line "  failed: unable to copy $label"
+    return 2
+  fi
+  DEPLOY_COPIED_COUNT=$((DEPLOY_COPIED_COUNT + 1))
+  ui_line "  - $dest"
+}
+
+deploy_config_copy_dir() {
+  label=$1
+  src=$2
+  dest_parent=$3
+  dest=$4
+
+  [ -d "$src" ] || return 0
+  if ! deploy_config_confirm "Copy $label to $dest?"; then
+    return 0
+  fi
+  if [ -e "$dest" ]; then
+    ui_line "  skipped existing: $dest"
+    return 0
+  fi
+  if ! mkdir -p "$dest_parent"; then
+    ui_line "  failed: unable to create $dest_parent"
+    return 2
+  fi
+  if ! cp -R "$src" "$dest"; then
+    ui_line "  failed: unable to copy $label"
+    return 2
+  fi
+  DEPLOY_COPIED_COUNT=$((DEPLOY_COPIED_COUNT + 1))
+  ui_line "  - $dest"
+}
+
+apply_guided_deploy_configs() {
+  package_root=$1
+  descriptor_content=""
+  if [ -r "$package_root/seed-kit-package.sh" ]; then
+    descriptor_content=$(sed -n '1,80p' "$package_root/seed-kit-package.sh")
+  fi
+  deploy_id=$(package_descriptor_value "$descriptor_content" "PROFILE_ID")
+  if [ -z "$deploy_id" ]; then
+    deploy_id=$(package_descriptor_value "$descriptor_content" "PACKAGE_ID")
+  fi
+  case "$deploy_id" in
+    ""|"."|".."|/*|*/*|*[!A-Za-z0-9._-]*)
+      deploy_id="package"
+      ;;
+  esac
+
+  if [ -z "${HOME:-}" ]; then
+    ui_line "Deploy configs: HOME is not set"
+    return 2
+  fi
+
+  compose_file="$package_root/services/docker-compose.yml"
+  caddy_file="$package_root/configs/caddy/Caddyfile"
+  homepage_dir="$package_root/configs/homepage"
+  deploy_root="$HOME/seed-kit-deploy/$deploy_id"
+
+  ui_section "GUIDED CONFIG DEPLOYMENT"
+  ui_line "Detected:"
+  detected=0
+  if [ -f "$compose_file" ]; then
+    ui_line "  - services/docker-compose.yml"
+    detected=$((detected + 1))
+  fi
+  if [ -f "$caddy_file" ]; then
+    ui_line "  - configs/caddy/Caddyfile"
+    detected=$((detected + 1))
+  fi
+  if [ -d "$homepage_dir" ]; then
+    ui_line "  - configs/homepage/"
+    detected=$((detected + 1))
+  fi
+
+  if [ "$detected" -eq 0 ]; then
+    ui_line "  none"
+    ui_line "No files were copied."
+    return 0
+  fi
+
+  ui_line ""
+  ui_line "Suggested destinations:"
+  ui_line "  - $deploy_root/docker-compose.yml"
+  ui_line "  - $deploy_root/Caddyfile"
+  ui_line "  - $deploy_root/homepage/"
+  ui_line ""
+  ui_line "SAFE boundary:"
+  ui_line "  - user directory only"
+  ui_line "  - no /etc writes"
+  ui_line "  - no compose up/pull"
+  ui_line "  - no Caddy reload/restart"
+  ui_line "  - no secrets, DNS/cutover, reboot, or network restart"
+
+  if ! deploy_config_confirm "Continue with guided config deployment?"; then
+    ui_line "No files were copied."
+    return 2
+  fi
+
+  ui_line ""
+  ui_line "Copied:"
+  DEPLOY_COPIED_COUNT=0
+  deploy_config_copy_file "services/docker-compose.yml" "$compose_file" "$deploy_root" "$deploy_root/docker-compose.yml" || return 2
+  deploy_config_copy_file "configs/caddy/Caddyfile" "$caddy_file" "$deploy_root" "$deploy_root/Caddyfile" || return 2
+  deploy_config_copy_dir "configs/homepage/" "$homepage_dir" "$deploy_root" "$deploy_root/homepage" || return 2
+  if [ "$DEPLOY_COPIED_COUNT" -eq 0 ]; then
+    ui_line "  none"
+  fi
+
+  ui_line ""
+  ui_line "Not done:"
+  ui_line "  - compose up/pull"
+  ui_line "  - Caddy reload/restart"
+  ui_line "  - service start"
+  ui_line "  - secrets"
+  ui_line "  - DNS/cutover"
+  ui_line "  - reboot or network restart"
+  ui_line "Staging kept for inspection."
+}
+
 apply_guided_package() {
   package_file=$1
   guided_step=${2:-preview}
 
   case "$guided_step" in
-    preview|install-modules|review-configs|validate-services)
+    preview|install-modules|review-configs|validate-services|deploy-configs)
       ;;
     *)
       echo "unknown apply-guided step: $guided_step" >&2
@@ -3010,6 +3165,15 @@ apply_guided_package() {
       return 2
     fi
     apply_guided_validate_services "$package_root"
+  fi
+  if [ "$guided_step" = "deploy-configs" ]; then
+    if [ -z "$package_root" ]; then
+      ui_line "Deploy configs: package root not found"
+      return 2
+    fi
+    apply_guided_review_configs "$package_root"
+    apply_guided_validate_services "$package_root"
+    apply_guided_deploy_configs "$package_root"
   fi
 }
 
