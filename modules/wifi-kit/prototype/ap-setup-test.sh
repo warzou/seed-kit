@@ -13,6 +13,7 @@ temporary_hostapd_conf="/tmp/wifi-kit-hostapd-test.conf"
 temporary_hostapd_conf_public="/tmp/wifi-kit-hostapd-test.conf.redacted"
 temporary_hostapd_log="/tmp/wifi-kit-hostapd-test.log"
 temporary_hostapd_pid="/tmp/wifi-kit-hostapd-test.pid"
+ap_only_nm_state="/tmp/wifi-kit-ap-only-nm-state"
 confirm_phrase=""
 dangerous_real_apply="0"
 
@@ -38,6 +39,9 @@ Usage:
   sh modules/wifi-kit/prototype/ap-setup-test.sh plan-ap-sta
   sh modules/wifi-kit/prototype/ap-setup-test.sh apply-ap-sta-manual-test \
     --confirm "WIFI-KIT AP STA MANUAL TEST"
+  sh modules/wifi-kit/prototype/ap-setup-test.sh plan-ap-only
+  sh modules/wifi-kit/prototype/ap-setup-test.sh apply-ap-only-manual-test \
+    --confirm "WIFI-KIT AP ONLY MANUAL TEST"
 
 Options:
   --iface <name>           Wi-Fi interface. Default: wlan0
@@ -172,6 +176,44 @@ device_state() {
     awk -F: -v iface="$iface" '$1 == iface { print $2; exit }'
 }
 
+write_ap_only_nm_state() {
+  state_iface=$1
+  state_connection=$2
+  umask 077
+  {
+    printf 'mode=ap-only\n'
+    printf 'iface=%s\n' "$state_iface"
+    printf 'active_connection=%s\n' "$state_connection"
+  } >"$ap_only_nm_state"
+  chmod 600 "$ap_only_nm_state" 2>/dev/null || true
+}
+
+read_ap_only_state_value() {
+  key=$1
+  [ -r "$ap_only_nm_state" ] || return 0
+  sed -n "s/^$key=//p" "$ap_only_nm_state" | sed -n '1p'
+}
+
+restore_nm_from_ap_only_state_best_effort() {
+  [ -r "$ap_only_nm_state" ] || return 0
+  [ "$(id -u 2>/dev/null || printf 1)" = "0" ] || return 0
+  nmcli_bin="$(find_tool nmcli 2>/dev/null || true)"
+  [ -n "$nmcli_bin" ] || return 0
+
+  restore_iface="$(read_ap_only_state_value iface || true)"
+  restore_connection="$(read_ap_only_state_value active_connection || true)"
+  [ -n "$restore_iface" ] || restore_iface="$iface"
+
+  "$nmcli_bin" device set "$restore_iface" managed yes >/dev/null 2>&1 || true
+  if [ -n "$restore_connection" ] && [ "$restore_connection" != "--" ]; then
+    "$nmcli_bin" connection up "$restore_connection" ifname "$restore_iface" >/dev/null 2>&1 ||
+      "$nmcli_bin" device connect "$restore_iface" >/dev/null 2>&1 || true
+  else
+    "$nmcli_bin" device connect "$restore_iface" >/dev/null 2>&1 || true
+  fi
+  rm -f "$ap_only_nm_state" 2>/dev/null || true
+}
+
 interface_exists() {
   dev=$1
   ip link show "$dev" >/dev/null 2>&1
@@ -236,6 +278,68 @@ supports_ap_sta_same_channel() {
       in_combo && managed_ap && index($0, "#channels <= 1") { found = 1 }
       END { exit found ? 0 : 1 }
     '
+}
+
+cmd_plan_ap_only() {
+  channel="$(current_channel || true)"
+  active="$(active_connection || true)"
+  state="$(device_state || true)"
+  ssid="$(effective_ap_ssid)"
+  if [ -z "$ap_channel" ]; then
+    ap_channel="${channel:-6}"
+  fi
+  if [ "$ap_max_seconds_set" = "0" ]; then
+    ap_max_seconds="600"
+  fi
+
+  printf '[wifi-kit] AP-only recovery test plan\n'
+  kv "mode" "plan-ap-only"
+  kv "network_writes" "false"
+  kv "real_apply_allowed" "false"
+  kv "interface" "$iface"
+  kv "nm_device_state" "${state:-unknown}"
+  kv "nm_active_connection" "${active:-unknown}"
+  kv "current_channel" "${channel:-unknown}"
+  kv "future_ap_channel" "$ap_channel"
+  kv "future_ap_ssid" "$ssid"
+  kv "max_seconds" "$ap_max_seconds"
+  kv "hostapd_log" "$temporary_hostapd_log"
+  kv "hostapd_pidfile" "$temporary_hostapd_pid"
+  kv "temporary_hostapd_conf" "$temporary_hostapd_conf"
+  kv "redacted_config_path" "$temporary_hostapd_conf_public"
+  kv "ap_only_nm_state" "$ap_only_nm_state"
+  kv "root_required" "yes"
+
+  section "v1-strategy"
+  kv "ap_sta_single_radio" "not-retained-for-v1"
+  kv "normal_mode" "NetworkManager client"
+  kv "recovery_mode" "AP-only when no usable Wi-Fi exists or explicit recovery is requested"
+  kv "wifi_connected_without_internet" "do-not-force-ap-automatically-without-policy"
+
+  section "planned-hostapd-config"
+  write_hostapd_config_plan "$ssid" "$ap_channel"
+
+  section "future-command-sequence"
+  kv "01.preflight" "sh modules/wifi-kit/prototype/ap-setup-test.sh preflight"
+  kv "02.snapshot_nm" "record current $iface NetworkManager state and active connection in $ap_only_nm_state"
+  kv "03.disconnect_nm" "sudo nmcli device disconnect $iface"
+  kv "04.write_config" "create $(shell_quote "$temporary_hostapd_conf") mode 600 with runtime-only passphrase"
+  kv "05.start_hostapd" "sudo hostapd -d $(shell_quote "$temporary_hostapd_conf") > $(shell_quote "$temporary_hostapd_log") 2>&1"
+  kv "06.observe" "scan for SSID $ssid from phone/Windows"
+  kv "07.stop" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
+  kv "08.cleanup" "stop hostapd; delete secret config and pidfile; keep log and redacted config"
+  kv "09.restore_nm" "sudo nmcli device set $iface managed yes; sudo nmcli connection up <previous> ifname $iface || sudo nmcli device connect $iface"
+  kv "10.verify" "nmcli device status; ip addr show $iface; iw dev"
+
+  section "guards"
+  kv "real_execution" "requires --dangerous-real-apply and exact confirmation"
+  kv "confirmation" "WIFI-KIT AP ONLY MANUAL TEST"
+  kv "dnsmasq" "not-used"
+  kv "captive_portal" "not-used"
+  kv "persistent_system_files" "none"
+  kv "save_config" "not-called"
+  kv "reboot" "not-used"
+  kv "rollback" "best-effort NetworkManager reconnect to previous active connection"
 }
 
 cmd_plan_ap_sta() {
@@ -430,6 +534,119 @@ cmd_apply_ap_sta_manual_test() {
   kv "apply_status" "completed-or-stopped"
 }
 
+cmd_apply_ap_only_manual_test() {
+  [ "$confirm_phrase" = "WIFI-KIT AP ONLY MANUAL TEST" ] ||
+    fail "apply-ap-only-manual-test requires --confirm \"WIFI-KIT AP ONLY MANUAL TEST\""
+
+  if [ "$ap_max_seconds_set" = "0" ]; then
+    ap_max_seconds="600"
+  fi
+  require_number "--max-seconds" "$ap_max_seconds"
+  if [ "$ap_max_seconds" -lt 1 ]; then
+    fail "--max-seconds must be greater than 0"
+  fi
+
+  cmd_plan_ap_only
+  section "apply"
+  if [ "$dangerous_real_apply" != "1" ]; then
+    kv "apply_status" "refused-plan-only"
+    kv "reason" "AP-only real apply needs --dangerous-real-apply plus separate validation"
+    kv "future_command" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh apply-ap-only-manual-test --dangerous-real-apply --confirm \"WIFI-KIT AP ONLY MANUAL TEST\" --max-seconds 600"
+    return 0
+  fi
+
+  if [ "$(id -u 2>/dev/null || printf 1)" != "0" ]; then
+    fail "real AP-only manual test requires root; run: sudo sh modules/wifi-kit/prototype/ap-setup-test.sh apply-ap-only-manual-test --dangerous-real-apply --confirm \"WIFI-KIT AP ONLY MANUAL TEST\" --max-seconds 600"
+  fi
+  find_tool hostapd >/dev/null 2>&1 || fail "hostapd is required"
+  find_tool nmcli >/dev/null 2>&1 || fail "nmcli is required for AP-only rollback"
+
+  hostapd_bin="$(find_tool hostapd)"
+  nmcli_bin="$(find_tool nmcli)"
+  ssid="$(effective_ap_ssid)"
+  channel="$(current_channel || true)"
+  if [ -z "$ap_channel" ]; then
+    ap_channel="${channel:-6}"
+  fi
+
+  existing_pid="$(test_pid_from_file || true)"
+  if [ -n "$existing_pid" ] && is_test_hostapd_pid "$existing_pid"; then
+    fail "wifi-kit test hostapd already running with pid $existing_pid"
+  fi
+
+  passphrase="$(runtime_ap_passphrase)"
+  case "$passphrase" in
+    ????????*) ;;
+    *) fail "runtime AP passphrase must be at least 8 characters" ;;
+  esac
+
+  previous_connection="$(active_connection || true)"
+  previous_state="$(device_state || true)"
+  hostapd_pid=""
+  cleanup_ap_only() {
+    if [ -n "${hostapd_pid:-}" ] && is_test_hostapd_pid "$hostapd_pid"; then
+      kill "$hostapd_pid" 2>/dev/null || true
+      wait "$hostapd_pid" 2>/dev/null || true
+    fi
+    write_redacted_hostapd_config_copy
+    rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid"
+    restore_nm_from_ap_only_state_best_effort
+  }
+  trap cleanup_ap_only EXIT INT TERM HUP
+
+  rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid"
+  : >"$temporary_hostapd_log"
+  chmod 600 "$temporary_hostapd_log"
+  write_ap_only_nm_state "$iface" "$previous_connection"
+
+  section "real-apply"
+  kv "apply_status" "starting"
+  kv "interface" "$iface"
+  kv "previous_nm_state" "${previous_state:-unknown}"
+  kv "previous_nm_active_connection" "${previous_connection:-unknown}"
+  kv "ap_ssid" "$ssid"
+  kv "ap_channel" "$ap_channel"
+  kv "max_seconds" "$ap_max_seconds"
+  kv "log_path" "$temporary_hostapd_log"
+  kv "pidfile" "$temporary_hostapd_pid"
+  kv "redacted_config_path" "$temporary_hostapd_conf_public"
+  kv "runtime_secret" "not-logged"
+  kv "dnsmasq" "not-used"
+  kv "captive_portal" "not-used"
+  kv "stop_command" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
+
+  "$nmcli_bin" device disconnect "$iface"
+  umask 077
+  write_hostapd_config_real "$ssid" "$ap_channel" "$passphrase"
+  "$hostapd_bin" -d "$temporary_hostapd_conf" >"$temporary_hostapd_log" 2>&1 &
+  hostapd_pid=$!
+  printf '%s\n' "$hostapd_pid" >"$temporary_hostapd_pid"
+  kv "hostapd_pid" "$hostapd_pid"
+  kv "phone_check" "look for SSID $ssid now"
+
+  elapsed=0
+  while is_test_hostapd_pid "$hostapd_pid"; do
+    if [ "$elapsed" -ge "$ap_max_seconds" ]; then
+      kv "auto_stop" "max-seconds-reached"
+      break
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+
+  cleanup_ap_only
+  trap - EXIT INT TERM HUP
+
+  section "post-check"
+  kv "elapsed_seconds" "$elapsed"
+  kv "log_path" "$temporary_hostapd_log"
+  kv "config_cleanup" "done"
+  kv "networkmanager_restore" "attempted"
+  kv "final_nm_device_state" "$(device_state || true)"
+  kv "final_nm_active_connection" "$(active_connection || true)"
+  kv "apply_status" "completed-or-stopped"
+}
+
 cmd_preflight() {
   channel="$(current_channel || true)"
   active="$(active_connection || true)"
@@ -564,10 +781,11 @@ cmd_diagnose_last() {
   kv "beacon_seen" "$(grep -Eiq 'beacon' "$temporary_hostapd_log" && printf yes || printf no)"
   kv "ignore_broadcast_ssid_seen" "$(grep -q 'ignore_broadcast_ssid' "$temporary_hostapd_log" && printf yes || printf no)"
   kv "nl80211_issue_seen" "$(grep -Eiq 'nl80211|Could not|failed|error' "$temporary_hostapd_log" && printf yes || printf no)"
+  kv "ap_only_nm_state_present" "$([ -r "$ap_only_nm_state" ] && printf yes || printf no)"
   kv "estimated_duration" "unknown"
 
   section "important-log-lines"
-  grep -Ei 'ignore_broadcast_ssid|beacon|AP-ENABLED|AP-DISABLED|nl80211|Could not|failed|error|interface state|mode|wlan0' "$temporary_hostapd_log" |
+  grep -Ei 'ignore_broadcast_ssid|beacon|AP-ENABLED|AP-DISABLED|nl80211|Could not|failed|error|interface state|mode|wlan0|wlan0_ap' "$temporary_hostapd_log" |
     tail -n 80 || true
 
   section "last-log-lines"
@@ -589,6 +807,7 @@ cmd_stop() {
     kv "stop_status" "no-pidfile"
     write_redacted_hostapd_config_copy
     cleanup_test_ap_interface_best_effort
+    restore_nm_from_ap_only_state_best_effort
     rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid" 2>/dev/null || true
     return 0
   fi
@@ -602,6 +821,7 @@ cmd_stop() {
     kv "pid" "$pid"
     write_redacted_hostapd_config_copy
     cleanup_test_ap_interface_best_effort
+    restore_nm_from_ap_only_state_best_effort
     rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid" 2>/dev/null || true
     return 0
   fi
@@ -948,7 +1168,7 @@ cmd_apply_manual_test() {
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    preflight|plan|apply|apply-short-test|apply-manual-test|status|stop|diagnose-last|plan-ap-sta|apply-ap-sta-manual-test)
+    preflight|plan|apply|apply-short-test|apply-manual-test|status|stop|diagnose-last|plan-ap-sta|apply-ap-sta-manual-test|plan-ap-only|apply-ap-only-manual-test)
       [ -z "$mode" ] || fail "choose only one mode"
       mode="$1"
       ;;
@@ -980,6 +1200,7 @@ while [ "$#" -gt 0 ]; do
     --max-seconds)
       [ "$#" -gt 1 ] || fail "--max-seconds requires a value"
       ap_max_seconds="$2"
+      ap_max_seconds_set="1"
       shift
       ;;
     --confirm)
@@ -1012,6 +1233,8 @@ case "${mode:-}" in
   diagnose-last) cmd_diagnose_last ;;
   plan-ap-sta) cmd_plan_ap_sta ;;
   apply-ap-sta-manual-test) cmd_apply_ap_sta_manual_test ;;
+  plan-ap-only) cmd_plan_ap_only ;;
+  apply-ap-only-manual-test) cmd_apply_ap_only_manual_test ;;
   *)
     usage
     exit 2

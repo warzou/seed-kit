@@ -1,6 +1,7 @@
 # Wifi-Kit AP fallback and known-network reconnect design
 
-Status: design only, plan-only. No real AP mode is implemented here.
+Status: design plus gated hardware-test prototypes. AP test helpers remain
+explicitly gated and must not run without a separate real-test validation.
 
 This document defines the safe target architecture for two future Wifi-Kit capabilities:
 
@@ -35,11 +36,11 @@ Allowed in this design phase:
 - plan-only CLI output;
 - rollback and recovery planning.
 
-Still forbidden in this phase:
+Still forbidden in the normal product path:
 
-- hostapd start or configuration;
+- unattended hostapd start or configuration;
 - dnsmasq start or configuration;
-- NetworkManager mutation;
+- persistent NetworkManager mutation;
 - systemd-networkd mutation;
 - wpa_supplicant mutation;
 - wpa_cli select_network, enable_network, reconfigure, or save_config;
@@ -47,7 +48,7 @@ Still forbidden in this phase:
 - IP changes;
 - reboot;
 - network restart;
-- real connect-safe apply;
+- ungated real connect-safe apply;
 - endpoint POST actions.
 
 ## State model
@@ -185,14 +186,23 @@ Temporary AP mode is a recovery path, not the main engine.
 
 It should start only when:
 
-- no known validated Wi-Fi works;
+- no known validated Wi-Fi works, or explicit recovery is requested;
 - rollback to a previous client network is not possible;
 - the hardware supports the requested mode;
 - SSH safety rules accept the risk;
 - the AP lifetime is bounded;
 - the UI remains local and explicit.
 
-Future AP mode may need hostapd and dnsmasq, but they are not active in the current Wifi-Kit implementation.
+Future AP mode may need hostapd and dnsmasq. The current AP-only radio test
+uses hostapd only; it does not start dnsmasq and does not implement a captive
+portal.
+
+For V1, AP-only recovery is preferred over permanent AP+STA on the same radio.
+When Wi-Fi is connected but internet validation fails, Wifi-Kit should not
+blindly start AP automatically. It should first classify the failure: local
+network available but no internet can still be a valid maintenance state. AP
+auto-start should be reserved for no usable Wi-Fi, explicit recovery, or a
+future policy that deliberately treats the current state as unrecoverable.
 
 The first minimal AP radio test uses hostapd only. Real hostapd execution
 requires root privileges because it must ask the kernel driver to change Wi-Fi
@@ -273,7 +283,8 @@ SAFE V1 recommendation:
 - do not depend on simultaneous AP plus client for the main product flow;
 - try known and validated client networks first;
 - stay in client mode if one works;
-- enter temporary AP recovery only if no known network works;
+- enter temporary AP-only recovery only if no known network works or explicit
+  recovery is requested;
 - keep AP mode bounded, explicit, and recovery-oriented;
 - prefer a second Wi-Fi adapter if reliable AP plus client mode becomes a real
   requirement.
@@ -304,28 +315,49 @@ Interpretation:
   events and the driver stopped AP mode;
 - `wlan0` direct is not a good base for persistent AP plus STA behavior.
 
-Next test should use a dedicated AP virtual interface, currently planned as
-`wlan0_ap`, while leaving `wlan0` under NetworkManager as the STA/client
-interface. This remains plan-only until a separate real-test prompt.
-
-Planned AP plus STA flow:
+The follow-up dedicated AP virtual interface test used `wlan0_ap`, while
+leaving `wlan0` under NetworkManager as the STA/client interface. Hostapd
+started, the config contained `ssid=Wifi-Kit-pocket-node`, and the SSID was
+not intentionally hidden, but the driver failed when setting beacons:
 
 ```text
-iw dev wlan0 interface add wlan0_ap type __ap
-ip link set wlan0_ap up
-hostapd -d /tmp/wifi-kit-hostapd-test.conf
+wlan0_ap: AP-ENABLED
+nl80211: Beacon set failed: -95 (Operation not supported)
+Failed to set beacon parameters
 ```
 
-The hostapd config should use `interface=wlan0_ap`, the AP channel must match
-the current STA channel, and cleanup must stop hostapd and delete `wlan0_ap`.
+During that test `wlan0_ap` ended up exposed as managed rather than a stable AP
+interface, and the SSID was not visible from Windows or phone scans. Cleanup
+stopped hostapd, removed `wlan0_ap`, and returned `wlan0` to NetworkManager.
 
-Prerequisites:
+Conclusion: AP+STA single-radio is not reliable enough for V1 on pocket-node /
+Raspberry Pi Zero 2 W. Keep AP+STA as a lab-only investigation or use a second
+Wi-Fi adapter for a product path that needs simultaneous AP and client mode.
 
-- `iw` with permission to create virtual interfaces;
+The next V1 hardware path is AP-only recovery:
+
+```text
+snapshot NetworkManager state
+nmcli device disconnect wlan0
+hostapd -d /tmp/wifi-kit-hostapd-test.conf
+stop hostapd
+remove secret config
+restore wlan0 to NetworkManager
+reconnect previous active connection best effort
+```
+
+This path intentionally interrupts the current Wi-Fi client connection during
+the recovery window, so it must be bounded, local, and rollback-aware.
+
+AP-only prerequisites:
+
 - `hostapd`;
-- root privileges for interface creation and hostapd;
-- NetworkManager must continue owning only `wlan0`, not the AP interface;
-- driver support for one managed interface plus one AP interface on one channel.
+- `nmcli`;
+- root privileges for NetworkManager disconnect/reconnect and hostapd;
+- bounded max duration;
+- runtime-only WPA2 passphrase;
+- cleanup that deletes the secret config and keeps only logs plus redacted
+  config.
 
 ## UI flow
 
