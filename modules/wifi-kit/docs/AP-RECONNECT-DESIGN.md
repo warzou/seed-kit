@@ -265,6 +265,54 @@ Exit from recovery should happen through a future UI action:
 No AP password, Wi-Fi password, admin password, or backend secret should be
 written to repository files, persistent configs, or unredacted logs.
 
+## Recovery guard
+
+Wifi-Kit needs a small recovery guard before it grows a full systemd service.
+The guard is a standalone, idempotent helper that can audit or clean up an
+interrupted AP recovery session. Its default mode must be read-only.
+
+Prototype:
+
+```text
+modules/wifi-kit/prototype/wifi-kit-recovery-guard.sh
+```
+
+Read-only modes:
+
+- `status`: summarize known Wifi-Kit AP recovery runtime state;
+- `audit`: status plus temporary files, NetworkManager state, and radio state.
+
+Cleanup mode:
+
+- stop only Wifi-Kit `hostapd` if the pidfile and process cmdline match the
+  known temporary hostapd config path;
+- stop only Wifi-Kit `dnsmasq` if the pidfile and process cmdline match the
+  known temporary dnsmasq config path;
+- remove Wifi-Kit pidfiles and temporary configs;
+- keep logs by default, with a future explicit option to remove them;
+- delete `wlan0_ap` only when it is the expected test interface and has a safe
+  AP-like type;
+- remove `192.168.50.1/24` from `wlan0` if present;
+- set `wlan0` managed again when NetworkManager is available;
+- reconnect the previous active NetworkManager connection best effort when the
+  runtime state file exists.
+
+The guard must not use aggressive `systemctl` operations. It must not stop a
+global `dnsmasq.service`, kill unrelated dnsmasq or hostapd processes, reboot,
+restart networking, call `save_config`, or touch non-Wifi-Kit files.
+
+Future boot integration:
+
+1. Run the guard early at boot, before starting the Wifi-Kit UI.
+2. Audit first and log the result without secrets.
+3. If stale Wifi-Kit runtime artifacts are detected, run cleanup.
+4. Hand the node back to normal NetworkManager client mode.
+5. Only after cleanup succeeds should recovery AP or UI flows be considered.
+
+This protects the node from a crash or power loss during AP recovery where
+hostapd, dnsmasq, `wlan0_ap`, or `192.168.50.1/24` might otherwise remain
+half-configured.
+
 Temporary AP metadata should include:
 
 - ap_ssid;
