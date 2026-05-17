@@ -113,6 +113,25 @@ find_tool() {
   return 1
 }
 
+pid_alive() {
+  pid=$1
+  [ -n "$pid" ] || return 1
+  case "$pid" in *[!0-9]*|'') return 1 ;; esac
+  kill -0 "$pid" 2>/dev/null
+}
+
+log_tail_if_readable() {
+  label=$1
+  path=$2
+  section "$label"
+  if [ -r "$path" ]; then
+    tail -n 60 "$path" 2>/dev/null || true
+  else
+    kv "log_path" "$path"
+    kv "log_readable" "no"
+  fi
+}
+
 is_test_hostapd_pid() {
   pid=$1
   [ -n "$pid" ] || return 1
@@ -397,6 +416,43 @@ remove_ap_recovery_ip_best_effort() {
   "$ip_bin" addr del "$ap_recovery_ip/$ap_recovery_cidr" dev "$iface" >/dev/null 2>&1 || true
 }
 
+wait_recovery_startup() {
+  startup_elapsed=0
+  startup_timeout=8
+
+  section "startup-grace"
+  kv "startup_timeout_seconds" "$startup_timeout"
+  while [ "$startup_elapsed" -le "$startup_timeout" ]; do
+    hostapd_ready="$(pid_alive "$hostapd_pid" && printf yes || printf no)"
+    dnsmasq_ready="$(pid_alive "$dnsmasq_pid" && printf yes || printf no)"
+    ui_ready="$(pid_alive "$ui_pid" && printf yes || printf no)"
+
+    kv "startup_second" "$startup_elapsed"
+    kv "hostapd_ready" "$hostapd_ready"
+    kv "dnsmasq_ready" "$dnsmasq_ready"
+    kv "ui_ready" "$ui_ready"
+
+    if [ "$hostapd_ready" = "yes" ] &&
+      [ "$dnsmasq_ready" = "yes" ] &&
+      [ "$ui_ready" = "yes" ]; then
+      kv "startup_status" "ready"
+      return 0
+    fi
+
+    sleep 1
+    startup_elapsed=$((startup_elapsed + 1))
+  done
+
+  kv "startup_status" "failed"
+  kv "hostapd_not_ready" "$([ "$hostapd_ready" = "yes" ] && printf no || printf yes)"
+  kv "dnsmasq_not_ready" "$([ "$dnsmasq_ready" = "yes" ] && printf no || printf yes)"
+  kv "ui_not_ready" "$([ "$ui_ready" = "yes" ] && printf no || printf yes)"
+  log_tail_if_readable "hostapd-log-tail" "$temporary_hostapd_log"
+  log_tail_if_readable "dnsmasq-log-tail" "$temporary_dnsmasq_log"
+  log_tail_if_readable "ui-log-tail" "$temporary_ui_log"
+  return 1
+}
+
 cmd_plan_ap_recovery() {
   channel="$(current_channel || true)"
   active="$(active_connection || true)"
@@ -598,7 +654,7 @@ cmd_apply_ap_recovery_manual_test() {
   : >"$temporary_hostapd_log"
   : >"$temporary_dnsmasq_log"
   : >"$temporary_ui_log"
-  chmod 600 "$temporary_hostapd_log" "$temporary_dnsmasq_log" "$temporary_ui_log"
+  chmod 644 "$temporary_hostapd_log" "$temporary_dnsmasq_log" "$temporary_ui_log"
   write_ap_only_nm_state "$iface" "$previous_connection"
 
   section "real-apply"
@@ -654,8 +710,25 @@ cmd_apply_ap_recovery_manual_test() {
   kv "client_check" "connect to SSID $ssid and verify DHCP address 192.168.50.x"
   kv "browser_check" "open http://$ap_recovery_ip/ or captive portal prompt"
 
+  if ! wait_recovery_startup; then
+    cleanup_ap_recovery
+    trap - EXIT INT TERM HUP
+    section "post-check"
+    kv "elapsed_seconds" "0"
+    kv "hostapd_log" "$temporary_hostapd_log"
+    kv "dnsmasq_log" "$temporary_dnsmasq_log"
+    kv "ui_log" "$temporary_ui_log"
+    kv "config_cleanup" "done"
+    kv "ap_ip_cleanup" "attempted"
+    kv "networkmanager_restore" "attempted"
+    kv "final_nm_device_state" "$(device_state || true)"
+    kv "final_nm_active_connection" "$(active_connection || true)"
+    kv "apply_status" "startup-failed"
+    return 1
+  fi
+
   elapsed=0
-  while is_test_hostapd_pid "$hostapd_pid" && is_test_dnsmasq_pid "$dnsmasq_pid" && is_test_ui_pid "$ui_pid"; do
+  while pid_alive "$hostapd_pid" && pid_alive "$dnsmasq_pid" && pid_alive "$ui_pid"; do
     if [ "$elapsed" -ge "$ap_max_seconds" ]; then
       kv "auto_stop" "max-seconds-reached"
       break
@@ -663,6 +736,9 @@ cmd_apply_ap_recovery_manual_test() {
     sleep 1
     elapsed=$((elapsed + 1))
   done
+  kv "hostapd_alive_final" "$(pid_alive "$hostapd_pid" && printf yes || printf no)"
+  kv "dnsmasq_alive_final" "$(pid_alive "$dnsmasq_pid" && printf yes || printf no)"
+  kv "ui_alive_final" "$(pid_alive "$ui_pid" && printf yes || printf no)"
 
   cleanup_ap_recovery
   trap - EXIT INT TERM HUP
