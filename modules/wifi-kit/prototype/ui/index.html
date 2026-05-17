@@ -829,40 +829,6 @@
       max-height: 220px;
     }
 
-    .bottom-nav {
-      width: 100%;
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 6px;
-      border: 1px solid var(--line);
-      border-radius: 24px;
-      background: rgba(9, 18, 30, 0.66);
-      padding: 8px;
-    }
-
-    .nav-item {
-      display: grid;
-      gap: 5px;
-      justify-items: center;
-      border: 0;
-      border-radius: 17px;
-      background: transparent;
-      color: var(--dim);
-      padding: 9px 5px;
-      font-size: 0.72rem;
-      font-weight: 800;
-    }
-
-    .nav-item .icon-svg {
-      width: 23px;
-      height: 23px;
-    }
-
-    .nav-item.active {
-      background: rgba(68, 212, 230, 0.09);
-      color: var(--cyan);
-    }
-
     @media (min-width: 760px) {
       .shell { padding: 20px 18px 18px; }
       .overview-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -956,32 +922,31 @@
         </div>
         <span class="chip">Read-only</span>
       </div>
-      <p class="lead">Pr&eacute;pare une connexion Wi-Fi sans modifier le Raspberry Pi.</p>
+      <p class="lead">Se connecter &agrave; un Wi-Fi.</p>
     </header>
 
+    <section class="overview" aria-label="Etat Wi-Fi courant">
+      <div class="overview-grid" aria-label="Etat actuel du node">
+        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Interface</span><strong id="status-interface">...</strong></div></div>
+        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-location"></use></svg></span><div><span>Adresse IP</span><strong id="status-ip">...</strong></div></div>
+        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-server"></use></svg></span><div><span>Backend</span><strong id="status-backend">...</strong></div></div>
+        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-wifi"></use></svg></span><div><span>Wi-Fi actuel</span><strong id="status-ssid">...</strong></div></div>
+      </div>
+    </section>
+
     <nav class="section-tabs" aria-label="Navigation Wifi-Kit">
-      <button class="tab-button active" type="button" data-page-target="networks" aria-current="page"><svg class="icon-svg" aria-hidden="true"><use href="#icon-wifi"></use></svg>Reseaux</button>
-      <button class="tab-button" type="button" data-page-target="node"><svg class="icon-svg" aria-hidden="true"><use href="#icon-server"></use></svg>Etat</button>
+      <button class="tab-button active" type="button" data-page-target="networks" aria-current="page"><svg class="icon-svg" aria-hidden="true"><use href="#icon-wifi"></use></svg>R&eacute;seaux</button>
+      <button class="tab-button" type="button" data-page-target="node"><svg class="icon-svg" aria-hidden="true"><use href="#icon-server"></use></svg>&Eacute;tat du node</button>
       <button class="tab-button" type="button" data-page-target="recovery"><svg class="icon-svg" aria-hidden="true"><use href="#icon-shield"></use></svg>Recovery</button>
-      <button class="tab-button" type="button" data-page-target="diagnostic"><svg class="icon-svg" aria-hidden="true"><use href="#icon-activity"></use></svg>Diag</button>
-      <button class="tab-button" type="button" data-page-target="config"><svg class="icon-svg" aria-hidden="true"><use href="#icon-gear"></use></svg>Config</button>
+      <button class="tab-button" type="button" data-page-target="diagnostic"><svg class="icon-svg" aria-hidden="true"><use href="#icon-activity"></use></svg>Diagnostic</button>
+      <button class="tab-button" type="button" data-page-target="config"><svg class="icon-svg" aria-hidden="true"><use href="#icon-gear"></use></svg>Configuration</button>
     </nav>
 
     <div class="page" data-page="networks">
-      <section class="overview" aria-label="Etat Wi-Fi courant">
-        <div class="overview-grid" aria-label="Etat actuel du node">
-          <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Interface</span><strong id="status-interface">...</strong></div></div>
-          <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-location"></use></svg></span><div><span>Adresse IP</span><strong id="status-ip">...</strong></div></div>
-          <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-server"></use></svg></span><div><span>Backend</span><strong id="status-backend">...</strong></div></div>
-          <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-wifi"></use></svg></span><div><span>Wi-Fi actuel</span><strong id="status-ssid">...</strong></div></div>
-        </div>
-      </section>
-
       <section class="panel" aria-labelledby="network-title">
         <div class="section-head">
           <div>
             <h2 id="network-title">Choisir ou changer de Wi-Fi</h2>
-            <p class="section-copy" id="scan-source">Source de scan: inconnue</p>
             <p id="scan-status" class="scan-status">Scan passif pret.</p>
           </div>
           <button id="refresh" type="button" class="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-refresh"></use></svg>Actualiser</button>
@@ -1048,7 +1013,7 @@
         </div>
         <div class="action-grid">
           <div class="action-card">
-            <strong>Reprendre l'ancien Wi-Fi</strong>
+            <strong>Wi-Fi par d&eacute;faut</strong>
             <p>Quitte recovery, arrete les services temporaires, puis redonne wlan0 a NetworkManager.</p>
             <button class="button" type="button" data-network-action="reconnect-previous">Afficher le plan</button>
           </div>
@@ -1056,11 +1021,6 @@
             <strong>Demarrer le mode recovery</strong>
             <p>Prevoit AP, DHCP, DNS captive et UI locale; lancement reel seulement via script garde.</p>
             <button class="button secondary" type="button" data-network-action="start-recovery">Afficher le plan</button>
-          </div>
-          <div class="action-card">
-            <strong>Choisir un autre Wi-Fi</strong>
-            <p>Bascule vers la page Reseaux; le vrai changement reste connect-safe plus tard.</p>
-            <button class="button secondary" type="button" data-network-action="choose-other-wifi">Afficher le plan</button>
           </div>
         </div>
         <div id="network-action-result" class="callout recovery-result" hidden></div>
@@ -1082,6 +1042,8 @@
           <div class="metric"><span>AP</span><strong id="diag-ap">...</strong></div>
           <div class="metric"><span>DHCP</span><strong id="diag-dhcp">...</strong></div>
           <div class="metric"><span>UI</span><strong id="diag-ui">...</strong></div>
+          <div class="metric"><span>Source de scan</span><strong id="scan-source">...</strong></div>
+          <div class="metric"><span>Backend scan</span><strong id="diag-scan-backend">...</strong></div>
           <div class="metric"><span>Ping gateway</span><strong>futur</strong></div>
           <div class="metric"><span>Ping internet</span><strong>futur</strong></div>
           <div class="metric"><span>Recovery guard</span><strong>audit futur</strong></div>
@@ -1128,13 +1090,6 @@
       </section>
     </div>
 
-    <nav class="bottom-nav" aria-label="Navigation visuelle">
-      <button class="nav-item active" type="button" data-page-target="networks" aria-current="page"><svg class="icon-svg" aria-hidden="true"><use href="#icon-wifi"></use></svg>Reseaux</button>
-      <button class="nav-item" type="button" data-page-target="node"><svg class="icon-svg" aria-hidden="true"><use href="#icon-server"></use></svg>Etat</button>
-      <button class="nav-item" type="button" data-page-target="recovery"><svg class="icon-svg" aria-hidden="true"><use href="#icon-shield"></use></svg>Recovery</button>
-      <button class="nav-item" type="button" data-page-target="diagnostic"><svg class="icon-svg" aria-hidden="true"><use href="#icon-activity"></use></svg>Diag</button>
-      <button class="nav-item" type="button" data-page-target="config"><svg class="icon-svg" aria-hidden="true"><use href="#icon-gear"></use></svg>Config</button>
-    </nav>
   </main>
 
   <script id="wifi-kit-data" type="application/json">
@@ -1207,6 +1162,8 @@
     "wifi": "unknown",
     "interface": "unknown",
     "networkmanager": "unknown",
+    "backend": "unknown",
+    "scan_backend": "unknown",
     "uptime": "unknown",
     "temperature": "unknown",
     "recovery_active": false,
@@ -1282,10 +1239,13 @@
 
     function describeConnection() {
       const system = systemState();
+      const recovery = recoveryState();
       const ip = system.ip || value(data.diagnose, 'current_ip');
       const iface = system.interface || value(data.diagnose, 'interface');
-      const ssid = system.wifi || value(data.diagnose, 'current_ssid_state');
-      const backend = data.scan?.backend || value(data.diagnose, 'backend');
+      const ssid = system.mode === 'recovery'
+        ? (recovery.ssid || system.recovery_ssid || 'Wifi-Kit-node')
+        : (system.wifi || value(data.diagnose, 'current_ssid_state'));
+      const backend = system.backend || value(data.diagnose, 'backend') || data.scan?.backend;
       document.getElementById('status-interface').textContent = iface;
       document.getElementById('status-ip').textContent = ip;
       document.getElementById('status-backend').textContent = backend || 'inconnu';
@@ -1294,8 +1254,8 @@
 
     function describeScanBackend(scan) {
       const backend = scan.backend || 'unknown';
-      if (backend === 'wpa_cli') return 'wpa_cli scan_results - lecture seule';
-      if (backend === 'iw') return 'iw scan - fallback lecture seule';
+      if (backend === 'wpa_cli') return 'Scan Wi-Fi lu en mode diagnostic';
+      if (backend === 'iw') return 'Scan Wi-Fi fallback en mode diagnostic';
       return `Source de scan: ${backend}`;
     }
 
@@ -1417,6 +1377,7 @@
       setText('diag-ap', serviceLabel(system.ap_state || recovery.ap));
       setText('diag-dhcp', serviceLabel(system.dhcp_state || recovery.dhcp));
       setText('diag-ui', serviceLabel(system.ui_state || recovery.ui));
+      setText('diag-scan-backend', describeScanBackend(data.scan || {}));
     }
 
     function showPage(page) {
@@ -1453,17 +1414,12 @@
     function networkActionPlan(action) {
       const plans = {
         'reconnect-previous': "Plan: arreter l'UI recovery, dnsmasq et hostapd Wifi-Kit, supprimer les configs temporaires, retirer 192.168.50.1/24, puis reconnecter NetworkManager a l'ancien Wi-Fi. Action HTTP encore plan-only.",
-        'choose-other-wifi': "Plan: choisir un SSID, garder le mot de passe runtime-only, lancer plus tard connect-safe NetworkManager avec rollback, puis revenir en recovery si validation KO. Encore stub.",
         'start-recovery': "Plan: snapshot NetworkManager, passer wlan0 en AP-only, lancer hostapd avec le mot de passe AP recovery de test 12345678, dnsmasq DHCP/DNS captive et l'UI locale sur 192.168.50.1:80. Lancement reel uniquement par script confirme."
       };
       return plans[action] || `Action ${action}: plan-only.`;
     }
 
     async function triggerNetworkAction(action) {
-      if (action === 'choose-other-wifi') {
-        showPage('networks');
-        document.getElementById('network-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
       showNetworkActionResult(networkActionPlan(action));
       if (window.location.protocol === 'file:') return;
       try {
@@ -1477,13 +1433,6 @@
     }
 
     async function triggerRecoveryAction(action) {
-      if (action === 'choose-other-wifi') {
-        showPage('networks');
-        document.getElementById('network-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
-        showRecoveryResult('Choix Wi-Fi visible ici. La reconnexion reelle reste gardee cote script, avec rollback.');
-        return;
-      }
-
       if (window.location.protocol === 'file:') {
         showRecoveryResult(`Action ${action}: plan-only dans cette page locale.`);
         return;

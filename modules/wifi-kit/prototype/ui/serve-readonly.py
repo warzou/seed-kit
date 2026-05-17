@@ -30,7 +30,6 @@ CAPTIVE_PATHS = {
 
 ACTION_PATHS = {
     "/reconnect-previous": "reconnect-previous",
-    "/choose-other-wifi": "choose-other-wifi",
     "/start-recovery": "start-recovery",
     "/exit-recovery": "exit-recovery",
     "/reboot-recovery": "reboot-recovery",
@@ -124,6 +123,15 @@ def networkmanager_state() -> str:
     return state or "unknown"
 
 
+def networkmanager_owns_wlan0() -> bool:
+    output = run_text_command(["nmcli", "-t", "-f", "DEVICE,TYPE,STATE", "device", "status"])
+    for line in output.splitlines():
+        device, typ, state = (line.split(":") + ["", "", ""])[:3]
+        if device == "wlan0" and typ == "wifi" and state in {"connected", "connecting", "disconnected"}:
+            return True
+    return False
+
+
 def wlan_connection() -> str:
     output = run_text_command(["nmcli", "-t", "-f", "DEVICE,CONNECTION", "device", "status"])
     for line in output.splitlines():
@@ -145,6 +153,8 @@ def system_info(diagnose: dict, recovery: dict | None = None) -> dict:
         "wifi": diagnose.get("current_ssid_state") or wlan_connection(),
         "interface": diagnose.get("interface") or "unknown",
         "networkmanager": networkmanager_state(),
+        "backend": "NetworkManager" if networkmanager_owns_wlan0() else diagnose.get("backend") or "unknown",
+        "scan_backend": diagnose.get("backend") or "unknown",
         "uptime": uptime_label(),
         "temperature": temperature_label(),
         "recovery_active": recovery_active,
