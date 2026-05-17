@@ -1555,6 +1555,7 @@ seed_kit_usage() {
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
   echo "  package inspect-stage <dir>  inspect staged package without applying it"
+  echo "  package apply-guided <file>  guided SAFE package assistant without applying it"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --apply --package <file> [--components=a,b]  preview package apply only"
   echo "  --apply-module=<module> [--yes|-y]  apply one module only"
@@ -2770,6 +2771,53 @@ inspect_stage_package() {
   ui_line "No restore, compose up, secrets, DNS/cutover, reboot, or network restart was attempted."
 }
 
+apply_guided_package() {
+  package_file=$1
+
+  ui_separator "========================================"
+  ui_line "PACKAGE APPLY GUIDED"
+  ui_line "SAFE prototype"
+  ui_separator "========================================"
+
+  ui_section "[1/5] verify package"
+  if ! verify_package_archive "$package_file"; then
+    ui_line "Apply guided: stopped because verification failed"
+    return 2
+  fi
+
+  ui_section "[2/5] stage package"
+  stage_output=$(stage_package_archive "$package_file") || {
+    printf '%s\n' "$stage_output"
+    ui_line "Apply guided: stopped because staging failed"
+    return 2
+  }
+  printf '%s\n' "$stage_output"
+  stage_dir=$(printf '%s\n' "$stage_output" | sed -n 's/^Stage dir: //p' | sed -n '1p')
+  if [ -z "$stage_dir" ]; then
+    ui_line "Apply guided: unable to find stage directory"
+    return 2
+  fi
+
+  ui_section "[3/5] inspect staged package"
+  inspect_stage_package "$stage_dir"
+
+  ui_section "[4/5] proposed future actions"
+  ui_line "- install missing modules"
+  ui_line "- review configs"
+  ui_line "- reconnect tailscale manually"
+  ui_line "- reconnect cloudflare manually"
+  ui_line "- validate compose"
+  ui_line "- optional manual service start"
+
+  ui_section "[5/5] SAFE status"
+  ui_line "No restore was attempted."
+  ui_line "No service was started."
+  ui_line "No secret was copied."
+  ui_line "No DNS/cutover was attempted."
+  ui_line "No reboot or network restart was attempted."
+  ui_line "Package apply remains disabled in V1."
+}
+
 show_package_plan() {
   package_file=$1
 
@@ -3320,10 +3368,19 @@ case "${1:-}" in
         fi
         inspect_stage_package "$1"
         ;;
+      apply-guided)
+        shift
+        if [ -z "${1:-}" ]; then
+          echo "usage: sh seed-kit.sh package apply-guided <file>" >&2
+          exit 2
+        fi
+        apply_guided_package "$1"
+        ;;
       *)
         echo "usage: sh seed-kit.sh package verify <file>" >&2
         echo "       sh seed-kit.sh package stage <file>" >&2
         echo "       sh seed-kit.sh package inspect-stage <dir>" >&2
+        echo "       sh seed-kit.sh package apply-guided <file>" >&2
         exit 2
         ;;
     esac
