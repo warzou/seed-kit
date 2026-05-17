@@ -938,8 +938,8 @@
       <button class="tab-button active" type="button" data-page-target="networks" aria-current="page"><svg class="icon-svg" aria-hidden="true"><use href="#icon-wifi"></use></svg>R&eacute;seaux</button>
       <button class="tab-button" type="button" data-page-target="node"><svg class="icon-svg" aria-hidden="true"><use href="#icon-server"></use></svg>&Eacute;tat du node</button>
       <button class="tab-button" type="button" data-page-target="recovery"><svg class="icon-svg" aria-hidden="true"><use href="#icon-shield"></use></svg>Recovery</button>
-      <button class="tab-button" type="button" data-page-target="diagnostic"><svg class="icon-svg" aria-hidden="true"><use href="#icon-activity"></use></svg>Diagnostic</button>
-      <button class="tab-button" type="button" data-page-target="config"><svg class="icon-svg" aria-hidden="true"><use href="#icon-gear"></use></svg>Configuration</button>
+      <button class="tab-button" type="button" data-page-target="diagnostic"><svg class="icon-svg" aria-hidden="true"><use href="#icon-activity"></use></svg>Diag.</button>
+      <button class="tab-button" type="button" data-page-target="config"><svg class="icon-svg" aria-hidden="true"><use href="#icon-gear"></use></svg>Config.</button>
     </nav>
 
     <div class="page" data-page="networks">
@@ -1061,31 +1061,43 @@
     </div>
 
     <div class="page" data-page="config" hidden>
+      <section class="panel config-panel" aria-labelledby="config-password-title">
+        <div class="section-head">
+          <div>
+            <h2 id="config-password-title">Mot de passe AP recovery</h2>
+            <p class="section-copy">Ce mot de passe sert au Wi-Fi recovery, pas &agrave; l'interface.</p>
+          </div>
+          <span class="chip">Plan-only</span>
+        </div>
+        <div class="config-grid">
+          <div class="metric"><span>Valeur de test actuelle</span><strong id="config-ap-password-current">...</strong></div>
+        </div>
+        <div class="config-form">
+          <label class="field-label">
+            Nouveau mot de passe AP recovery
+            <input id="config-ap-password" class="password-local" type="password" autocomplete="new-password" placeholder="Nouveau mot de passe AP recovery">
+          </label>
+          <button id="config-save-password" class="button" type="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-lock"></use></svg>Modifier en simulation</button>
+          <div id="config-result" class="callout recovery-result" hidden></div>
+        </div>
+      </section>
+
       <section class="panel config-panel" aria-labelledby="config-title">
         <div class="section-head">
           <div>
             <h2 id="config-title">Configuration</h2>
-            <p class="section-copy">Parametres affiches seulement; persistance future hors repo.</p>
+            <p class="section-copy">Param&egrave;tres affich&eacute;s seulement ; persistance future hors repo.</p>
           </div>
-          <span class="chip">Plan-only</span>
+          <span class="chip">Read-only</span>
         </div>
         <div class="config-grid">
           <div class="metric"><span>Port normal UI</span><strong id="config-normal-port">...</strong></div>
           <div class="metric"><span>Port recovery UI</span><strong id="config-recovery-port">...</strong></div>
           <div class="metric"><span>SSID recovery</span><strong id="config-recovery-ssid">...</strong></div>
-          <div class="metric"><span>Mot de passe test</span><strong id="config-ap-password-current">...</strong></div>
+          <div class="metric"><span>Mot de passe test</span><strong id="config-ap-password-summary">...</strong></div>
           <div class="metric"><span>Politique AP</span><strong id="config-ap-password-policy">...</strong></div>
-          <div class="metric"><span>Acces interface</span><strong id="config-ui-access-password">...</strong></div>
+          <div class="metric"><span>Acc&egrave;s interface</span><strong id="config-ui-access-password">...</strong></div>
           <div class="metric"><span>Persistance</span><strong>future</strong></div>
-        </div>
-        <div class="config-form">
-          <label class="field-label">
-            Mot de passe AP recovery
-            <span class="field-hint">Valeur de test actuelle: 12345678. Ce mot de passe sert au Wi-Fi recovery, pas a l'interface.</span>
-            <input id="config-ap-password" class="password-local" type="password" autocomplete="new-password" placeholder="Nouveau mot de passe AP recovery">
-          </label>
-          <button id="config-save-password" class="button" type="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-lock"></use></svg>Modifier en simulation</button>
-          <div id="config-result" class="callout recovery-result" hidden></div>
         </div>
       </section>
     </div>
@@ -1366,6 +1378,7 @@
       setText('config-recovery-port', system.recovery_ui_port || recovery.recovery_ui_port || 80);
       setText('config-recovery-ssid', recovery.ssid || system.recovery_ssid || 'Wifi-Kit-node');
       setText('config-ap-password-current', recovery.ap_password_current || system.recovery_ap_password_current || '12345678');
+      setText('config-ap-password-summary', recovery.ap_password_current || system.recovery_ap_password_current || '12345678');
       setText('config-ap-password-policy', recovery.ap_password_policy || system.recovery_ap_password_policy || 'min-8-chars');
       setText('config-ui-access-password', recovery.ui_access_password || system.ui_access_password || 'future-not-configured');
     }

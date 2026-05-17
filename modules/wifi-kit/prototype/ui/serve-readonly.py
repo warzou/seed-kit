@@ -132,6 +132,20 @@ def networkmanager_owns_wlan0() -> bool:
     return False
 
 
+def wlan_ssid() -> str:
+    output = run_text_command(["nmcli", "-t", "-f", "ACTIVE,SSID", "device", "wifi", "list", "--rescan", "no"])
+    for line in output.splitlines():
+        active, _, ssid = line.partition(":")
+        if active == "yes" and ssid:
+            return ssid
+    output = run_text_command(["iw", "dev", "wlan0", "link"])
+    for line in output.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("SSID:"):
+            return stripped.partition(":")[2].strip() or "unknown"
+    return "unknown"
+
+
 def wlan_connection() -> str:
     output = run_text_command(["nmcli", "-t", "-f", "DEVICE,CONNECTION", "device", "status"])
     for line in output.splitlines():
@@ -146,15 +160,23 @@ def system_info(diagnose: dict, recovery: dict | None = None) -> dict:
     recovery_active = bool(recovery.get("active"))
     hostname = socket.gethostname() or "unknown"
     recovery_ssid = recovery.get("ssid") or f"Wifi-Kit-{hostname}"
+    nm_owns_wlan0 = networkmanager_owns_wlan0()
+    scan_backend = diagnose.get("backend") or "unknown"
+    diagnose_wifi = diagnose.get("current_ssid_state") or ""
+    wifi = wlan_ssid()
+    if wifi == "unknown" and diagnose_wifi not in {"", "unknown", "present"}:
+        wifi = diagnose_wifi
+    if wifi == "unknown":
+        wifi = wlan_connection()
     return {
         "hostname": hostname,
         "mode": "recovery" if recovery_active else "normal",
         "ip": diagnose.get("current_ip") or "unknown",
-        "wifi": diagnose.get("current_ssid_state") or wlan_connection(),
+        "wifi": recovery_ssid if recovery_active else wifi,
         "interface": diagnose.get("interface") or "unknown",
         "networkmanager": networkmanager_state(),
-        "backend": "NetworkManager" if networkmanager_owns_wlan0() else diagnose.get("backend") or "unknown",
-        "scan_backend": diagnose.get("backend") or "unknown",
+        "backend": f"NM + {scan_backend}" if nm_owns_wlan0 and scan_backend != "unknown" else ("NM" if nm_owns_wlan0 else scan_backend),
+        "scan_backend": scan_backend,
         "uptime": uptime_label(),
         "temperature": temperature_label(),
         "recovery_active": recovery_active,
