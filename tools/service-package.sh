@@ -40,9 +40,10 @@ copy_allowed_path() {
   source_root="$1"
   staging_dir="$2"
   rel_path="$3"
+  target_rel_path="${4:-$rel_path}"
 
   source_path="$source_root/$rel_path"
-  target_path="$staging_dir/$rel_path"
+  target_path="$staging_dir/$target_rel_path"
 
   if [ ! -e "$source_path" ]; then
     echo "missing: $rel_path"
@@ -70,7 +71,7 @@ copy_allowed_path() {
     mkdir -p "$(dirname "$target_path")"
     cp "$source_path" "$target_path"
   fi
-  echo "copied: $rel_path"
+  echo "copied: $rel_path -> $target_rel_path"
 }
 
 write_manifest() {
@@ -80,6 +81,8 @@ write_manifest() {
 
   {
     echo "service-name: $service"
+    echo "package-id: rpi-edge-service"
+    echo "profile-id: rpi-edge"
     echo "format-version: 1"
     echo "generated-by: seed-kit"
     echo "generated-at: $(timestamp_utc)"
@@ -91,9 +94,12 @@ write_manifest() {
     echo "secrets-included: no"
     echo
     echo "included-paths:"
-    echo "  - compose/docker-compose.yml"
-    echo "  - config/caddy"
-    echo "  - config/homepage"
+    echo "  - seed-kit-package.sh"
+    echo "  - profiles/rpi-edge.profile"
+    echo "  - services/docker-compose.yml"
+    echo "  - configs/caddy"
+    echo "  - configs/homepage"
+    echo "  - docs/reconstruction.txt"
     echo
     echo "excluded:"
     echo "  - .env"
@@ -107,6 +113,28 @@ write_manifest() {
     echo "  - cloudflare credentials"
     echo "  - tokens/api keys"
   } > "$manifest"
+}
+
+write_package_descriptor() {
+  descriptor="$1"
+
+  {
+    echo 'PACKAGE_ID="rpi-edge-service"'
+    echo 'PROFILE_ID="rpi-edge"'
+    echo 'COMPONENTS="docker tailscale cloudflared caddy homepage"'
+    echo 'SECRETS_POLICY="manual-reconnect"'
+  } > "$descriptor"
+}
+
+write_profile() {
+  profile="$1"
+
+  {
+    echo 'PROFILE_ID="rpi-edge"'
+    echo 'NODE_ROLE="edge-service"'
+    echo 'MODULES="docker tailscale cloudflared caddy homepage"'
+    echo 'RECONSTRUCTION_MODE="manual"'
+  } > "$profile"
 }
 
 write_checksums() {
@@ -170,7 +198,7 @@ create_archive_if_possible() {
 create_rpi_edge_vps() {
   source_dir="$1"
   output_dir="$2"
-  staging_name="rpi-edge-vps-service"
+  staging_name="rpi-edge-service"
   staging_dir="$output_dir/$staging_name"
 
   if [ ! -d "$source_dir" ]; then
@@ -189,13 +217,15 @@ create_rpi_edge_vps() {
     return 2
   fi
 
-  mkdir -p "$staging_dir/compose" "$staging_dir/config" "$staging_dir/notes"
+  mkdir -p "$staging_dir/services" "$staging_dir/configs" "$staging_dir/docs" "$staging_dir/profiles"
 
   write_manifest "$staging_dir/MANIFEST.txt" "rpi-edge-vps" "$source_dir"
+  write_package_descriptor "$staging_dir/seed-kit-package.sh"
+  write_profile "$staging_dir/profiles/rpi-edge.profile"
 
-  copy_allowed_path "$source_dir" "$staging_dir" "compose/docker-compose.yml"
-  copy_allowed_path "$source_dir" "$staging_dir" "config/caddy"
-  copy_allowed_path "$source_dir" "$staging_dir" "config/homepage"
+  copy_allowed_path "$source_dir" "$staging_dir" "compose/docker-compose.yml" "services/docker-compose.yml"
+  copy_allowed_path "$source_dir" "$staging_dir" "config/caddy" "configs/caddy"
+  copy_allowed_path "$source_dir" "$staging_dir" "config/homepage" "configs/homepage"
 
   {
     echo "rpi-edge-vps reconstruction notes"
@@ -205,7 +235,7 @@ create_rpi_edge_vps() {
     echo "- reconnect Tailscale manually"
     echo "- reconnect Cloudflare manually"
     echo "- validate services before production cutover"
-  } > "$staging_dir/notes/reconstruction.txt"
+  } > "$staging_dir/docs/reconstruction.txt"
 
   refuse_if_forbidden_staged "$staging_dir"
   write_checksums "$staging_dir"
@@ -219,9 +249,11 @@ create_rpi_edge_vps() {
   echo "created:"
   echo "  MANIFEST.txt"
   echo "  SHA256SUMS"
-  echo "  compose/"
-  echo "  config/"
-  echo "  notes/"
+  echo "  seed-kit-package.sh"
+  echo "  profiles/"
+  echo "  services/"
+  echo "  configs/"
+  echo "  docs/"
   echo
   echo "summary:"
   echo "  restore performed: no"

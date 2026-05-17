@@ -13,18 +13,20 @@ reconstruction.
 Example:
 
 ```text
-rpi-edge-vps-service/
+rpi-edge-service/
   MANIFEST.txt
   SHA256SUMS
-  compose/
-  config/
-  notes/
+  seed-kit-package.sh
+  profiles/rpi-edge.profile
+  services/
+  configs/
+  docs/
 ```
 
 Archive form:
 
 ```text
-rpi-edge-vps-service.tar.gz
+rpi-edge-service.tar.gz
 ```
 
 ## Expected contents
@@ -32,6 +34,8 @@ rpi-edge-vps-service.tar.gz
 - compose files
 - service configs
 - reconstruction notes
+- package declaration
+- embedded profile
 - manifests/checksums
 - optional selected small runtime state
 
@@ -59,6 +63,8 @@ Example:
 
 ```text
 service-name: rpi-edge-vps
+package-id: rpi-edge-service
+profile-id: rpi-edge
 format-version: 1
 generated-by: seed-kit
 reconstruction-mode: manual

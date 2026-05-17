@@ -27,7 +27,7 @@ sh seed-kit.sh --apply --package <file.tar.gz> --components docker,homepage
 ```text
 MANIFEST.txt
 SHA256SUMS
-seed-kit-package.json
+seed-kit-package.sh
 profiles/<profile>.profile
 services/
 configs/
