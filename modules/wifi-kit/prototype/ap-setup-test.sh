@@ -8,6 +8,7 @@ ap_channel=""
 ap_duration_seconds="30"
 ap_max_seconds="300"
 temporary_hostapd_conf="/tmp/wifi-kit-hostapd-test.conf"
+temporary_hostapd_conf_public="/tmp/wifi-kit-hostapd-test.conf.redacted"
 temporary_hostapd_log="/tmp/wifi-kit-hostapd-test.log"
 temporary_hostapd_pid="/tmp/wifi-kit-hostapd-test.pid"
 confirm_phrase=""
@@ -31,6 +32,7 @@ Usage:
     --confirm "WIFI-KIT AP MANUAL TEST"
   sh modules/wifi-kit/prototype/ap-setup-test.sh status
   sh modules/wifi-kit/prototype/ap-setup-test.sh stop
+  sh modules/wifi-kit/prototype/ap-setup-test.sh diagnose-last
 
 Options:
   --iface <name>           Wi-Fi interface. Default: wlan0
@@ -235,7 +237,7 @@ cmd_plan() {
   kv "01.preflight" "sh modules/wifi-kit/prototype/ap-setup-test.sh preflight"
   kv "02.write_temp_hostapd_config" "create $temporary_hostapd_conf with ssid=$ssid channel=$ap_channel wpa=2"
   kv "03.runtime_secret" "WPA2 passphrase supplied at runtime only; never repo/log/diff"
-  kv "04.start_hostapd_foreground" "hostapd $temporary_hostapd_conf"
+  kv "04.start_hostapd_foreground" "hostapd -d $temporary_hostapd_conf"
   kv "05.observe_phone_visibility" "confirm SSID appears from phone"
   kv "06.stop_hostapd" "terminate foreground hostapd after ${ap_duration_seconds}s or manual stop"
   kv "07.cleanup" "remove $temporary_hostapd_conf"
@@ -285,6 +287,40 @@ cmd_status() {
   fi
 }
 
+cmd_diagnose_last() {
+  printf '[wifi-kit] AP setup last-run diagnosis\n'
+  kv "mode" "diagnose-last-readonly"
+  kv "log_path" "$temporary_hostapd_log"
+  kv "redacted_config_path" "$temporary_hostapd_conf_public"
+
+  if [ ! -r "$temporary_hostapd_log" ]; then
+    kv "log_present" "no"
+    kv "diagnose_status" "WARN"
+    kv "warning" "hostapd log is missing or not readable"
+    return 0
+  fi
+
+  kv "log_present" "yes"
+  kv "ap_enabled" "$(grep -q 'AP-ENABLED' "$temporary_hostapd_log" && printf yes || printf no)"
+  kv "ap_disabled" "$(grep -q 'AP-DISABLED' "$temporary_hostapd_log" && printf yes || printf no)"
+  kv "beacon_seen" "$(grep -Eiq 'beacon' "$temporary_hostapd_log" && printf yes || printf no)"
+  kv "ignore_broadcast_ssid_seen" "$(grep -q 'ignore_broadcast_ssid' "$temporary_hostapd_log" && printf yes || printf no)"
+  kv "nl80211_issue_seen" "$(grep -Eiq 'nl80211|Could not|failed|error' "$temporary_hostapd_log" && printf yes || printf no)"
+  kv "estimated_duration" "unknown"
+
+  section "important-log-lines"
+  grep -Ei 'ignore_broadcast_ssid|beacon|AP-ENABLED|AP-DISABLED|nl80211|Could not|failed|error|interface state|mode|wlan0' "$temporary_hostapd_log" |
+    tail -n 80 || true
+
+  section "last-log-lines"
+  tail -n 40 "$temporary_hostapd_log" || true
+
+  if [ -r "$temporary_hostapd_conf_public" ]; then
+    section "redacted-hostapd-config"
+    cat "$temporary_hostapd_conf_public"
+  fi
+}
+
 cmd_stop() {
   pid="$(test_pid_from_file || true)"
 
@@ -326,6 +362,7 @@ auth_algs=1
 wpa=2
 wpa_key_mgmt=WPA-PSK
 rsn_pairwise=CCMP
+ignore_broadcast_ssid=0
 wpa_passphrase=<runtime-only-secret>
 EOF
 }
@@ -347,9 +384,22 @@ auth_algs=1
 wpa=2
 wpa_key_mgmt=WPA-PSK
 rsn_pairwise=CCMP
+ignore_broadcast_ssid=0
 wpa_passphrase=$passphrase
 EOF
   chmod 600 "$temporary_hostapd_conf"
+}
+
+write_redacted_hostapd_config_copy() {
+  [ -r "$temporary_hostapd_conf" ] || return 0
+  awk '
+    /^wpa_passphrase=/ {
+      print "wpa_passphrase=<redacted>"
+      next
+    }
+    { print }
+  ' "$temporary_hostapd_conf" >"$temporary_hostapd_conf_public"
+  chmod 600 "$temporary_hostapd_conf_public" 2>/dev/null || true
 }
 
 runtime_ap_passphrase() {
@@ -400,17 +450,18 @@ cmd_apply_short_test() {
   kv "ap_channel" "$ap_channel"
   kv "duration_seconds" "$ap_duration_seconds"
   kv "temporary_hostapd_conf" "$temporary_hostapd_conf"
+  kv "redacted_config_path" "$temporary_hostapd_conf_public"
   kv "log_path" "$temporary_hostapd_log"
   kv "pidfile" "$temporary_hostapd_pid"
   kv "hostapd_present" "$(find_tool hostapd >/dev/null 2>&1 && printf yes || printf no)"
-  kv "hostapd_command" "$hostapd_bin $temporary_hostapd_conf"
+  kv "hostapd_command" "$hostapd_bin -d $temporary_hostapd_conf"
 
   section "temporary-hostapd-config"
   write_hostapd_config_plan "$ssid" "$ap_channel"
 
   section "exact-command"
   kv "01.write_config" "create $quoted_conf mode 600 with runtime-only passphrase"
-  kv "02.run_foreground" "timeout ${ap_duration_seconds}s $quoted_hostapd $quoted_conf"
+  kv "02.run_foreground" "timeout ${ap_duration_seconds}s $quoted_hostapd -d $quoted_conf"
   kv "03.cleanup" "rm -f $quoted_conf"
   kv "04.verify" "systemctl is-active hostapd || true; iw dev; nmcli device status"
   kv "05.next_root_command" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh apply-short-test --dangerous-real-apply --confirm \"WIFI-KIT AP SHORT TEST\""
@@ -444,6 +495,7 @@ cmd_apply_short_test() {
   esac
 
   cleanup() {
+    write_redacted_hostapd_config_copy
     rm -f "$temporary_hostapd_conf"
   }
   trap cleanup EXIT INT TERM HUP
@@ -457,12 +509,12 @@ cmd_apply_short_test() {
   kv "ap_ssid" "$ssid"
   kv "duration_seconds" "$ap_duration_seconds"
   kv "temporary_hostapd_conf" "$temporary_hostapd_conf"
-  kv "hostapd_command" "$hostapd_bin $temporary_hostapd_conf"
+  kv "hostapd_command" "$hostapd_bin -d $temporary_hostapd_conf"
   kv "runtime_secret" "not-logged"
   kv "phone_check" "look for SSID $ssid now"
 
   set +e
-  timeout "${ap_duration_seconds}s" "$hostapd_bin" "$temporary_hostapd_conf"
+  timeout "${ap_duration_seconds}s" "$hostapd_bin" -d "$temporary_hostapd_conf"
   hostapd_rc=$?
   set -e
 
@@ -516,17 +568,18 @@ cmd_apply_manual_test() {
   kv "ap_channel" "$ap_channel"
   kv "max_seconds" "$ap_max_seconds"
   kv "temporary_hostapd_conf" "$temporary_hostapd_conf"
+  kv "redacted_config_path" "$temporary_hostapd_conf_public"
   kv "log_path" "$temporary_hostapd_log"
   kv "pidfile" "$temporary_hostapd_pid"
   kv "hostapd_present" "$(find_tool hostapd >/dev/null 2>&1 && printf yes || printf no)"
-  kv "hostapd_command" "$hostapd_bin $temporary_hostapd_conf"
+  kv "hostapd_command" "$hostapd_bin -d $temporary_hostapd_conf"
 
   section "temporary-hostapd-config"
   write_hostapd_config_plan "$ssid" "$ap_channel"
 
   section "exact-command"
   kv "01.write_config" "create $(shell_quote "$temporary_hostapd_conf") mode 600 with runtime-only passphrase"
-  kv "02.run_hostapd" "$hostapd_bin $temporary_hostapd_conf > $(shell_quote "$temporary_hostapd_log") 2>&1"
+  kv "02.run_hostapd" "$hostapd_bin -d $temporary_hostapd_conf > $(shell_quote "$temporary_hostapd_log") 2>&1"
   kv "03.pidfile" "$temporary_hostapd_pid"
   kv "04.stop" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
   kv "05.auto_stop" "after ${ap_max_seconds}s if not manually stopped"
@@ -570,6 +623,7 @@ cmd_apply_manual_test() {
       kill "$hostapd_pid" 2>/dev/null || true
       wait "$hostapd_pid" 2>/dev/null || true
     fi
+    write_redacted_hostapd_config_copy
     rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid"
   }
   trap cleanup_manual EXIT INT TERM HUP
@@ -587,11 +641,12 @@ cmd_apply_manual_test() {
   kv "max_seconds" "$ap_max_seconds"
   kv "log_path" "$temporary_hostapd_log"
   kv "pidfile" "$temporary_hostapd_pid"
+  kv "redacted_config_path" "$temporary_hostapd_conf_public"
   kv "runtime_secret" "not-logged"
   kv "phone_check" "look for SSID $ssid now"
   kv "stop_command" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
 
-  "$hostapd_bin" "$temporary_hostapd_conf" >"$temporary_hostapd_log" 2>&1 &
+  "$hostapd_bin" -d "$temporary_hostapd_conf" >"$temporary_hostapd_log" 2>&1 &
   hostapd_pid=$!
   printf '%s\n' "$hostapd_pid" >"$temporary_hostapd_pid"
   kv "hostapd_pid" "$hostapd_pid"
@@ -622,7 +677,7 @@ cmd_apply_manual_test() {
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    preflight|plan|apply|apply-short-test|apply-manual-test|status|stop)
+    preflight|plan|apply|apply-short-test|apply-manual-test|status|stop|diagnose-last)
       [ -z "$mode" ] || fail "choose only one mode"
       mode="$1"
       ;;
@@ -678,6 +733,7 @@ case "${mode:-}" in
   apply-manual-test) cmd_apply_manual_test ;;
   status) cmd_status ;;
   stop) cmd_stop ;;
+  diagnose-last) cmd_diagnose_last ;;
   *)
     usage
     exit 2
