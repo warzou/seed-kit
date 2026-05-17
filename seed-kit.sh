@@ -3267,7 +3267,13 @@ apply_guided_suggest_start() {
 
   ui_line ""
   ui_line "Identity/manual steps:"
+  ui_line "  Review readiness first:"
+  ui_line "    sh seed-kit.sh package apply-guided $package_file --step readiness"
+  ui_line ""
+  ui_line "  Tailscale will open a browser authentication URL:"
   ui_line "  sudo tailscale up"
+  ui_line ""
+  ui_line "  Cloudflare tunnel setup remains manual:"
   ui_line "  cloudflared tunnel login/create/configure"
 
   ui_line ""
@@ -3357,6 +3363,17 @@ apply_guided_readiness() {
   ui_line "  connected: $tailscale_connected"
   ui_line "  ready: $(readiness_bool "$tailscale_connected")"
   if [ "$tailscale_connected" != "yes" ]; then
+    ui_line ""
+    ui_line "  This node is not connected to your tailnet yet."
+    ui_line "  The next step will open a browser authentication URL."
+    ui_line ""
+    ui_line "  When ready:"
+    ui_line "    sudo tailscale up"
+    ui_line ""
+    ui_line "  Expected result:"
+    ui_line "    - node appears in your tailnet"
+    ui_line "    - tailscale ip returns an IP"
+    ui_line "    - readiness becomes yes"
     ui_line "  next: sudo tailscale up"
   fi
 
@@ -3376,6 +3393,18 @@ apply_guided_readiness() {
   ui_line "  configured: $cloudflared_configured_status"
   ui_line "  ready: $(readiness_bool "$cloudflared_configured_status")"
   if [ "$cloudflared_configured_status" != "yes" ]; then
+    ui_line ""
+    ui_line "  Cloudflare tunnel credentials are not configured yet."
+    ui_line ""
+    ui_line "  When ready:"
+    ui_line "    cloudflared tunnel login"
+    ui_line "    cloudflared tunnel create ..."
+    ui_line "    cloudflared tunnel route ..."
+    ui_line ""
+    ui_line "  Expected result:"
+    ui_line "    - tunnel credentials present"
+    ui_line "    - tunnel configuration detected"
+    ui_line "    - readiness becomes yes"
     ui_line "  next: cloudflared tunnel login/create/configure"
   fi
 
