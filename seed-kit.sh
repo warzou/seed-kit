@@ -1555,7 +1555,7 @@ seed_kit_usage() {
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
   echo "  package inspect-stage <dir>  inspect staged package without applying it"
-  echo "  package apply-guided <file> [--step install-modules|review-configs]  guided SAFE package assistant"
+  echo "  package apply-guided <file> [--step install-modules|review-configs|validate-services]  guided SAFE package assistant"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --apply --package <file> [--components=a,b]  preview package apply only"
   echo "  --apply-module=<module> [--yes|-y]  apply one module only"
@@ -2881,12 +2881,63 @@ apply_guided_review_configs() {
   ui_line "No restore, compose up/pull, Caddy reload, secrets, DNS/cutover, reboot, or network restart was attempted."
 }
 
+apply_guided_validate_services() {
+  package_root=$1
+  compose_file="$package_root/services/docker-compose.yml"
+  caddy_file="$package_root/configs/caddy/Caddyfile"
+  homepage_dir="$package_root/configs/homepage"
+
+  ui_section "SERVICE VALIDATION"
+  ui_line "Staged root: $package_root"
+
+  ui_line ""
+  ui_line "docker compose:"
+  if [ ! -f "$compose_file" ]; then
+    ui_line "  missing: services/docker-compose.yml"
+  elif docker compose version >/dev/null 2>&1; then
+    if docker compose -f "$compose_file" config >/dev/null 2>&1; then
+      ui_line "  OK"
+    else
+      ui_line "  warning: docker compose config failed"
+    fi
+  else
+    ui_line "  warning: docker compose unavailable, skipped"
+  fi
+
+  ui_line ""
+  ui_line "caddy config:"
+  if [ ! -f "$caddy_file" ]; then
+    ui_line "  missing: configs/caddy/Caddyfile"
+  elif command -v caddy >/dev/null 2>&1; then
+    if caddy validate --config "$caddy_file" >/dev/null 2>&1; then
+      ui_line "  OK"
+    else
+      ui_line "  warning: caddy validate failed"
+    fi
+  else
+    ui_line "  warning: caddy unavailable, skipped"
+  fi
+
+  ui_line ""
+  ui_line "homepage configs:"
+  if [ -d "$homepage_dir" ]; then
+    ui_line "  detected"
+  else
+    ui_line "  missing: configs/homepage"
+  fi
+
+  ui_line ""
+  ui_line "No services were started."
+  ui_line "No configs were copied."
+  ui_line "No compose up/pull, Caddy reload, secrets, DNS/cutover, reboot, or network restart was attempted."
+}
+
 apply_guided_package() {
   package_file=$1
   guided_step=${2:-preview}
 
   case "$guided_step" in
-    preview|install-modules|review-configs)
+    preview|install-modules|review-configs|validate-services)
       ;;
     *)
       echo "unknown apply-guided step: $guided_step" >&2
@@ -2952,6 +3003,13 @@ apply_guided_package() {
       return 2
     fi
     apply_guided_review_configs "$package_root"
+  fi
+  if [ "$guided_step" = "validate-services" ]; then
+    if [ -z "$package_root" ]; then
+      ui_line "Validate services: package root not found"
+      return 2
+    fi
+    apply_guided_validate_services "$package_root"
   fi
 }
 
