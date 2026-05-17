@@ -1553,6 +1553,7 @@ seed_kit_usage() {
   echo "  modules list     list module scripts available in modules/"
   echo "  modules deps <module>  show read-only module dependency declaration"
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
+  echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --apply --package <file> [--components=a,b]  preview package apply only"
   echo "  --apply-module=<module> [--yes|-y]  apply one module only"
@@ -2599,6 +2600,65 @@ verify_package_archive() {
   return 2
 }
 
+stage_package_archive() {
+  package_file=$1
+
+  ui_header "Package stage" "inspection only"
+  if ! verify_package_archive "$package_file"; then
+    ui_line "Stage: skipped because verification failed"
+    return 2
+  fi
+
+  if ! command -v mktemp >/dev/null 2>&1; then
+    ui_line "Stage: mktemp unavailable"
+    return 2
+  fi
+
+  stage_dir=$(mktemp -d -t seed-kit-package-stage.XXXXXX)
+  case "$stage_dir" in
+    /tmp/seed-kit-package-stage.*)
+      ;;
+    *)
+      ui_line "Stage: unsafe temporary directory"
+      return 2
+      ;;
+  esac
+
+  if ! tar -xzf "$package_file" -C "$stage_dir" 2>/dev/null; then
+    ui_line "Stage: extraction failed"
+    case "$stage_dir" in
+      /tmp/seed-kit-package-stage.*)
+        rm -rf "$stage_dir"
+        ;;
+    esac
+    return 2
+  fi
+
+  ui_line "Package staged"
+  ui_line "Stage dir: $stage_dir"
+  ui_line "No system changes were made."
+  ui_line "No restore, compose up, secrets, DNS/cutover, reboot, or network restart was attempted."
+  ui_line "Contents:"
+  stage_entries=$(tar -tzf "$package_file" 2>/dev/null || true)
+  for item in \
+    "seed-kit-package.sh" \
+    "profiles/" \
+    "services/" \
+    "configs/" \
+    "docs/"
+  do
+    if find_package_entry "$stage_entries" "$item" >/dev/null; then
+      ui_line "  - $item"
+    else
+      ui_line "  - $item missing/unknown"
+    fi
+  done
+  ui_line "Inspect:"
+  ui_line "  find $stage_dir -maxdepth 3 -type f"
+  ui_line "Cleanup:"
+  ui_line "  rm -rf $stage_dir"
+}
+
 show_package_plan() {
   package_file=$1
 
@@ -3133,8 +3193,17 @@ case "${1:-}" in
         fi
         verify_package_archive "$1"
         ;;
+      stage)
+        shift
+        if [ -z "${1:-}" ]; then
+          echo "usage: sh seed-kit.sh package stage <file>" >&2
+          exit 2
+        fi
+        stage_package_archive "$1"
+        ;;
       *)
         echo "usage: sh seed-kit.sh package verify <file>" >&2
+        echo "       sh seed-kit.sh package stage <file>" >&2
         exit 2
         ;;
     esac
