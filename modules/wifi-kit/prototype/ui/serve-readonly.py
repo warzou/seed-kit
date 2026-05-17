@@ -15,6 +15,9 @@ from urllib.parse import parse_qs, urlparse
 SCRIPT_DIR = Path(__file__).resolve().parent
 WIFI_KIT_SH = SCRIPT_DIR.parent / "wifi-kit.sh"
 INDEX_HTML = SCRIPT_DIR / "index.html"
+NORMAL_UI_PORT = 18089
+RECOVERY_UI_PORT = 80
+RECOVERY_AP_TEST_PASSWORD = "12345678"
 
 CAPTIVE_PATHS = {
     "/generate_204",
@@ -151,6 +154,12 @@ def system_info(diagnose: dict, recovery: dict | None = None) -> dict:
         "ui_state": recovery.get("ui") or "read-only",
         "recovery_ssid": recovery_ssid,
         "recovery_ip": recovery.get("ip") or "192.168.50.1",
+        "normal_ui_port": NORMAL_UI_PORT,
+        "recovery_ui_port": RECOVERY_UI_PORT,
+        "recovery_ap_password_policy": "min-8-chars",
+        "recovery_ap_password_configurable": True,
+        "recovery_ap_password_current": RECOVERY_AP_TEST_PASSWORD,
+        "ui_access_password": "future-not-configured",
         "last_recovery_event": "recovery-captive-ui-validated" if recovery_active else "normal-client-mode",
     }
 
@@ -181,6 +190,12 @@ def ui_data(recovery: dict | None = None) -> dict:
             "ui": "read-only",
             "captive_portal": "planned",
             "actions": "plan-only",
+            "normal_ui_port": NORMAL_UI_PORT,
+            "recovery_ui_port": RECOVERY_UI_PORT,
+            "ap_password_policy": "min-8-chars",
+            "ap_password_configurable": True,
+            "ap_password_current": RECOVERY_AP_TEST_PASSWORD,
+            "ui_access_password": "future-not-configured",
         },
         "system": system_info(diagnose, recovery),
         "scan": scan(),
@@ -263,6 +278,10 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
                     "mode": "recovery" if self.recovery.get("active") else "readonly",
                     "recovery": self.recovery,
                     "system": ui_data(self.recovery)["system"],
+                    "normal_ui_port": NORMAL_UI_PORT,
+                    "recovery_ui_port": RECOVERY_UI_PORT,
+                    "recovery_ap_password_policy": "min-8-chars",
+                    "recovery_ap_password_configurable": True,
                     "actions": "plan-only",
                 }
             )
@@ -310,7 +329,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="wifi-kit read-only local HTTP prototype")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8088)
+    parser.add_argument("--port", type=int, default=NORMAL_UI_PORT)
     parser.add_argument("--recovery-mode", action="store_true")
     parser.add_argument("--recovery-ssid", default="")
     parser.add_argument("--recovery-ip", default="192.168.50.1")
@@ -331,6 +350,12 @@ def main() -> None:
         "ui": "active" if args.recovery_mode else "read-only",
         "captive_portal": "basic" if args.recovery_mode else "planned",
         "actions": "plan-only",
+        "normal_ui_port": NORMAL_UI_PORT,
+        "recovery_ui_port": RECOVERY_UI_PORT,
+        "ap_password_policy": "min-8-chars",
+        "ap_password_configurable": True,
+        "ap_password_current": RECOVERY_AP_TEST_PASSWORD,
+        "ui_access_password": "future-not-configured",
         "action_endpoints": sorted(ACTION_PATHS.keys()),
     }
     print(f"wifi-kit read-only HTTP on http://{args.host}:{args.port}")

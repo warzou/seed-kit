@@ -942,6 +942,8 @@
         <div class="metric"><span>NetworkManager</span><strong id="node-nm">...</strong></div>
         <div class="metric"><span>Uptime</span><strong id="node-uptime">...</strong></div>
         <div class="metric"><span>Temperature</span><strong id="node-temp">...</strong></div>
+        <div class="metric"><span>Port normal</span><strong id="node-normal-port">...</strong></div>
+        <div class="metric"><span>Port recovery</span><strong id="node-recovery-port">...</strong></div>
         <div class="metric"><span>Recovery</span><strong id="node-recovery">...</strong></div>
         <div class="metric"><span>AP</span><strong id="node-ap">...</strong></div>
         <div class="metric"><span>DHCP</span><strong id="node-dhcp">...</strong></div>
@@ -953,19 +955,22 @@
       <div class="section-head">
         <div>
           <h2 id="config-title">Configuration Wifi-Kit</h2>
-          <p class="section-copy">Ce mot de passe protege uniquement le Wi-Fi recovery Wifi-Kit.</p>
+          <p class="section-copy">Le mot de passe AP recovery sert a rejoindre le Wi-Fi recovery; il ne protege pas encore l'interface captive.</p>
         </div>
         <span class="chip">Plan-only</span>
       </div>
       <div class="config-grid">
         <div class="metric"><span>SSID recovery</span><strong id="config-recovery-ssid">...</strong></div>
+        <div class="metric"><span>Mot de passe test</span><strong id="config-ap-password-current">...</strong></div>
+        <div class="metric"><span>Politique AP</span><strong id="config-ap-password-policy">...</strong></div>
+        <div class="metric"><span>Acces interface</span><strong id="config-ui-access-password">...</strong></div>
         <div class="metric"><span>Persistance</span><strong>non activee</strong></div>
       </div>
       <div class="config-form">
         <label class="field-label">
           Mot de passe AP recovery
-          <span class="field-hint">Runtime-only pour l'instant; rien n'est enregistre par ce prototype.</span>
-          <input id="config-ap-password" class="password-local" type="password" autocomplete="new-password" placeholder="Nouveau mot de passe recovery">
+          <span class="field-hint">Valeur de test actuelle: 12345678. Modifiable plus tard hors repo et hors logs.</span>
+          <input id="config-ap-password" class="password-local" type="password" autocomplete="new-password" placeholder="Nouveau mot de passe AP recovery">
         </label>
         <button id="config-save-password" class="button" type="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-lock"></use></svg>Modifier en simulation</button>
         <div id="config-result" class="callout recovery-result" hidden></div>
@@ -1112,6 +1117,12 @@
     "ui": "read-only",
     "captive_portal": "planned",
     "actions": "plan-only",
+    "normal_ui_port": 18089,
+    "recovery_ui_port": 80,
+    "ap_password_policy": "min-8-chars",
+    "ap_password_configurable": true,
+    "ap_password_current": "12345678",
+    "ui_access_password": "future-not-configured",
     "action_endpoints": [
       "/exit-recovery",
       "/reboot-recovery",
@@ -1134,6 +1145,12 @@
     "ui_state": "read-only",
     "recovery_ssid": "Wifi-Kit-node",
     "recovery_ip": "192.168.50.1",
+    "normal_ui_port": 18089,
+    "recovery_ui_port": 80,
+    "recovery_ap_password_policy": "min-8-chars",
+    "recovery_ap_password_configurable": true,
+    "recovery_ap_password_current": "12345678",
+    "ui_access_password": "future-not-configured",
     "last_recovery_event": "normal-client-mode"
   },
   "scan": {
@@ -1303,6 +1320,8 @@
       setText('node-nm', system.networkmanager || 'inconnu');
       setText('node-uptime', system.uptime || 'inconnu');
       setText('node-temp', system.temperature || 'inconnu');
+      setText('node-normal-port', system.normal_ui_port || recoveryState().normal_ui_port || 18089);
+      setText('node-recovery-port', system.recovery_ui_port || recoveryState().recovery_ui_port || 80);
       setText('node-recovery', system.recovery_active ? 'actif' : 'inactif');
       setText('node-ap', serviceLabel(system.ap_state));
       setText('node-dhcp', serviceLabel(system.dhcp_state));
@@ -1313,6 +1332,9 @@
       const system = systemState();
       const recovery = recoveryState();
       setText('config-recovery-ssid', recovery.ssid || system.recovery_ssid || 'Wifi-Kit-node');
+      setText('config-ap-password-current', recovery.ap_password_current || system.recovery_ap_password_current || '12345678');
+      setText('config-ap-password-policy', recovery.ap_password_policy || system.recovery_ap_password_policy || 'min-8-chars');
+      setText('config-ui-access-password', recovery.ui_access_password || system.ui_access_password || 'future-not-configured');
     }
 
     function showRecoveryResult(message) {
@@ -1337,7 +1359,7 @@
       const plans = {
         'reconnect-previous': "Plan: arreter l'UI recovery, dnsmasq et hostapd Wifi-Kit, supprimer les configs temporaires, retirer 192.168.50.1/24, puis reconnecter NetworkManager a l'ancien Wi-Fi. Action HTTP encore plan-only.",
         'choose-other-wifi': "Plan: choisir un SSID, garder le mot de passe runtime-only, lancer plus tard connect-safe NetworkManager avec rollback, puis revenir en recovery si validation KO. Encore stub.",
-        'start-recovery': "Plan: snapshot NetworkManager, passer wlan0 en AP-only, lancer hostapd, dnsmasq DHCP/DNS captive et l'UI locale sur 192.168.50.1:80. Lancement reel uniquement par script confirme."
+        'start-recovery': "Plan: snapshot NetworkManager, passer wlan0 en AP-only, lancer hostapd avec le mot de passe AP recovery de test 12345678, dnsmasq DHCP/DNS captive et l'UI locale sur 192.168.50.1:80. Lancement reel uniquement par script confirme."
       };
       return plans[action] || `Action ${action}: plan-only.`;
     }
@@ -1608,8 +1630,8 @@
       const length = field.value.length;
       field.value = '';
       showConfigResult(length
-        ? 'Mot de passe recovery prepare en simulation. Rien n est persiste et aucun secret n est envoye.'
-        : 'Saisis un mot de passe recovery pour afficher le plan. Aucun enregistrement reel dans cette version.');
+        ? 'Mot de passe AP recovery prepare en simulation. Il servira a rejoindre le Wi-Fi recovery, pas a proteger l interface captive. Rien n est persiste ni envoye.'
+        : 'Saisis un mot de passe AP recovery pour afficher le plan. La valeur de test reste 12345678 dans cette version.');
     });
     document.querySelectorAll('[data-network-action]').forEach((button) => {
       button.addEventListener('click', () => triggerNetworkAction(button.dataset.networkAction));

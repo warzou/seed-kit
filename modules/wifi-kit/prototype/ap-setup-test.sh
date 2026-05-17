@@ -19,6 +19,7 @@ ap_recovery_cidr="24"
 ap_recovery_dhcp_start="192.168.50.20"
 ap_recovery_dhcp_end="192.168.50.80"
 ap_recovery_dhcp_lease="1h"
+ap_recovery_test_psk="12345678"
 temporary_dnsmasq_conf="/tmp/wifi-kit-dnsmasq-recovery.conf"
 temporary_dnsmasq_conf_public="/tmp/wifi-kit-dnsmasq-recovery.conf.redacted"
 temporary_dnsmasq_log="/tmp/wifi-kit-dnsmasq-recovery.log"
@@ -480,6 +481,8 @@ cmd_plan_ap_recovery() {
   kv "current_channel" "${channel:-unknown}"
   kv "future_ap_channel" "$ap_channel"
   kv "future_ap_ssid" "$ssid"
+  kv "recovery_ap_test_password" "$ap_recovery_test_psk"
+  kv "recovery_ap_password_source" "WIFI_KIT_AP_PSK runtime override or test default"
   kv "ap_ip" "$ap_recovery_ip/$ap_recovery_cidr"
   kv "dhcp_range" "$ap_recovery_dhcp_start-$ap_recovery_dhcp_end"
   kv "dhcp_lease" "$ap_recovery_dhcp_lease"
@@ -538,7 +541,7 @@ cmd_plan_ap_recovery() {
   kv "02.snapshot_nm" "record current $iface NetworkManager state and active connection in $ap_only_nm_state"
   kv "03.disconnect_nm" "sudo nmcli device disconnect $iface"
   kv "04.assign_ap_ip" "sudo ip addr flush dev $iface; sudo ip addr add $ap_recovery_ip/$ap_recovery_cidr dev $iface; sudo ip link set $iface up"
-  kv "05.write_hostapd" "create $(shell_quote "$temporary_hostapd_conf") mode 600 with runtime-only passphrase"
+  kv "05.write_hostapd" "create $(shell_quote "$temporary_hostapd_conf") mode 600 with WIFI_KIT_AP_PSK runtime passphrase; test value $ap_recovery_test_psk"
   kv "06.start_hostapd" "sudo hostapd -d $(shell_quote "$temporary_hostapd_conf") > $(shell_quote "$temporary_hostapd_log") 2>&1"
   kv "07.write_dnsmasq" "create $(shell_quote "$temporary_dnsmasq_conf")"
   kv "08.start_dnsmasq" "sudo dnsmasq --no-daemon --conf-file=$(shell_quote "$temporary_dnsmasq_conf") --log-facility=$(shell_quote "$temporary_dnsmasq_log")"
@@ -550,6 +553,7 @@ cmd_plan_ap_recovery() {
 
   section "guards"
   kv "real_execution" "requires --dangerous-real-apply and exact confirmation"
+  kv "test_password_command_prefix" "WIFI_KIT_AP_PSK='$ap_recovery_test_psk'"
   kv "confirmation" "WIFI-KIT AP RECOVERY MANUAL TEST"
   kv "dnsmasq_start" "no"
   kv "hostapd_start" "no"
@@ -570,12 +574,12 @@ cmd_apply_ap_recovery_manual_test() {
   if [ "$dangerous_real_apply" != "1" ]; then
     kv "apply_status" "refused-plan-only"
     kv "reason" "AP recovery real apply needs --dangerous-real-apply plus separate validation"
-    kv "future_command" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh apply-ap-recovery-manual-test --dangerous-real-apply --confirm \"WIFI-KIT AP RECOVERY MANUAL TEST\" --max-seconds 600"
+    kv "future_command" "sudo env WIFI_KIT_AP_PSK='$ap_recovery_test_psk' sh modules/wifi-kit/prototype/ap-setup-test.sh apply-ap-recovery-manual-test --dangerous-real-apply --confirm \"WIFI-KIT AP RECOVERY MANUAL TEST\" --max-seconds 600"
     return 0
   fi
 
   if [ "$(id -u 2>/dev/null || printf 1)" != "0" ]; then
-    fail "real AP recovery manual test requires root; run: sudo sh modules/wifi-kit/prototype/ap-setup-test.sh apply-ap-recovery-manual-test --dangerous-real-apply --confirm \"WIFI-KIT AP RECOVERY MANUAL TEST\" --max-seconds 600"
+    fail "real AP recovery manual test requires root; run: sudo env WIFI_KIT_AP_PSK='$ap_recovery_test_psk' sh modules/wifi-kit/prototype/ap-setup-test.sh apply-ap-recovery-manual-test --dangerous-real-apply --confirm \"WIFI-KIT AP RECOVERY MANUAL TEST\" --max-seconds 600"
   fi
   require_number "--max-seconds" "$ap_max_seconds"
   if [ "$ap_max_seconds" -lt 1 ]; then
@@ -675,6 +679,7 @@ cmd_apply_ap_recovery_manual_test() {
   kv "ui_pidfile" "$temporary_ui_pid"
   kv "ui_url" "http://$ap_recovery_ip:$ui_port/"
   kv "runtime_secret" "not-logged"
+  kv "ap_password_source" "WIFI_KIT_AP_PSK runtime or test default"
   kv "captive_portal" "basic"
   kv "ui" "starting"
   kv "stop_command" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
@@ -1409,12 +1414,7 @@ runtime_ap_passphrase() {
     printf '%s\n' "$WIFI_KIT_AP_PSK"
     return 0
   fi
-  if [ -r /proc/sys/kernel/random/uuid ]; then
-    uuid="$(sed 's/-//g; s/^\(.\{16\}\).*/\1/' /proc/sys/kernel/random/uuid)"
-    printf 'WifiKit%s\n' "$uuid"
-  else
-    printf 'WifiKit%sTest\n' "$(date +%s)"
-  fi
+  printf '%s\n' "$ap_recovery_test_psk"
 }
 
 cmd_apply_short_test() {

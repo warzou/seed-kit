@@ -228,7 +228,27 @@ ssid: Wifi-Kit-<hostname>
 ap_ip: 192.168.50.1/24
 dhcp_range: 192.168.50.20-192.168.50.80
 ui_url: http://192.168.50.1/
+recovery_ui_port: 80
+normal_ui_port: 18089
 ```
+
+Normal mode and recovery mode intentionally use different UI ports:
+
+- normal mode: the read-only Wifi-Kit UI listens on port `18089`;
+- recovery/captive mode: the temporary captive UI listens on port `80` so
+  phones can open it as a local captive portal.
+
+The AP recovery Wi-Fi test password is currently `12345678`. This password is
+only the WPA2 passphrase used to join `Wifi-Kit-<hostname>`. It is not the
+future password for accessing the captive UI. A future UI access password, if
+added, must be modeled separately.
+
+The AP recovery password remains runtime/test configuration. The prototype may
+default to `12345678` for field tests and may accept `WIFI_KIT_AP_PSK` as a
+runtime override, but it must not write that value into repository files,
+persistent system configs, or unredacted logs. Future product configuration can
+make it user-editable and persistent outside the repository with appropriate
+permissions.
 
 Target startup order:
 
@@ -259,6 +279,7 @@ Recovery Captive UI V1 is validated on pocket-node / Raspberry Pi Zero 2 W.
 The real test confirmed:
 
 - AP-only recovery starts with SSID `Wifi-Kit-pocket-node`;
+- recovery AP test password is `12345678`;
 - DHCP leases a client address in `192.168.50.x`;
 - the node advertises `192.168.50.1` as gateway and DNS;
 - local DNS captive resolution redirects unknown names to `192.168.50.1`;
