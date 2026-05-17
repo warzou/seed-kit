@@ -2664,8 +2664,11 @@ package_stage_safe_dir() {
   stage_dir=$1
 
   case "$stage_dir" in
-    /tmp/seed-kit-package-stage.*)
-      [ -d "$stage_dir" ]
+    /tmp/seed-kit-package-stage.*/*)
+      return 1
+      ;;
+    /tmp/seed-kit-package-stage.?*)
+      return 0
       ;;
     *)
       return 1
@@ -2704,6 +2707,11 @@ inspect_stage_package() {
 
   if ! package_stage_safe_dir "$stage_dir"; then
     ui_line "Refusing path outside /tmp/seed-kit-package-stage.*"
+    return 2
+  fi
+
+  if [ ! -d "$stage_dir" ]; then
+    ui_line "Stage dir: not found"
     return 2
   fi
 
