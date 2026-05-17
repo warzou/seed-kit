@@ -213,8 +213,8 @@
 
     .overview-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px 12px;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.4rem), 1fr));
+      gap: 12px;
       align-items: stretch;
     }
 
@@ -324,6 +324,7 @@
       overflow-wrap: anywhere;
       color: var(--ink);
       font-size: 0.96rem;
+      line-height: 1.16;
     }
 
     .safe-mini strong { font-size: 0.78rem; }
@@ -831,7 +832,6 @@
 
     @media (min-width: 760px) {
       .shell { padding: 20px 18px 18px; }
-      .overview-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .recovery-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
       .node-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .action-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
