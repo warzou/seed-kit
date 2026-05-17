@@ -194,6 +194,16 @@ It should start only when:
 
 Future AP mode may need hostapd and dnsmasq, but they are not active in the current Wifi-Kit implementation.
 
+The first minimal AP radio test uses hostapd only. Real hostapd execution
+requires root privileges because it must ask the kernel driver to change Wi-Fi
+interface mode. Running hostapd without root is expected to fail with a driver
+permission error such as `Could not set interface wlan0 flags (DOWN):
+Operation not permitted`.
+
+The future captive portal is a separate layer: AP plus dnsmasq DHCP/DNS, the
+Wifi-Kit UI server, and Android/iOS captive-network detection endpoints. It is
+not implemented by the minimal AP radio test.
+
 Temporary AP metadata should include:
 
 - ap_ssid;
