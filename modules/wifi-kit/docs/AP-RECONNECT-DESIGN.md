@@ -278,6 +278,55 @@ SAFE V1 recommendation:
 - prefer a second Wi-Fi adapter if reliable AP plus client mode becomes a real
   requirement.
 
+## Pocket-node AP radio test result
+
+A first real hostapd test on `wlan0` confirmed that hostapd can start and
+configure beacons, but it is not stable while NetworkManager owns the same
+interface as the active client connection.
+
+Observed hostapd log markers:
+
+```text
+nl80211: ssid=Wifi-Kit-pocket-node
+nl80211: hidden SSID not in use
+wlan0: AP-ENABLED
+nl80211: Drv Event 16 (NL80211_CMD_STOP_AP) received for wlan0
+Interface wlan0 is unavailable -- stopped
+nl80211: Connect event
+nl80211: Set drv->ssid based on scan res info to 'GL-MT6000-d53'
+```
+
+Interpretation:
+
+- the SSID was not intentionally hidden;
+- hostapd reached `AP-ENABLED`;
+- NetworkManager/wpa_supplicant activity on `wlan0` triggered scan/connect
+  events and the driver stopped AP mode;
+- `wlan0` direct is not a good base for persistent AP plus STA behavior.
+
+Next test should use a dedicated AP virtual interface, currently planned as
+`wlan0_ap`, while leaving `wlan0` under NetworkManager as the STA/client
+interface. This remains plan-only until a separate real-test prompt.
+
+Planned AP plus STA flow:
+
+```text
+iw dev wlan0 interface add wlan0_ap type __ap
+ip link set wlan0_ap up
+hostapd -d /tmp/wifi-kit-hostapd-test.conf
+```
+
+The hostapd config should use `interface=wlan0_ap`, the AP channel must match
+the current STA channel, and cleanup must stop hostapd and delete `wlan0_ap`.
+
+Prerequisites:
+
+- `iw` with permission to create virtual interfaces;
+- `hostapd`;
+- root privileges for interface creation and hostapd;
+- NetworkManager must continue owning only `wlan0`, not the AP interface;
+- driver support for one managed interface plus one AP interface on one channel.
+
 ## UI flow
 
 The phone UI should remain read-only until connect-safe apply is implemented and reviewed separately.

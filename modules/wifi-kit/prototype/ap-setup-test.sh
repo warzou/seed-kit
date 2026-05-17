@@ -3,6 +3,7 @@ set -eu
 
 mode=""
 iface="wlan0"
+ap_iface="wlan0_ap"
 ap_ssid=""
 ap_channel=""
 ap_duration_seconds="30"
@@ -33,9 +34,13 @@ Usage:
   sh modules/wifi-kit/prototype/ap-setup-test.sh status
   sh modules/wifi-kit/prototype/ap-setup-test.sh stop
   sh modules/wifi-kit/prototype/ap-setup-test.sh diagnose-last
+  sh modules/wifi-kit/prototype/ap-setup-test.sh plan-ap-sta
+  sh modules/wifi-kit/prototype/ap-setup-test.sh apply-ap-sta-manual-test \
+    --confirm "WIFI-KIT AP STA MANUAL TEST"
 
 Options:
   --iface <name>           Wi-Fi interface. Default: wlan0
+  --ap-iface <name>        Future virtual AP interface. Default: wlan0_ap
   --ssid <name>            Future AP SSID. Default: Wifi-Kit-<hostname>
   --channel <number>       Future AP channel. Default: current wlan0 channel if detected
   --duration-seconds <n>   Future short AP test duration. Default: 30
@@ -165,6 +170,11 @@ device_state() {
     awk -F: -v iface="$iface" '$1 == iface { print $2; exit }'
 }
 
+interface_exists() {
+  dev=$1
+  ip link show "$dev" >/dev/null 2>&1
+}
+
 supports_ap_sta_same_channel() {
   iw_bin="$(find_tool iw 2>/dev/null || true)"
   [ -n "$iw_bin" ] || return 1
@@ -177,6 +187,89 @@ supports_ap_sta_same_channel() {
       in_combo && managed_ap && index($0, "#channels <= 1") { found = 1 }
       END { exit found ? 0 : 1 }
     '
+}
+
+cmd_plan_ap_sta() {
+  channel="$(current_channel || true)"
+  active="$(active_connection || true)"
+  state="$(device_state || true)"
+  ssid="$(effective_ap_ssid)"
+  if [ -z "$ap_channel" ]; then
+    ap_channel="${channel:-6}"
+  fi
+
+  printf '[wifi-kit] AP+STA dedicated-interface test plan\n'
+  kv "mode" "plan-ap-sta-only"
+  kv "network_writes" "false"
+  kv "real_apply_allowed" "false"
+  kv "sta_interface" "$iface"
+  kv "ap_interface" "$ap_iface"
+  kv "ap_interface_exists" "$(interface_exists "$ap_iface" && printf yes || printf no)"
+  kv "nm_device_state" "${state:-unknown}"
+  kv "nm_active_connection" "${active:-unknown}"
+  kv "current_sta_channel" "${channel:-unknown}"
+  kv "future_ap_channel" "$ap_channel"
+  kv "same_channel_required" "yes"
+  kv "ap_sta_same_channel_supported" "$(supports_ap_sta_same_channel && printf yes || printf no)"
+  kv "future_ap_ssid" "$ssid"
+  kv "hostapd_log" "$temporary_hostapd_log"
+  kv "hostapd_pidfile" "$temporary_hostapd_pid"
+  kv "temporary_hostapd_conf" "$temporary_hostapd_conf"
+  kv "redacted_config_path" "$temporary_hostapd_conf_public"
+  kv "root_required" "yes"
+
+  section "read-only-interpretation"
+  kv "wlan0_direct_result" "unstable-under-NetworkManager"
+  kv "reason" "NetworkManager keeps STA ownership of wlan0 and can trigger STOP_AP"
+  kv "next_hypothesis" "hostapd on dedicated $ap_iface while $iface remains NM-managed STA"
+
+  section "planned-hostapd-config"
+  cat <<EOF
+interface=$ap_iface
+driver=nl80211
+ssid=$ssid
+hw_mode=g
+channel=$ap_channel
+ieee80211n=1
+wmm_enabled=1
+auth_algs=1
+wpa=2
+wpa_key_mgmt=WPA-PSK
+rsn_pairwise=CCMP
+ignore_broadcast_ssid=0
+wpa_passphrase=<runtime-only-secret>
+EOF
+
+  section "future-command-sequence"
+  kv "01.preflight" "iw dev; iw list; nmcli device status; ip link show $ap_iface || true"
+  kv "02.create_ap_interface" "sudo iw dev $iface interface add $ap_iface type __ap"
+  kv "03.bring_ap_interface_up" "sudo ip link set $ap_iface up"
+  kv "04.write_config" "create $(shell_quote "$temporary_hostapd_conf") mode 600 with interface=$ap_iface and runtime-only passphrase"
+  kv "05.start_hostapd" "sudo hostapd -d $(shell_quote "$temporary_hostapd_conf") > $(shell_quote "$temporary_hostapd_log") 2>&1"
+  kv "06.verify" "iw dev should show $iface type managed and $ap_iface type AP on channel $ap_channel"
+  kv "07.observe" "scan for SSID $ssid from phone/Windows"
+  kv "08.stop" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
+  kv "09.cleanup_ap_interface" "sudo ip link set $ap_iface down || true; sudo iw dev $ap_iface del || true"
+
+  section "guards"
+  kv "real_execution" "refused-in-this-prototype"
+  kv "networkmanager_changes" "none-planned"
+  kv "dnsmasq" "not-used"
+  kv "captive_portal" "not-used"
+  kv "save_config" "not-called"
+  kv "reboot" "not-used"
+  kv "cleanup_required" "hostapd-stop config-delete pidfile-delete log-retain-or-delete ap-interface-delete"
+}
+
+cmd_apply_ap_sta_manual_test() {
+  [ "$confirm_phrase" = "WIFI-KIT AP STA MANUAL TEST" ] ||
+    fail "apply-ap-sta-manual-test requires --confirm \"WIFI-KIT AP STA MANUAL TEST\""
+
+  cmd_plan_ap_sta
+  section "apply"
+  kv "apply_status" "refused-plan-only"
+  kv "reason" "dedicated-interface AP+STA real apply needs a separate validation prompt"
+  kv "future_command" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh apply-ap-sta-manual-test --dangerous-real-apply --confirm \"WIFI-KIT AP STA MANUAL TEST\""
 }
 
 cmd_preflight() {
@@ -197,6 +290,8 @@ cmd_preflight() {
   kv "networkmanager_modified" "false"
   kv "save_config" "not-called"
   kv "interface" "$iface"
+  kv "future_ap_interface" "$ap_iface"
+  kv "future_ap_interface_exists" "$(interface_exists "$ap_iface" && printf yes || printf no)"
   kv "hostname" "$(host_label || true)"
   kv "future_ap_ssid" "$ssid"
   tool_state hostapd
@@ -226,6 +321,7 @@ cmd_plan() {
   kv "network_writes" "false"
   kv "real_apply_allowed" "false"
   kv "interface" "$iface"
+  kv "future_ap_interface" "$ap_iface"
   kv "future_ap_ssid" "$ssid"
   kv "future_ap_channel" "$ap_channel"
   kv "duration_seconds" "$ap_duration_seconds"
@@ -257,7 +353,11 @@ cmd_plan() {
   kv "01.require_same_channel" "AP channel must match STA channel on Raspberry Pi Zero 2 W"
   kv "02.current_sta_channel" "${channel:-unknown}"
   kv "03.ap_channel_candidate" "$ap_channel"
-  kv "04.networkmanager_coordination" "not implemented; do not modify NM in this prototype"
+  kv "04.ap_interface" "$ap_iface"
+  kv "05.create_virtual_interface" "sudo iw dev $iface interface add $ap_iface type __ap"
+  kv "06.hostapd_interface" "$ap_iface"
+  kv "07.networkmanager_coordination" "keep $iface managed by NM; do not modify NM in this prototype"
+  kv "08.plan_command" "sh modules/wifi-kit/prototype/ap-setup-test.sh plan-ap-sta"
 
   section "forbidden-now"
   kv "hostapd_start" "no"
@@ -677,13 +777,18 @@ cmd_apply_manual_test() {
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    preflight|plan|apply|apply-short-test|apply-manual-test|status|stop|diagnose-last)
+    preflight|plan|apply|apply-short-test|apply-manual-test|status|stop|diagnose-last|plan-ap-sta|apply-ap-sta-manual-test)
       [ -z "$mode" ] || fail "choose only one mode"
       mode="$1"
       ;;
     --iface)
       [ "$#" -gt 1 ] || fail "--iface requires a value"
       iface="$2"
+      shift
+      ;;
+    --ap-iface)
+      [ "$#" -gt 1 ] || fail "--ap-iface requires a value"
+      ap_iface="$2"
       shift
       ;;
     --ssid)
@@ -734,6 +839,8 @@ case "${mode:-}" in
   status) cmd_status ;;
   stop) cmd_stop ;;
   diagnose-last) cmd_diagnose_last ;;
+  plan-ap-sta) cmd_plan_ap_sta ;;
+  apply-ap-sta-manual-test) cmd_apply_ap_sta_manual_test ;;
   *)
     usage
     exit 2
