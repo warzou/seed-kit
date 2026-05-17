@@ -2397,16 +2397,18 @@ show_package_apply_preview_only() {
   package_file=$1
   components=${2:-all}
 
-  if [ ! -f "$package_file" ]; then
-    echo "package not found: $package_file" >&2
-    return 2
-  fi
-
   ui_header "package-driven PRA apply" "preview only"
   ui_line "Package: $package_file"
   ui_line "Components: $components"
-  ui_line "No package apply is implemented in V1."
-  ui_line "No extraction, staging, restore, service start, secret write, reboot, or DNS cutover."
+  ui_line "Package apply is disabled in V1."
+  if [ ! -f "$package_file" ]; then
+    ui_line "Status: package not found"
+  else
+    ui_line "Status: package present"
+  fi
+  ui_line "No extraction was attempted."
+  ui_line "No restore was attempted."
+  ui_line "No secrets, DNS/cutover, or compose up were attempted."
   return 2
 }
 
