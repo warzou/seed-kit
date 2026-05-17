@@ -8,6 +8,7 @@ ap_ssid=""
 ap_channel=""
 ap_duration_seconds="30"
 ap_max_seconds="300"
+ap_max_seconds_set="0"
 temporary_hostapd_conf="/tmp/wifi-kit-hostapd-test.conf"
 temporary_hostapd_conf_public="/tmp/wifi-kit-hostapd-test.conf.redacted"
 temporary_hostapd_log="/tmp/wifi-kit-hostapd-test.log"
@@ -45,6 +46,7 @@ Options:
   --channel <number>       Future AP channel. Default: current wlan0 channel if detected
   --duration-seconds <n>   Future short AP test duration. Default: 30
   --max-seconds <n>        Future manual AP max duration. Default: 300
+                            AP+STA dedicated-interface default: 600
   --confirm <phrase>       Required for apply-short-test: WIFI-KIT AP SHORT TEST
                             Required for apply-manual-test: WIFI-KIT AP MANUAL TEST
   --dangerous-real-apply   Future execution gate. Do not use without a separate validation prompt.
@@ -175,6 +177,53 @@ interface_exists() {
   ip link show "$dev" >/dev/null 2>&1
 }
 
+ap_interface_type() {
+  iw_bin="$(find_tool iw 2>/dev/null || true)"
+  [ -n "$iw_bin" ] || return 0
+  "$iw_bin" dev "$ap_iface" info 2>/dev/null |
+    awk '$1 == "type" { print $2; exit }'
+}
+
+delete_test_ap_interface_if_exists() {
+  [ "$(id -u 2>/dev/null || printf 1)" = "0" ] ||
+    fail "deleting $ap_iface requires root"
+  iw_bin="$(find_tool iw 2>/dev/null || true)"
+  [ -n "$iw_bin" ] || fail "iw is required"
+
+  if ! interface_exists "$ap_iface"; then
+    return 0
+  fi
+
+  if [ "$ap_iface" != "wlan0_ap" ]; then
+    fail "$ap_iface already exists; refusing to delete non-default AP interface name"
+  fi
+
+  ap_type="$(ap_interface_type || true)"
+  case "$ap_type" in
+    AP|__ap|'')
+      ip link set "$ap_iface" down 2>/dev/null || true
+      "$iw_bin" dev "$ap_iface" del 2>/dev/null ||
+        fail "could not delete existing test AP interface $ap_iface"
+      ;;
+    *)
+      fail "$ap_iface exists with type $ap_type; refusing to treat it as a Wifi-Kit test interface"
+      ;;
+  esac
+}
+
+cleanup_test_ap_interface_best_effort() {
+  if [ "$ap_iface" != "wlan0_ap" ]; then
+    return 0
+  fi
+  if interface_exists "$ap_iface"; then
+    iw_bin="$(find_tool iw 2>/dev/null || true)"
+    ip link set "$ap_iface" down 2>/dev/null || true
+    if [ -n "$iw_bin" ]; then
+      "$iw_bin" dev "$ap_iface" del 2>/dev/null || true
+    fi
+  fi
+}
+
 supports_ap_sta_same_channel() {
   iw_bin="$(find_tool iw 2>/dev/null || true)"
   [ -n "$iw_bin" ] || return 1
@@ -197,6 +246,9 @@ cmd_plan_ap_sta() {
   if [ -z "$ap_channel" ]; then
     ap_channel="${channel:-6}"
   fi
+  if [ "$ap_max_seconds_set" = "0" ]; then
+    ap_max_seconds="600"
+  fi
 
   printf '[wifi-kit] AP+STA dedicated-interface test plan\n'
   kv "mode" "plan-ap-sta-only"
@@ -212,6 +264,7 @@ cmd_plan_ap_sta() {
   kv "same_channel_required" "yes"
   kv "ap_sta_same_channel_supported" "$(supports_ap_sta_same_channel && printf yes || printf no)"
   kv "future_ap_ssid" "$ssid"
+  kv "max_seconds" "$ap_max_seconds"
   kv "hostapd_log" "$temporary_hostapd_log"
   kv "hostapd_pidfile" "$temporary_hostapd_pid"
   kv "temporary_hostapd_conf" "$temporary_hostapd_conf"
@@ -242,14 +295,15 @@ EOF
 
   section "future-command-sequence"
   kv "01.preflight" "iw dev; iw list; nmcli device status; ip link show $ap_iface || true"
-  kv "02.create_ap_interface" "sudo iw dev $iface interface add $ap_iface type __ap"
-  kv "03.bring_ap_interface_up" "sudo ip link set $ap_iface up"
-  kv "04.write_config" "create $(shell_quote "$temporary_hostapd_conf") mode 600 with interface=$ap_iface and runtime-only passphrase"
-  kv "05.start_hostapd" "sudo hostapd -d $(shell_quote "$temporary_hostapd_conf") > $(shell_quote "$temporary_hostapd_log") 2>&1"
-  kv "06.verify" "iw dev should show $iface type managed and $ap_iface type AP on channel $ap_channel"
-  kv "07.observe" "scan for SSID $ssid from phone/Windows"
-  kv "08.stop" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
-  kv "09.cleanup_ap_interface" "sudo ip link set $ap_iface down || true; sudo iw dev $ap_iface del || true"
+  kv "02.cleanup_stale_ap_interface" "if $ap_iface exists and is the default Wifi-Kit test AP interface, delete it first"
+  kv "03.create_ap_interface" "sudo iw dev $iface interface add $ap_iface type __ap"
+  kv "04.bring_ap_interface_up" "sudo ip link set $ap_iface up"
+  kv "05.write_config" "create $(shell_quote "$temporary_hostapd_conf") mode 600 with interface=$ap_iface and runtime-only passphrase"
+  kv "06.start_hostapd" "sudo hostapd -d $(shell_quote "$temporary_hostapd_conf") > $(shell_quote "$temporary_hostapd_log") 2>&1"
+  kv "07.verify" "iw dev should show $iface type managed and $ap_iface type AP on channel $ap_channel"
+  kv "08.observe" "scan for SSID $ssid from phone/Windows"
+  kv "09.stop" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
+  kv "10.cleanup_ap_interface" "sudo ip link set $ap_iface down || true; sudo iw dev $ap_iface del || true"
 
   section "guards"
   kv "real_execution" "refused-in-this-prototype"
@@ -267,9 +321,113 @@ cmd_apply_ap_sta_manual_test() {
 
   cmd_plan_ap_sta
   section "apply"
-  kv "apply_status" "refused-plan-only"
-  kv "reason" "dedicated-interface AP+STA real apply needs a separate validation prompt"
-  kv "future_command" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh apply-ap-sta-manual-test --dangerous-real-apply --confirm \"WIFI-KIT AP STA MANUAL TEST\""
+  if [ "$dangerous_real_apply" != "1" ]; then
+    kv "apply_status" "refused-plan-only"
+    kv "reason" "dedicated-interface AP+STA real apply needs --dangerous-real-apply plus separate validation"
+    kv "future_command" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh apply-ap-sta-manual-test --dangerous-real-apply --confirm \"WIFI-KIT AP STA MANUAL TEST\" --max-seconds 600"
+    return 0
+  fi
+
+  if [ "$(id -u 2>/dev/null || printf 1)" != "0" ]; then
+    fail "real AP+STA manual test requires root; run: sudo sh modules/wifi-kit/prototype/ap-setup-test.sh apply-ap-sta-manual-test --dangerous-real-apply --confirm \"WIFI-KIT AP STA MANUAL TEST\" --max-seconds 600"
+  fi
+  require_number "--max-seconds" "$ap_max_seconds"
+  if [ "$ap_max_seconds" -lt 1 ]; then
+    fail "--max-seconds must be greater than 0"
+  fi
+  find_tool iw >/dev/null 2>&1 || fail "iw is required"
+  find_tool hostapd >/dev/null 2>&1 || fail "hostapd is required"
+  supports_ap_sta_same_channel ||
+    fail "AP+STA same-channel interface combination is not advertised by iw list"
+
+  hostapd_bin="$(find_tool hostapd)"
+  iw_bin="$(find_tool iw)"
+  ssid="$(effective_ap_ssid)"
+  channel="$(current_channel || true)"
+  if [ -z "$ap_channel" ]; then
+    ap_channel="${channel:-6}"
+  fi
+  if [ -n "$channel" ] && [ "$ap_channel" != "$channel" ]; then
+    fail "AP channel $ap_channel must match current STA channel $channel"
+  fi
+
+  existing_pid="$(test_pid_from_file || true)"
+  if [ -n "$existing_pid" ] && is_test_hostapd_pid "$existing_pid"; then
+    fail "wifi-kit test hostapd already running with pid $existing_pid"
+  fi
+
+  passphrase="$(runtime_ap_passphrase)"
+  case "$passphrase" in
+    ????????*) ;;
+    *) fail "runtime AP passphrase must be at least 8 characters" ;;
+  esac
+
+  hostapd_pid=""
+  cleanup_ap_sta() {
+    if [ -n "${hostapd_pid:-}" ] && is_test_hostapd_pid "$hostapd_pid"; then
+      kill "$hostapd_pid" 2>/dev/null || true
+      wait "$hostapd_pid" 2>/dev/null || true
+    fi
+    write_redacted_hostapd_config_copy
+    rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid"
+    if interface_exists "$ap_iface"; then
+      ip link set "$ap_iface" down 2>/dev/null || true
+      "$iw_bin" dev "$ap_iface" del 2>/dev/null || true
+    fi
+  }
+  trap cleanup_ap_sta EXIT INT TERM HUP
+
+  delete_test_ap_interface_if_exists
+  rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid"
+  : >"$temporary_hostapd_log"
+  chmod 600 "$temporary_hostapd_log"
+
+  section "real-apply"
+  kv "apply_status" "starting"
+  kv "sta_interface" "$iface"
+  kv "ap_interface" "$ap_iface"
+  kv "ap_ssid" "$ssid"
+  kv "ap_channel" "$ap_channel"
+  kv "max_seconds" "$ap_max_seconds"
+  kv "log_path" "$temporary_hostapd_log"
+  kv "pidfile" "$temporary_hostapd_pid"
+  kv "redacted_config_path" "$temporary_hostapd_conf_public"
+  kv "runtime_secret" "not-logged"
+  kv "networkmanager_changes" "none"
+  kv "dnsmasq" "not-used"
+  kv "captive_portal" "not-used"
+
+  "$iw_bin" dev "$iface" interface add "$ap_iface" type __ap
+  ip link set "$ap_iface" up
+
+  umask 077
+  write_hostapd_config_for_interface "$ap_iface" "$ssid" "$ap_channel" "$passphrase"
+  "$hostapd_bin" -d "$temporary_hostapd_conf" >"$temporary_hostapd_log" 2>&1 &
+  hostapd_pid=$!
+  printf '%s\n' "$hostapd_pid" >"$temporary_hostapd_pid"
+  kv "hostapd_pid" "$hostapd_pid"
+  kv "phone_check" "look for SSID $ssid now"
+  kv "stop_command" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
+
+  elapsed=0
+  while is_test_hostapd_pid "$hostapd_pid"; do
+    if [ "$elapsed" -ge "$ap_max_seconds" ]; then
+      kv "auto_stop" "max-seconds-reached"
+      break
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+
+  cleanup_ap_sta
+  trap - EXIT INT TERM HUP
+
+  section "post-check"
+  kv "elapsed_seconds" "$elapsed"
+  kv "log_path" "$temporary_hostapd_log"
+  kv "config_cleanup" "done"
+  kv "ap_interface_cleanup" "done"
+  kv "apply_status" "completed-or-stopped"
 }
 
 cmd_preflight() {
@@ -429,6 +587,8 @@ cmd_stop() {
   kv "pidfile" "$temporary_hostapd_pid"
   if [ -z "$pid" ]; then
     kv "stop_status" "no-pidfile"
+    write_redacted_hostapd_config_copy
+    cleanup_test_ap_interface_best_effort
     rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid" 2>/dev/null || true
     return 0
   fi
@@ -440,6 +600,8 @@ cmd_stop() {
   if kill "$pid" 2>/dev/null; then
     kv "stop_status" "signal-sent"
     kv "pid" "$pid"
+    write_redacted_hostapd_config_copy
+    cleanup_test_ap_interface_best_effort
     rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid" 2>/dev/null || true
     return 0
   fi
@@ -472,8 +634,17 @@ write_hostapd_config_real() {
   channel=$2
   passphrase=$3
 
+  write_hostapd_config_for_interface "$iface" "$ssid" "$channel" "$passphrase"
+}
+
+write_hostapd_config_for_interface() {
+  config_iface=$1
+  ssid=$2
+  channel=$3
+  passphrase=$4
+
   cat >"$temporary_hostapd_conf" <<EOF
-interface=$iface
+interface=$config_iface
 driver=nl80211
 ssid=$ssid
 hw_mode=g
