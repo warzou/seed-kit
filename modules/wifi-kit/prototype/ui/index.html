@@ -679,9 +679,53 @@
 
     .recovery-result[hidden] { display: none; }
 
+    .section-tabs {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: rgba(9, 18, 30, 0.66);
+      padding: 7px;
+    }
+
+    .tab-button {
+      display: grid;
+      gap: 4px;
+      justify-items: center;
+      min-width: 0;
+      min-height: 48px;
+      border: 0;
+      border-radius: 15px;
+      background: transparent;
+      color: var(--dim);
+      padding: 7px 4px;
+      font-size: 0.68rem;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .tab-button .icon-svg {
+      width: 21px;
+      height: 21px;
+    }
+
+    .tab-button.active {
+      background: rgba(68, 212, 230, 0.1);
+      color: var(--cyan);
+    }
+
+    .page {
+      display: grid;
+      gap: 14px;
+    }
+
+    .page[hidden] { display: none; }
+
     .node-state-panel,
     .config-panel,
-    .network-actions-panel {
+    .network-actions-panel,
+    .diagnostic-panel {
       display: grid;
       gap: 12px;
     }
@@ -825,6 +869,7 @@
       .recovery-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
       .node-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .action-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .tab-button { font-size: 0.74rem; }
       .network-orb {
         width: 64px;
         height: 64px;
@@ -914,155 +959,181 @@
       <p class="lead">Pr&eacute;pare une connexion Wi-Fi sans modifier le Raspberry Pi.</p>
     </header>
 
-    <section class="overview" aria-label="Etat du node en lecture seule">
-      <div class="overview-grid" aria-label="Etat actuel du node">
-        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Interface</span><strong id="status-interface">...</strong></div></div>
-        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-location"></use></svg></span><div><span>Adresse IP</span><strong id="status-ip">...</strong></div></div>
-        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-server"></use></svg></span><div><span>Backend</span><strong id="status-backend">...</strong></div></div>
-        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-wifi"></use></svg></span><div><span>Reseau actuel</span><strong id="status-ssid">...</strong></div></div>
-      </div>
-    </section>
+    <nav class="section-tabs" aria-label="Navigation Wifi-Kit">
+      <button class="tab-button active" type="button" data-page-target="networks" aria-current="page"><svg class="icon-svg" aria-hidden="true"><use href="#icon-wifi"></use></svg>Reseaux</button>
+      <button class="tab-button" type="button" data-page-target="node"><svg class="icon-svg" aria-hidden="true"><use href="#icon-server"></use></svg>Etat</button>
+      <button class="tab-button" type="button" data-page-target="recovery"><svg class="icon-svg" aria-hidden="true"><use href="#icon-shield"></use></svg>Recovery</button>
+      <button class="tab-button" type="button" data-page-target="diagnostic"><svg class="icon-svg" aria-hidden="true"><use href="#icon-activity"></use></svg>Diag</button>
+      <button class="tab-button" type="button" data-page-target="config"><svg class="icon-svg" aria-hidden="true"><use href="#icon-gear"></use></svg>Config</button>
+    </nav>
 
-    <section class="panel node-state-panel" aria-labelledby="node-state-title">
-      <div class="section-head">
-        <div>
-          <h2 id="node-state-title">Etat du node</h2>
-          <p class="section-copy" id="mode-copy">Mode normal: le node reste connecte au Wi-Fi habituel.</p>
+    <div class="page" data-page="networks">
+      <section class="overview" aria-label="Etat Wi-Fi courant">
+        <div class="overview-grid" aria-label="Etat actuel du node">
+          <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Interface</span><strong id="status-interface">...</strong></div></div>
+          <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-location"></use></svg></span><div><span>Adresse IP</span><strong id="status-ip">...</strong></div></div>
+          <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-server"></use></svg></span><div><span>Backend</span><strong id="status-backend">...</strong></div></div>
+          <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-wifi"></use></svg></span><div><span>Wi-Fi actuel</span><strong id="status-ssid">...</strong></div></div>
         </div>
-        <span class="chip" id="mode-chip">Mode normal</span>
-      </div>
-      <div class="mode-line">
-        <strong id="mode-summary">Wifi-Kit observe le reseau sans mutation.</strong>
-        <p class="section-copy" id="mode-detail">Le mode recovery demarre seulement sur demande explicite ou quand aucun Wi-Fi utilisable n'est disponible.</p>
-      </div>
-      <div class="node-grid" aria-label="Etat detaille du node">
-        <div class="metric"><span>Hostname</span><strong id="node-hostname">...</strong></div>
-        <div class="metric"><span>IP actuelle</span><strong id="node-ip">...</strong></div>
-        <div class="metric"><span>Wi-Fi actuel</span><strong id="node-wifi">...</strong></div>
-        <div class="metric"><span>NetworkManager</span><strong id="node-nm">...</strong></div>
-        <div class="metric"><span>Uptime</span><strong id="node-uptime">...</strong></div>
-        <div class="metric"><span>Temperature</span><strong id="node-temp">...</strong></div>
-        <div class="metric"><span>Port normal</span><strong id="node-normal-port">...</strong></div>
-        <div class="metric"><span>Port recovery</span><strong id="node-recovery-port">...</strong></div>
-        <div class="metric"><span>Recovery</span><strong id="node-recovery">...</strong></div>
-        <div class="metric"><span>AP</span><strong id="node-ap">...</strong></div>
-        <div class="metric"><span>DHCP</span><strong id="node-dhcp">...</strong></div>
-        <div class="metric"><span>Dernier evenement</span><strong id="node-last-event">...</strong></div>
-      </div>
-    </section>
+      </section>
 
-    <section class="panel config-panel" aria-labelledby="config-title">
-      <div class="section-head">
-        <div>
-          <h2 id="config-title">Configuration Wifi-Kit</h2>
-          <p class="section-copy">Le mot de passe AP recovery sert a rejoindre le Wi-Fi recovery; il ne protege pas encore l'interface captive.</p>
+      <section class="panel" aria-labelledby="network-title">
+        <div class="section-head">
+          <div>
+            <h2 id="network-title">Choisir ou changer de Wi-Fi</h2>
+            <p class="section-copy" id="scan-source">Source de scan: inconnue</p>
+            <p id="scan-status" class="scan-status">Scan passif pret.</p>
+          </div>
+          <button id="refresh" type="button" class="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-refresh"></use></svg>Actualiser</button>
         </div>
-        <span class="chip">Plan-only</span>
-      </div>
-      <div class="config-grid">
-        <div class="metric"><span>SSID recovery</span><strong id="config-recovery-ssid">...</strong></div>
-        <div class="metric"><span>Mot de passe test</span><strong id="config-ap-password-current">...</strong></div>
-        <div class="metric"><span>Politique AP</span><strong id="config-ap-password-policy">...</strong></div>
-        <div class="metric"><span>Acces interface</span><strong id="config-ui-access-password">...</strong></div>
-        <div class="metric"><span>Persistance</span><strong>non activee</strong></div>
-      </div>
-      <div class="config-form">
-        <label class="field-label">
-          Mot de passe AP recovery
-          <span class="field-hint">Valeur de test actuelle: 12345678. Modifiable plus tard hors repo et hors logs.</span>
-          <input id="config-ap-password" class="password-local" type="password" autocomplete="new-password" placeholder="Nouveau mot de passe AP recovery">
-        </label>
-        <button id="config-save-password" class="button" type="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-lock"></use></svg>Modifier en simulation</button>
-        <div id="config-result" class="callout recovery-result" hidden></div>
-      </div>
-    </section>
+        <div id="scan-message" class="callout" hidden></div>
+        <div id="network-list" class="network-list"></div>
+      </section>
+    </div>
 
-    <section class="panel network-actions-panel" aria-labelledby="network-actions-title">
-      <div class="section-head">
-        <div>
-          <h2 id="network-actions-title">Actions reseau</h2>
-          <p class="section-copy">Chaque action affiche son plan avant toute future mutation.</p>
+    <div class="page" data-page="node" hidden>
+      <section class="panel node-state-panel" aria-labelledby="node-state-title">
+        <div class="section-head">
+          <div>
+            <h2 id="node-state-title">Etat du node</h2>
+            <p class="section-copy" id="mode-copy">Mode normal: le node reste connecte au Wi-Fi habituel.</p>
+          </div>
+          <span class="chip" id="mode-chip">Mode normal</span>
         </div>
-        <span class="chip">SAFE</span>
-      </div>
-      <div class="action-grid">
-        <div class="action-card">
-          <strong>Reprendre l'ancien Wi-Fi</strong>
-          <p>Quitte recovery, arrete les services temporaires, puis redonne wlan0 a NetworkManager.</p>
-          <button class="button" type="button" data-network-action="reconnect-previous">Afficher le plan</button>
+        <div class="mode-line">
+          <strong id="mode-summary">Wifi-Kit observe le reseau sans mutation.</strong>
+          <p class="section-copy" id="mode-detail">Le mode recovery demarre seulement sur demande explicite ou quand aucun Wi-Fi utilisable n'est disponible.</p>
         </div>
-        <div class="action-card">
-          <strong>Choisir un autre Wi-Fi</strong>
-          <p>Ouvre la selection reseau; le vrai changement Wi-Fi reste reporte au connect-safe NetworkManager.</p>
-          <button class="button secondary" type="button" data-network-action="choose-other-wifi">Afficher le plan</button>
+        <div class="node-grid" aria-label="Etat detaille du node">
+          <div class="metric"><span>Hostname</span><strong id="node-hostname">...</strong></div>
+          <div class="metric"><span>IP actuelle</span><strong id="node-ip">...</strong></div>
+          <div class="metric"><span>Wi-Fi actuel</span><strong id="node-wifi">...</strong></div>
+          <div class="metric"><span>NetworkManager</span><strong id="node-nm">...</strong></div>
+          <div class="metric"><span>Uptime</span><strong id="node-uptime">...</strong></div>
+          <div class="metric"><span>Temperature</span><strong id="node-temp">...</strong></div>
+          <div class="metric"><span>Mode</span><strong id="node-recovery">...</strong></div>
+          <div class="metric"><span>AP</span><strong id="node-ap">...</strong></div>
+          <div class="metric"><span>DHCP</span><strong id="node-dhcp">...</strong></div>
         </div>
-        <div class="action-card">
-          <strong>Demarrer le mode recovery</strong>
-          <p>Prevoit AP, DHCP, DNS captive et UI locale; lancement reel seulement via script garde.</p>
-          <button class="button secondary" type="button" data-network-action="start-recovery">Afficher le plan</button>
-        </div>
-      </div>
-      <div id="network-action-result" class="callout recovery-result" hidden></div>
-    </section>
+      </section>
+    </div>
 
-    <section class="panel recovery-panel" id="recovery-panel" aria-labelledby="recovery-title">
-      <div class="section-head">
-        <div>
-          <h2 id="recovery-title">Mode recovery Wifi-Kit</h2>
-          <p class="section-copy" id="recovery-copy">AP temporaire avec DHCP, DNS local et UI captive sur le node.</p>
+    <div class="page" data-page="recovery" hidden>
+      <section class="panel recovery-panel" id="recovery-panel" aria-labelledby="recovery-title">
+        <div class="section-head">
+          <div>
+            <h2 id="recovery-title">Recovery</h2>
+            <p class="section-copy" id="recovery-copy">AP temporaire avec DHCP, DNS local et UI captive sur le node.</p>
+          </div>
+          <span class="chip" id="recovery-chip">Plan-only</span>
         </div>
-        <span class="chip" id="recovery-chip">Plan-only</span>
-      </div>
-      <div class="recovery-grid" aria-label="Etat du recovery">
-        <div class="metric"><span>SSID</span><strong id="recovery-ssid">...</strong></div>
-        <div class="metric"><span>IP locale</span><strong id="recovery-ip">...</strong></div>
-        <div class="metric"><span>DHCP</span><strong id="recovery-dhcp">...</strong></div>
-        <div class="metric"><span>DNS</span><strong id="recovery-dns">...</strong></div>
-        <div class="metric"><span>UI</span><strong id="recovery-ui">...</strong></div>
-      </div>
-      <div class="recovery-actions" aria-label="Actions recovery visibles">
-        <button class="button" type="button" data-recovery-action="reconnect-previous">Reprendre l'ancien Wi-Fi</button>
-        <button class="button secondary" type="button" data-recovery-action="choose-other-wifi">Choisir un autre Wi-Fi</button>
-        <button class="button secondary" type="button" data-recovery-action="reboot-recovery">Redemarrer recovery</button>
-        <button class="button warn" type="button" data-recovery-action="exit-recovery">Quitter recovery</button>
-      </div>
-      <div id="recovery-action-result" class="callout recovery-result" hidden></div>
-    </section>
-
-    <section class="panel" aria-labelledby="network-title">
-      <div class="section-head">
-        <div>
-          <h2 id="network-title">Reseaux disponibles</h2>
-          <p class="section-copy" id="scan-source">Source de scan: inconnue</p>
-          <p id="scan-status" class="scan-status">Scan passif pret.</p>
+        <div class="recovery-grid" aria-label="Etat du recovery">
+          <div class="metric"><span>SSID</span><strong id="recovery-ssid">...</strong></div>
+          <div class="metric"><span>Mot de passe AP</span><strong id="recovery-ap-password">12345678</strong></div>
+          <div class="metric"><span>IP locale</span><strong id="recovery-ip">192.168.50.1</strong></div>
+          <div class="metric"><span>Port captive</span><strong id="recovery-captive-port">80</strong></div>
+          <div class="metric"><span>DHCP</span><strong id="recovery-dhcp">...</strong></div>
+          <div class="metric"><span>DNS captive</span><strong id="recovery-dns">...</strong></div>
+          <div class="metric"><span>UI</span><strong id="recovery-ui">...</strong></div>
         </div>
-        <button id="refresh" type="button" class="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-refresh"></use></svg>Actualiser</button>
-      </div>
-      <div id="scan-message" class="callout" hidden></div>
-      <div id="network-list" class="network-list"></div>
-    </section>
+      </section>
 
-    <details class="advanced">
-      <summary>Diagnostics avances</summary>
-      <div class="advanced-grid">
-        <section aria-labelledby="node-title">
+      <section class="panel network-actions-panel" aria-labelledby="network-actions-title">
+        <div class="section-head">
+          <div>
+            <h2 id="network-actions-title">Actions recovery</h2>
+            <p class="section-copy">Chaque action affiche son plan avant toute future mutation.</p>
+          </div>
+          <span class="chip">SAFE</span>
+        </div>
+        <div class="action-grid">
+          <div class="action-card">
+            <strong>Reprendre l'ancien Wi-Fi</strong>
+            <p>Quitte recovery, arrete les services temporaires, puis redonne wlan0 a NetworkManager.</p>
+            <button class="button" type="button" data-network-action="reconnect-previous">Afficher le plan</button>
+          </div>
+          <div class="action-card">
+            <strong>Demarrer le mode recovery</strong>
+            <p>Prevoit AP, DHCP, DNS captive et UI locale; lancement reel seulement via script garde.</p>
+            <button class="button secondary" type="button" data-network-action="start-recovery">Afficher le plan</button>
+          </div>
+          <div class="action-card">
+            <strong>Choisir un autre Wi-Fi</strong>
+            <p>Bascule vers la page Reseaux; le vrai changement reste connect-safe plus tard.</p>
+            <button class="button secondary" type="button" data-network-action="choose-other-wifi">Afficher le plan</button>
+          </div>
+        </div>
+        <div id="network-action-result" class="callout recovery-result" hidden></div>
+        <div id="recovery-action-result" class="callout recovery-result" hidden></div>
+      </section>
+    </div>
+
+    <div class="page" data-page="diagnostic" hidden>
+      <section class="panel diagnostic-panel" aria-labelledby="diag-title">
+        <div class="section-head">
+          <div>
+            <h2 id="diag-title">Diagnostic</h2>
+            <p class="section-copy">Lecture seule: dernier etat connu, guard recovery, ports utiles et JSON brut.</p>
+          </div>
+          <span class="chip">Read-only</span>
+        </div>
+        <div class="node-grid">
+          <div class="metric"><span>Dernier evenement</span><strong id="diag-last-event">...</strong></div>
+          <div class="metric"><span>AP</span><strong id="diag-ap">...</strong></div>
+          <div class="metric"><span>DHCP</span><strong id="diag-dhcp">...</strong></div>
+          <div class="metric"><span>UI</span><strong id="diag-ui">...</strong></div>
+          <div class="metric"><span>Ping gateway</span><strong>futur</strong></div>
+          <div class="metric"><span>Ping internet</span><strong>futur</strong></div>
+          <div class="metric"><span>Recovery guard</span><strong>audit futur</strong></div>
+          <div class="metric"><span>Ports utiles</span><strong>18089 / 80 / 53 / 67</strong></div>
+        </div>
+        <div class="advanced-grid">
           <h2 id="node-title">Diagnostic SAFE</h2>
           <div id="node-state" class="mini-grid"></div>
-        </section>
-        <section aria-labelledby="json-title">
           <h2 id="json-title">JSON brut</h2>
           <pre id="raw-diagnose"></pre>
           <pre id="raw-scan"></pre>
           <pre id="raw-snapshot"></pre>
-        </section>
-      </div>
-    </details>
+        </div>
+      </section>
+    </div>
+
+    <div class="page" data-page="config" hidden>
+      <section class="panel config-panel" aria-labelledby="config-title">
+        <div class="section-head">
+          <div>
+            <h2 id="config-title">Configuration</h2>
+            <p class="section-copy">Parametres affiches seulement; persistance future hors repo.</p>
+          </div>
+          <span class="chip">Plan-only</span>
+        </div>
+        <div class="config-grid">
+          <div class="metric"><span>Port normal UI</span><strong id="config-normal-port">...</strong></div>
+          <div class="metric"><span>Port recovery UI</span><strong id="config-recovery-port">...</strong></div>
+          <div class="metric"><span>SSID recovery</span><strong id="config-recovery-ssid">...</strong></div>
+          <div class="metric"><span>Mot de passe test</span><strong id="config-ap-password-current">...</strong></div>
+          <div class="metric"><span>Politique AP</span><strong id="config-ap-password-policy">...</strong></div>
+          <div class="metric"><span>Acces interface</span><strong id="config-ui-access-password">...</strong></div>
+          <div class="metric"><span>Persistance</span><strong>future</strong></div>
+        </div>
+        <div class="config-form">
+          <label class="field-label">
+            Mot de passe AP recovery
+            <span class="field-hint">Valeur de test actuelle: 12345678. Ce mot de passe sert au Wi-Fi recovery, pas a l'interface.</span>
+            <input id="config-ap-password" class="password-local" type="password" autocomplete="new-password" placeholder="Nouveau mot de passe AP recovery">
+          </label>
+          <button id="config-save-password" class="button" type="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-lock"></use></svg>Modifier en simulation</button>
+          <div id="config-result" class="callout recovery-result" hidden></div>
+        </div>
+      </section>
+    </div>
 
     <nav class="bottom-nav" aria-label="Navigation visuelle">
-      <button class="nav-item active" type="button" aria-current="page"><svg class="icon-svg" aria-hidden="true"><use href="#icon-wifi"></use></svg>Reseaux</button>
-      <button class="nav-item" type="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-server"></use></svg>Apercu</button>
-      <button class="nav-item" type="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-activity"></use></svg>Diag</button>
-      <button class="nav-item" type="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-info"></use></svg>Infos</button>
+      <button class="nav-item active" type="button" data-page-target="networks" aria-current="page"><svg class="icon-svg" aria-hidden="true"><use href="#icon-wifi"></use></svg>Reseaux</button>
+      <button class="nav-item" type="button" data-page-target="node"><svg class="icon-svg" aria-hidden="true"><use href="#icon-server"></use></svg>Etat</button>
+      <button class="nav-item" type="button" data-page-target="recovery"><svg class="icon-svg" aria-hidden="true"><use href="#icon-shield"></use></svg>Recovery</button>
+      <button class="nav-item" type="button" data-page-target="diagnostic"><svg class="icon-svg" aria-hidden="true"><use href="#icon-activity"></use></svg>Diag</button>
+      <button class="nav-item" type="button" data-page-target="config"><svg class="icon-svg" aria-hidden="true"><use href="#icon-gear"></use></svg>Config</button>
     </nav>
   </main>
 
@@ -1331,10 +1402,34 @@
     function renderConfiguration() {
       const system = systemState();
       const recovery = recoveryState();
+      setText('config-normal-port', system.normal_ui_port || recovery.normal_ui_port || 18089);
+      setText('config-recovery-port', system.recovery_ui_port || recovery.recovery_ui_port || 80);
       setText('config-recovery-ssid', recovery.ssid || system.recovery_ssid || 'Wifi-Kit-node');
       setText('config-ap-password-current', recovery.ap_password_current || system.recovery_ap_password_current || '12345678');
       setText('config-ap-password-policy', recovery.ap_password_policy || system.recovery_ap_password_policy || 'min-8-chars');
       setText('config-ui-access-password', recovery.ui_access_password || system.ui_access_password || 'future-not-configured');
+    }
+
+    function renderDiagnostics() {
+      const system = systemState();
+      const recovery = recoveryState();
+      setText('diag-last-event', system.last_recovery_event || recovery.last_event || 'inconnu');
+      setText('diag-ap', serviceLabel(system.ap_state || recovery.ap));
+      setText('diag-dhcp', serviceLabel(system.dhcp_state || recovery.dhcp));
+      setText('diag-ui', serviceLabel(system.ui_state || recovery.ui));
+    }
+
+    function showPage(page) {
+      const targetPage = page || 'networks';
+      document.querySelectorAll('[data-page]').forEach((panel) => {
+        panel.hidden = panel.dataset.page !== targetPage;
+      });
+      document.querySelectorAll('[data-page-target]').forEach((button) => {
+        const active = button.dataset.pageTarget === targetPage;
+        button.classList.toggle('active', active);
+        if (active) button.setAttribute('aria-current', 'page');
+        else button.removeAttribute('aria-current');
+      });
     }
 
     function showRecoveryResult(message) {
@@ -1366,6 +1461,7 @@
 
     async function triggerNetworkAction(action) {
       if (action === 'choose-other-wifi') {
+        showPage('networks');
         document.getElementById('network-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
       showNetworkActionResult(networkActionPlan(action));
@@ -1382,6 +1478,7 @@
 
     async function triggerRecoveryAction(action) {
       if (action === 'choose-other-wifi') {
+        showPage('networks');
         document.getElementById('network-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
         showRecoveryResult('Choix Wi-Fi visible ici. La reconnexion reelle reste gardee cote script, avec rollback.');
         return;
@@ -1598,6 +1695,7 @@
       renderNodeOverview();
       renderConfiguration();
       renderRecovery();
+      renderDiagnostics();
       renderNodeState();
       renderNetworks();
       renderSafety();
@@ -1639,7 +1737,11 @@
     document.querySelectorAll('[data-recovery-action]').forEach((button) => {
       button.addEventListener('click', () => triggerRecoveryAction(button.dataset.recoveryAction));
     });
+    document.querySelectorAll('[data-page-target]').forEach((button) => {
+      button.addEventListener('click', () => showPage(button.dataset.pageTarget));
+    });
     renderAll();
+    showPage('networks');
   </script>
 </body>
 </html>
