@@ -1552,6 +1552,7 @@ seed_kit_usage() {
   echo "  --modules        list available modules"
   echo "  modules list     list module scripts available in modules/"
   echo "  modules deps <module>  show read-only module dependency declaration"
+  echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --apply --package <file> [--components=a,b]  preview package apply only"
   echo "  --apply-module=<module> [--yes|-y]  apply one module only"
@@ -2318,14 +2319,22 @@ find_package_entry() {
   entries=$1
   wanted=$2
 
-  printf '%s\n' "$entries" | while IFS= read -r entry; do
+  old_ifs=$IFS
+  IFS='
+'
+
+  for entry in $entries; do
     case "$entry" in
       "$wanted"|*/"$wanted")
         printf '%s\n' "$entry"
+        IFS=$old_ifs
         return 0
         ;;
     esac
   done
+
+  IFS=$old_ifs
+  return 1
 }
 
 strip_package_value_quotes() {
@@ -2367,7 +2376,7 @@ read_package_metadata() {
   [ -n "$package_entries" ] || return 0
   command -v tar >/dev/null 2>&1 || return 0
 
-  descriptor_path=$(find_package_entry "$package_entries" "seed-kit-package.sh")
+  descriptor_path=$(find_package_entry "$package_entries" "seed-kit-package.sh" || true)
   if [ -z "$descriptor_path" ]; then
     PACKAGE_METADATA_STATUS="missing"
     return 0
@@ -2383,6 +2392,211 @@ read_package_metadata() {
   PACKAGE_METADATA_COMPONENTS=$(package_descriptor_value "$descriptor_content" "COMPONENTS")
   PACKAGE_METADATA_SECRETS_POLICY=$(package_descriptor_value "$descriptor_content" "SECRETS_POLICY")
   PACKAGE_METADATA_STATUS="present"
+}
+
+PACKAGE_VERIFY_TMP=""
+
+cleanup_package_verify() {
+  case "$PACKAGE_VERIFY_TMP" in
+    /tmp/seed-kit-package-verify.*)
+      if [ -d "$PACKAGE_VERIFY_TMP" ]; then
+        rm -rf "$PACKAGE_VERIFY_TMP"
+      fi
+      ;;
+  esac
+  PACKAGE_VERIFY_TMP=""
+}
+
+package_verify_ok() {
+  ui_line "OK: $*"
+}
+
+package_verify_fail() {
+  PACKAGE_VERIFY_FAILED=1
+  ui_line "FAIL: $*"
+}
+
+package_entries_have_safe_paths() {
+  entries=$1
+  old_ifs=$IFS
+  IFS='
+'
+
+  for entry in $entries; do
+    [ -n "$entry" ] || continue
+    case "$entry" in
+      /*|../*|*/../*|*/..|..)
+        IFS=$old_ifs
+        return 1
+        ;;
+    esac
+  done
+
+  IFS=$old_ifs
+  return 0
+}
+
+package_entries_have_forbidden_paths() {
+  entries=$1
+  old_ifs=$IFS
+  IFS='
+'
+
+  for entry in $entries; do
+    [ -n "$entry" ] || continue
+    case "$entry" in
+      .env|*/.env|*.log|logs|*/logs|logs/*|*/logs/*|log|*/log|log/*|*/log/*|cache|*/cache|cache/*|*/cache/*|caches|*/caches|caches/*|*/caches/*|id_rsa|*/id_rsa|id_ed25519|*/id_ed25519|*.pem|*.key|ssh_host_*|*/ssh_host_*|machine-id|*/machine-id|*tailscale*state*|*cloudflare*credential*|*cloudflared*credential*|*cloudflare*token*|*cloudflared*token*|*cloudflare*cert*|*cloudflared*cert*|*cloudflare*key*|*cloudflared*key*)
+        IFS=$old_ifs
+        return 0
+        ;;
+    esac
+  done
+
+  IFS=$old_ifs
+  return 1
+}
+
+package_archive_has_links() {
+  package_file=$1
+
+  if ! verbose_entries=$(tar -tvzf "$package_file" 2>/dev/null); then
+    return 1
+  fi
+
+  old_ifs=$IFS
+  IFS='
+'
+
+  for line in $verbose_entries; do
+    case "$line" in
+      l*|h*)
+        IFS=$old_ifs
+        return 0
+        ;;
+    esac
+  done
+
+  IFS=$old_ifs
+  return 1
+}
+
+verify_package_archive() {
+  package_file=$1
+
+  PACKAGE_VERIFY_FAILED=0
+
+  ui_section "Package verification"
+  ui_line "Mode: read-only"
+  ui_line "Package: $package_file"
+
+  if [ ! -f "$package_file" ]; then
+    package_verify_fail "package file not found"
+    return 2
+  fi
+
+  if command -v gzip >/dev/null 2>&1; then
+    if gzip -t "$package_file" 2>/dev/null; then
+      package_verify_ok "gzip"
+    else
+      package_verify_fail "gzip"
+    fi
+  else
+    package_verify_fail "gzip unavailable"
+  fi
+
+  package_entries=""
+  if command -v tar >/dev/null 2>&1; then
+    if package_entries=$(tar -tzf "$package_file" 2>/dev/null); then
+      package_verify_ok "tar listing"
+    else
+      package_verify_fail "tar listing"
+    fi
+  else
+    package_verify_fail "tar unavailable"
+  fi
+
+  if [ -n "$package_entries" ]; then
+    if package_entries_have_safe_paths "$package_entries"; then
+      package_verify_ok "tar paths safe"
+    else
+      package_verify_fail "tar contains unsafe absolute or parent paths"
+    fi
+
+    if package_archive_has_links "$package_file"; then
+      package_verify_fail "tar contains link entries"
+    else
+      package_verify_ok "no tar links detected"
+    fi
+
+    for required in \
+      "MANIFEST.txt" \
+      "SHA256SUMS" \
+      "seed-kit-package.sh" \
+      "profiles/" \
+      "services/" \
+      "configs/" \
+      "docs/"
+    do
+      if find_package_entry "$package_entries" "$required" >/dev/null; then
+        package_verify_ok "$required present"
+      else
+        package_verify_fail "$required missing"
+      fi
+    done
+
+    if package_entries_have_forbidden_paths "$package_entries"; then
+      package_verify_fail "forbidden secret/runtime paths detected"
+    else
+      package_verify_ok "secret/runtime path scan"
+    fi
+  fi
+
+  if [ "$PACKAGE_VERIFY_FAILED" -eq 0 ]; then
+    if ! command -v mktemp >/dev/null 2>&1; then
+      package_verify_fail "mktemp unavailable"
+    elif ! command -v sha256sum >/dev/null 2>&1; then
+      package_verify_fail "sha256sum unavailable"
+    else
+      PACKAGE_VERIFY_TMP=$(mktemp -d -t seed-kit-package-verify.XXXXXX)
+      case "$PACKAGE_VERIFY_TMP" in
+        /tmp/seed-kit-package-verify.*)
+          trap 'cleanup_package_verify' EXIT HUP INT TERM
+          if tar -xzf "$package_file" -C "$PACKAGE_VERIFY_TMP" 2>/dev/null; then
+            sums_entry=$(find_package_entry "$package_entries" "SHA256SUMS")
+            sums_root=${sums_entry%/SHA256SUMS}
+            if [ "$sums_root" = "$sums_entry" ]; then
+              sums_root="."
+            fi
+            verify_dir="$PACKAGE_VERIFY_TMP/$sums_root"
+            if [ -d "$verify_dir" ] && [ -f "$verify_dir/SHA256SUMS" ]; then
+              if (cd "$verify_dir" && sha256sum -c SHA256SUMS >/dev/null 2>&1); then
+                package_verify_ok "SHA256SUMS"
+              else
+                package_verify_fail "SHA256SUMS"
+              fi
+            else
+              package_verify_fail "SHA256SUMS verification path"
+            fi
+          else
+            package_verify_fail "temporary extraction"
+          fi
+          cleanup_package_verify
+          trap - EXIT HUP INT TERM
+          ;;
+        *)
+          package_verify_fail "unsafe temporary verification directory"
+          ;;
+      esac
+    fi
+  fi
+
+  if [ "$PACKAGE_VERIFY_FAILED" -eq 0 ]; then
+    ui_line "Result: OK"
+    return 0
+  fi
+
+  ui_line "Result: FAILED"
+  return 2
 }
 
 show_package_plan() {
@@ -2471,6 +2685,8 @@ show_package_plan() {
       ui_line "Package metadata: unavailable"
       ;;
   esac
+
+  verify_package_archive "$package_file" || true
 
   ui_section "Preview"
   ui_line "Profile: ${PACKAGE_METADATA_PROFILE_ID:-embedded / unknown}"
@@ -2902,6 +3118,23 @@ case "${1:-}" in
       *)
         echo "usage: sh seed-kit.sh modules list" >&2
         echo "       sh seed-kit.sh modules deps <module>" >&2
+        exit 2
+        ;;
+    esac
+    ;;
+  package)
+    shift
+    case "${1:-}" in
+      verify)
+        shift
+        if [ -z "${1:-}" ]; then
+          echo "usage: sh seed-kit.sh package verify <file>" >&2
+          exit 2
+        fi
+        verify_package_archive "$1"
+        ;;
+      *)
+        echo "usage: sh seed-kit.sh package verify <file>" >&2
         exit 2
         ;;
     esac
