@@ -386,6 +386,41 @@ write_dnsmasq_recovery_config_real() {
   chmod 600 "$temporary_dnsmasq_conf"
 }
 
+prepare_root_log_file() {
+  log_path=$1
+  log_mode=$2
+
+  rm -f "$log_path"
+  : >"$log_path" || fail "could not create $log_path"
+  chmod "$log_mode" "$log_path" 2>/dev/null || true
+}
+
+prepare_dnsmasq_recovery_log() {
+  rm -f "$temporary_dnsmasq_log"
+  : >"$temporary_dnsmasq_log" || fail "could not create $temporary_dnsmasq_log"
+
+  if id nobody >/dev/null 2>&1; then
+    chown nobody:root "$temporary_dnsmasq_log" 2>/dev/null ||
+      chown nobody "$temporary_dnsmasq_log" 2>/dev/null || true
+    chmod 664 "$temporary_dnsmasq_log" 2>/dev/null || true
+  else
+    chmod 666 "$temporary_dnsmasq_log" 2>/dev/null || true
+  fi
+}
+
+prepare_recovery_runtime_files() {
+  rm -f \
+    "$temporary_hostapd_conf" \
+    "$temporary_hostapd_pid" \
+    "$temporary_dnsmasq_conf" \
+    "$temporary_dnsmasq_pid" \
+    "$temporary_ui_pid"
+
+  prepare_root_log_file "$temporary_hostapd_log" 644
+  prepare_dnsmasq_recovery_log
+  prepare_root_log_file "$temporary_ui_log" 644
+}
+
 write_redacted_dnsmasq_config_copy() {
   [ -r "$temporary_dnsmasq_conf" ] || return 0
   cp "$temporary_dnsmasq_conf" "$temporary_dnsmasq_conf_public"
@@ -654,11 +689,7 @@ cmd_apply_ap_recovery_manual_test() {
   }
   trap cleanup_ap_recovery EXIT INT TERM HUP
 
-  rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid" "$temporary_dnsmasq_conf" "$temporary_dnsmasq_pid" "$temporary_ui_pid"
-  : >"$temporary_hostapd_log"
-  : >"$temporary_dnsmasq_log"
-  : >"$temporary_ui_log"
-  chmod 644 "$temporary_hostapd_log" "$temporary_dnsmasq_log" "$temporary_ui_log"
+  prepare_recovery_runtime_files
   write_ap_only_nm_state "$iface" "$previous_connection"
 
   section "real-apply"
@@ -683,6 +714,7 @@ cmd_apply_ap_recovery_manual_test() {
   kv "captive_portal" "basic"
   kv "ui" "starting"
   kv "stop_command" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
+  kv "runtime_files_prepare" "done"
 
   "$nmcli_bin" device disconnect "$iface"
   "$ip_bin" addr flush dev "$iface"
