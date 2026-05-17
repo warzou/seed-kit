@@ -14,6 +14,17 @@ temporary_hostapd_conf_public="/tmp/wifi-kit-hostapd-test.conf.redacted"
 temporary_hostapd_log="/tmp/wifi-kit-hostapd-test.log"
 temporary_hostapd_pid="/tmp/wifi-kit-hostapd-test.pid"
 ap_only_nm_state="/tmp/wifi-kit-ap-only-nm-state"
+ap_recovery_ip="192.168.50.1"
+ap_recovery_cidr="24"
+ap_recovery_dhcp_start="192.168.50.20"
+ap_recovery_dhcp_end="192.168.50.80"
+ap_recovery_dhcp_lease="1h"
+temporary_dnsmasq_conf="/tmp/wifi-kit-dnsmasq-recovery.conf"
+temporary_dnsmasq_log="/tmp/wifi-kit-dnsmasq-recovery.log"
+temporary_dnsmasq_pid="/tmp/wifi-kit-dnsmasq-recovery.pid"
+temporary_ui_log="/tmp/wifi-kit-ui-recovery.log"
+temporary_ui_pid="/tmp/wifi-kit-ui-recovery.pid"
+ui_port="8080"
 confirm_phrase=""
 dangerous_real_apply="0"
 
@@ -42,6 +53,9 @@ Usage:
   sh modules/wifi-kit/prototype/ap-setup-test.sh plan-ap-only
   sh modules/wifi-kit/prototype/ap-setup-test.sh apply-ap-only-manual-test \
     --confirm "WIFI-KIT AP ONLY MANUAL TEST"
+  sh modules/wifi-kit/prototype/ap-setup-test.sh plan-ap-recovery
+  sh modules/wifi-kit/prototype/ap-setup-test.sh apply-ap-recovery-manual-test \
+    --confirm "WIFI-KIT AP RECOVERY MANUAL TEST"
 
 Options:
   --iface <name>           Wi-Fi interface. Default: wlan0
@@ -51,6 +65,7 @@ Options:
   --duration-seconds <n>   Future short AP test duration. Default: 30
   --max-seconds <n>        Future manual AP max duration. Default: 300
                             AP+STA dedicated-interface default: 600
+  --ui-port <n>            Future recovery UI port. Default: 8080
   --confirm <phrase>       Required for apply-short-test: WIFI-KIT AP SHORT TEST
                             Required for apply-manual-test: WIFI-KIT AP MANUAL TEST
   --dangerous-real-apply   Future execution gate. Do not use without a separate validation prompt.
@@ -278,6 +293,137 @@ supports_ap_sta_same_channel() {
       in_combo && managed_ap && index($0, "#channels <= 1") { found = 1 }
       END { exit found ? 0 : 1 }
     '
+}
+
+port53_listeners() {
+  ss -lnup 2>/dev/null |
+    awk 'NR > 1 && ($5 ~ /:53$/ || $5 ~ /[.]53$/ || $5 ~ /[*]:53$/) { print }' |
+    sed -n '1,5p'
+}
+
+write_dnsmasq_recovery_config_plan() {
+  cat <<EOF
+interface=$iface
+bind-interfaces
+except-interface=lo
+dhcp-range=$ap_recovery_dhcp_start,$ap_recovery_dhcp_end,$ap_recovery_dhcp_lease
+dhcp-option=option:router,$ap_recovery_ip
+dhcp-option=option:dns-server,$ap_recovery_ip
+address=/#/$ap_recovery_ip
+log-queries
+log-dhcp
+pid-file=$temporary_dnsmasq_pid
+EOF
+}
+
+cmd_plan_ap_recovery() {
+  channel="$(current_channel || true)"
+  active="$(active_connection || true)"
+  state="$(device_state || true)"
+  ssid="$(effective_ap_ssid)"
+  if [ -z "$ap_channel" ]; then
+    ap_channel="${channel:-6}"
+  fi
+  if [ "$ap_max_seconds_set" = "0" ]; then
+    ap_max_seconds="600"
+  fi
+
+  dnsmasq_path="$(find_tool dnsmasq 2>/dev/null || true)"
+  python3_path="$(find_tool python3 2>/dev/null || true)"
+  port53="$(port53_listeners || true)"
+
+  printf '[wifi-kit] AP recovery UX plan\n'
+  kv "mode" "plan-ap-recovery"
+  kv "network_writes" "false"
+  kv "real_apply_allowed" "false"
+  kv "interface" "$iface"
+  kv "nm_device_state" "${state:-unknown}"
+  kv "nm_active_connection" "${active:-unknown}"
+  kv "current_channel" "${channel:-unknown}"
+  kv "future_ap_channel" "$ap_channel"
+  kv "future_ap_ssid" "$ssid"
+  kv "ap_ip" "$ap_recovery_ip/$ap_recovery_cidr"
+  kv "dhcp_range" "$ap_recovery_dhcp_start-$ap_recovery_dhcp_end"
+  kv "dhcp_lease" "$ap_recovery_dhcp_lease"
+  kv "ui_bind" "$ap_recovery_ip:$ui_port"
+  kv "max_seconds" "$ap_max_seconds"
+  kv "hostapd_conf" "$temporary_hostapd_conf"
+  kv "hostapd_log" "$temporary_hostapd_log"
+  kv "hostapd_pidfile" "$temporary_hostapd_pid"
+  kv "dnsmasq_present" "$([ -n "$dnsmasq_path" ] && printf yes || printf no)"
+  kv "dnsmasq_path" "${dnsmasq_path:-missing}"
+  kv "dnsmasq_conf" "$temporary_dnsmasq_conf"
+  kv "dnsmasq_log" "$temporary_dnsmasq_log"
+  kv "dnsmasq_pidfile" "$temporary_dnsmasq_pid"
+  kv "python3_present" "$([ -n "$python3_path" ] && printf yes || printf no)"
+  kv "python3_path" "${python3_path:-missing}"
+  kv "ui_log" "$temporary_ui_log"
+  kv "ui_pidfile" "$temporary_ui_pid"
+  kv "port53_listener_detected" "$([ -n "$port53" ] && printf yes || printf no)"
+  kv "root_required" "yes"
+
+  section "port-53-listeners"
+  if [ -n "$port53" ]; then
+    printf '%s\n' "$port53"
+  else
+    kv "port53" "free-or-not-visible"
+  fi
+
+  section "target-architecture"
+  kv "01.mode" "AP-only recovery UX"
+  kv "02.radio" "$iface leaves NetworkManager client mode and becomes AP-only"
+  kv "03.address" "assign $ap_recovery_ip/$ap_recovery_cidr to $iface"
+  kv "04.hostapd" "serve SSID $ssid on channel $ap_channel"
+  kv "05.dnsmasq_dhcp" "lease $ap_recovery_dhcp_start-$ap_recovery_dhcp_end"
+  kv "06.dnsmasq_dns" "answer local DNS and redirect unknown names to $ap_recovery_ip"
+  kv "07.ui" "python3 UI listens on http://$ap_recovery_ip:$ui_port/"
+  kv "08.captive_portal_future" "Android/iOS detection endpoints redirect to local UI"
+  kv "09.exit" "future UI reconnects normal Wi-Fi, stops AP recovery, restores NetworkManager"
+
+  section "planned-hostapd-config"
+  write_hostapd_config_plan "$ssid" "$ap_channel"
+
+  section "planned-dnsmasq-config"
+  write_dnsmasq_recovery_config_plan
+
+  section "future-command-sequence"
+  kv "01.preflight" "sh modules/wifi-kit/prototype/ap-setup-test.sh preflight"
+  kv "02.snapshot_nm" "record current $iface NetworkManager state and active connection in $ap_only_nm_state"
+  kv "03.disconnect_nm" "sudo nmcli device disconnect $iface"
+  kv "04.assign_ap_ip" "sudo ip addr flush dev $iface; sudo ip addr add $ap_recovery_ip/$ap_recovery_cidr dev $iface; sudo ip link set $iface up"
+  kv "05.write_hostapd" "create $(shell_quote "$temporary_hostapd_conf") mode 600 with runtime-only passphrase"
+  kv "06.start_hostapd" "sudo hostapd -d $(shell_quote "$temporary_hostapd_conf") > $(shell_quote "$temporary_hostapd_log") 2>&1"
+  kv "07.write_dnsmasq" "create $(shell_quote "$temporary_dnsmasq_conf")"
+  kv "08.start_dnsmasq" "sudo dnsmasq --conf-file=$(shell_quote "$temporary_dnsmasq_conf") --log-facility=$(shell_quote "$temporary_dnsmasq_log")"
+  kv "09.start_ui" "python3 modules/wifi-kit/prototype/ui/serve-readonly.py --host $ap_recovery_ip --port $ui_port"
+  kv "10.captive_portal_future" "serve /generate_204, /hotspot-detect.html, /ncsi.txt, and DNS redirects"
+  kv "11.stop" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
+  kv "12.cleanup" "stop UI/dnsmasq/hostapd; delete temp configs with secrets; keep logs/redacted hostapd config"
+  kv "13.restore_nm" "sudo nmcli device set $iface managed yes; sudo nmcli connection up <previous> ifname $iface || sudo nmcli device connect $iface"
+
+  section "guards"
+  kv "real_execution" "refused-plan-only-in-this-step"
+  kv "confirmation" "WIFI-KIT AP RECOVERY MANUAL TEST"
+  kv "dnsmasq_start" "no"
+  kv "hostapd_start" "no"
+  kv "ui_start" "no"
+  kv "network_changes" "no"
+  kv "persistent_system_files" "none"
+  kv "save_config" "not-called"
+  kv "reboot" "not-used"
+  kv "rollback" "planned-through-AP-only-NetworkManager-restore"
+}
+
+cmd_apply_ap_recovery_manual_test() {
+  [ "$confirm_phrase" = "WIFI-KIT AP RECOVERY MANUAL TEST" ] ||
+    fail "apply-ap-recovery-manual-test requires --confirm \"WIFI-KIT AP RECOVERY MANUAL TEST\""
+
+  cmd_plan_ap_recovery
+  section "apply"
+  kv "apply_status" "refused-plan-only"
+  kv "reason" "AP recovery UX real apply is not implemented in this step"
+  kv "future_command" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh apply-ap-recovery-manual-test --dangerous-real-apply --confirm \"WIFI-KIT AP RECOVERY MANUAL TEST\" --max-seconds 600"
+  return 0
 }
 
 cmd_plan_ap_only() {
@@ -1168,7 +1314,7 @@ cmd_apply_manual_test() {
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    preflight|plan|apply|apply-short-test|apply-manual-test|status|stop|diagnose-last|plan-ap-sta|apply-ap-sta-manual-test|plan-ap-only|apply-ap-only-manual-test)
+    preflight|plan|apply|apply-short-test|apply-manual-test|status|stop|diagnose-last|plan-ap-sta|apply-ap-sta-manual-test|plan-ap-only|apply-ap-only-manual-test|plan-ap-recovery|apply-ap-recovery-manual-test)
       [ -z "$mode" ] || fail "choose only one mode"
       mode="$1"
       ;;
@@ -1203,6 +1349,11 @@ while [ "$#" -gt 0 ]; do
       ap_max_seconds_set="1"
       shift
       ;;
+    --ui-port)
+      [ "$#" -gt 1 ] || fail "--ui-port requires a value"
+      ui_port="$2"
+      shift
+      ;;
     --confirm)
       [ "$#" -gt 1 ] || fail "--confirm requires a value"
       confirm_phrase="$2"
@@ -1235,6 +1386,8 @@ case "${mode:-}" in
   apply-ap-sta-manual-test) cmd_apply_ap_sta_manual_test ;;
   plan-ap-only) cmd_plan_ap_only ;;
   apply-ap-only-manual-test) cmd_apply_ap_only_manual_test ;;
+  plan-ap-recovery) cmd_plan_ap_recovery ;;
+  apply-ap-recovery-manual-test) cmd_apply_ap_recovery_manual_test ;;
   *)
     usage
     exit 2

@@ -214,6 +214,57 @@ The future captive portal is a separate layer: AP plus dnsmasq DHCP/DNS, the
 Wifi-Kit UI server, and Android/iOS captive-network detection endpoints. It is
 not implemented by the minimal AP radio test.
 
+## AP recovery UX target
+
+The V1 recovery UX is an AP-only mode with local DHCP, local DNS, and the
+Wifi-Kit mobile UI served from the node. It is entered only when no usable
+Wi-Fi exists or when recovery is explicitly requested.
+
+Target network:
+
+```text
+interface: wlan0
+ssid: Wifi-Kit-<hostname>
+ap_ip: 192.168.50.1/24
+dhcp_range: 192.168.50.20-192.168.50.80
+ui_url: http://192.168.50.1:8080/
+```
+
+Target startup order:
+
+```text
+snapshot NetworkManager state
+disconnect wlan0 from NetworkManager
+assign 192.168.50.1/24 to wlan0
+start hostapd on wlan0
+start dnsmasq with temporary config for DHCP and local DNS
+start the local Python UI bound to 192.168.50.1
+serve captive-network detection endpoints in a future UI layer
+```
+
+`dnsmasq` should be started with a temporary config under `/tmp`, not through a
+persistent system service. It should bind only to the AP interface, hand out a
+small private DHCP range, advertise `192.168.50.1` as router/DNS, and resolve
+unknown names to the AP IP only during recovery.
+
+The captive portal layer is intentionally separate from the radio/DHCP layer.
+Future endpoints should cover common platform probes such as Android
+`/generate_204`, Apple `/hotspot-detect.html`, and Windows network connectivity
+checks. Those endpoints should redirect or serve the local Wifi-Kit UI without
+requiring internet access.
+
+Exit from recovery should happen through a future UI action:
+
+1. User selects a Wi-Fi target and enters the password locally.
+2. Wifi-Kit runs the NetworkManager connect-safe flow with rollback.
+3. If validation succeeds, Wifi-Kit stops UI/dnsmasq/hostapd, deletes temporary
+   configs, returns `wlan0` to NetworkManager, and stays in client mode.
+4. If validation fails, Wifi-Kit keeps or restarts AP recovery so the user can
+   correct the Wi-Fi settings.
+
+No AP password, Wi-Fi password, admin password, or backend secret should be
+written to repository files, persistent configs, or unredacted logs.
+
 Temporary AP metadata should include:
 
 - ap_ssid;
@@ -352,7 +403,9 @@ the recovery window, so it must be bounded, local, and rollback-aware.
 AP-only prerequisites:
 
 - `hostapd`;
+- `dnsmasq` or `dnsmasq-base` for recovery DHCP/DNS;
 - `nmcli`;
+- `python3` for the current V1 local UI server;
 - root privileges for NetworkManager disconnect/reconnect and hostapd;
 - bounded max duration;
 - runtime-only WPA2 passphrase;
@@ -437,5 +490,7 @@ Recommended sequence:
 4. Add read-only hardware capability checks.
 5. Add connect-safe CLI apply behind explicit refusal-by-default gates.
 6. Validate rollback on a lab node with physical access.
-7. Only then design temporary AP apply.
-8. Only then expose a UI action path.
+7. Validate AP-only recovery with hostapd on lab hardware.
+8. Add plan-only recovery UX with dnsmasq and local UI.
+9. Validate recovery UX on lab hardware.
+10. Only then expose a UI action path.
