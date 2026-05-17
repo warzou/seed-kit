@@ -40,6 +40,10 @@ ui_whisper() { printf '%s%s%s\n' "$COLOR_MUTED" "$*" "$COLOR_RESET"; }
 ui_success() { printf '%s%s%s\n' "$COLOR_GOOD" "$*" "$COLOR_RESET"; }
 ui_warning() { printf '%s%s%s\n' "$COLOR_WARN" "$*" "$COLOR_RESET"; }
 ui_failure() { printf '%s%s%s\n' "$COLOR_BAD" "$*" "$COLOR_RESET"; }
+ui_report_ok() { printf '%s[OK]%s %s\n' "$COLOR_GOOD" "$COLOR_RESET" "$*"; }
+ui_report_warn() { printf '%s[WARN]%s %s\n' "$COLOR_WARN" "$COLOR_RESET" "$*"; }
+ui_report_info() { printf '%s[INFO]%s %s\n' "$COLOR_SECTION" "$COLOR_RESET" "$*"; }
+ui_report_active() { printf '%s->%s %s\n' "$COLOR_SECTION" "$COLOR_RESET" "$*"; }
 ui_prompt() { printf '%s ' "$1"; }
 ui_masthead() { ui_header "$1" "$2"; }
 ui_focus() { ui_kv "$1" "$2"; [ -n "${3:-}" ] && printf '%s\n' "$3"; }
@@ -2453,6 +2457,9 @@ cleanup_package_verify() {
 }
 
 package_verify_ok() {
+  if [ "${PACKAGE_OUTPUT_COMPACT:-0}" = "1" ]; then
+    return 0
+  fi
   ui_line "OK: $*"
 }
 
@@ -2530,9 +2537,11 @@ verify_package_archive() {
 
   PACKAGE_VERIFY_FAILED=0
 
-  ui_section "Package verification"
-  ui_line "Mode: read-only"
-  ui_line "Package: $package_file"
+  if [ "${PACKAGE_OUTPUT_COMPACT:-0}" != "1" ]; then
+    ui_section "Package verification"
+    ui_line "Mode: read-only"
+    ui_line "Package: $package_file"
+  fi
 
   if [ ! -f "$package_file" ]; then
     package_verify_fail "package file not found"
@@ -2636,7 +2645,9 @@ verify_package_archive() {
   fi
 
   if [ "$PACKAGE_VERIFY_FAILED" -eq 0 ]; then
-    ui_line "Result: OK"
+    if [ "${PACKAGE_OUTPUT_COMPACT:-0}" != "1" ]; then
+      ui_line "Result: OK"
+    fi
     return 0
   fi
 
@@ -2647,7 +2658,9 @@ verify_package_archive() {
 stage_package_archive() {
   package_file=$1
 
-  ui_header "Package stage" "inspection only"
+  if [ "${PACKAGE_OUTPUT_COMPACT:-0}" != "1" ]; then
+    ui_header "Package stage" "inspection only"
+  fi
   if ! verify_package_archive "$package_file"; then
     ui_line "Stage: skipped because verification failed"
     return 2
@@ -2676,6 +2689,11 @@ stage_package_archive() {
         ;;
     esac
     return 2
+  fi
+
+  if [ "${PACKAGE_OUTPUT_COMPACT:-0}" = "1" ]; then
+    ui_line "Stage dir: $stage_dir"
+    return 0
   fi
 
   ui_line "Package staged"
@@ -2745,8 +2763,10 @@ stage_subdir_status() {
 inspect_stage_package() {
   stage_dir=$1
 
-  ui_header "Package stage inspect" "read-only"
-  ui_line "Stage dir: $stage_dir"
+  if [ "${PACKAGE_OUTPUT_COMPACT:-0}" != "1" ]; then
+    ui_header "Package stage inspect" "read-only"
+    ui_line "Stage dir: $stage_dir"
+  fi
 
   if ! package_stage_safe_dir "$stage_dir"; then
     ui_line "Refusing path outside /tmp/seed-kit-package-stage.*"
@@ -2762,6 +2782,11 @@ inspect_stage_package() {
   if [ -z "$package_root" ] || [ ! -d "$package_root" ]; then
     ui_line "Package root: not found"
     return 2
+  fi
+
+  if [ "${PACKAGE_OUTPUT_COMPACT:-0}" = "1" ]; then
+    ui_line "Package root: $package_root"
+    return 0
   fi
 
   descriptor="$package_root/seed-kit-package.sh"
@@ -3289,6 +3314,18 @@ readiness_bool() {
   fi
 }
 
+readiness_line() {
+  name=$1
+  state=$2
+  summary=$3
+
+  if [ "$state" = "ok" ]; then
+    printf '%s[OK]%s %-12s %s\n' "$COLOR_GOOD" "$COLOR_RESET" "$name" "$summary"
+  else
+    printf '%s[WARN]%s %-12s %s\n' "$COLOR_WARN" "$COLOR_RESET" "$name" "$summary"
+  fi
+}
+
 cloudflared_configured() {
   for path in \
     "$HOME/.cloudflared/config.yml" \
@@ -3322,7 +3359,7 @@ apply_guided_readiness() {
   caddy_file="$deploy_root/Caddyfile"
   homepage_dir="$deploy_root/homepage"
 
-  ui_section "READINESS"
+  ui_section "Readiness"
 
   docker_installed=no
   docker_service_active=no
@@ -3340,13 +3377,15 @@ apply_guided_readiness() {
   if [ "$docker_installed" = "yes" ] && [ "$docker_service_active" = "yes" ] && [ "$docker_compose_available" = "yes" ]; then
     docker_ready=yes
   fi
-  ui_line "docker:"
-  ui_line "  installed: $docker_installed"
-  ui_line "  service active: $docker_service_active"
-  ui_line "  compose: $docker_compose_available"
-  ui_line "  ready: $docker_ready"
+  docker_summary="ready"
+  docker_state=ok
   if [ "$docker_ready" != "yes" ]; then
-    ui_line "  next: sh seed-kit.sh package apply-guided <package> --step install-modules, then verify Docker service"
+    docker_state=warn
+    if [ "$docker_installed" = "yes" ]; then
+      docker_summary="installed, not ready"
+    else
+      docker_summary="not installed"
+    fi
   fi
 
   tailscale_installed=no
@@ -3357,24 +3396,15 @@ apply_guided_readiness() {
       tailscale_connected=yes
     fi
   fi
-  ui_line ""
-  ui_line "tailscale:"
-  ui_line "  installed: $tailscale_installed"
-  ui_line "  connected: $tailscale_connected"
-  ui_line "  ready: $(readiness_bool "$tailscale_connected")"
+  tailscale_state=ok
+  tailscale_summary="connected"
   if [ "$tailscale_connected" != "yes" ]; then
-    ui_line ""
-    ui_line "  This node is not connected to your tailnet yet."
-    ui_line "  The next step will open a browser authentication URL."
-    ui_line ""
-    ui_line "  When ready:"
-    ui_line "    sudo tailscale up"
-    ui_line ""
-    ui_line "  Expected result:"
-    ui_line "    - node appears in your tailnet"
-    ui_line "    - tailscale ip returns an IP"
-    ui_line "    - readiness becomes yes"
-    ui_line "  next: sudo tailscale up"
+    tailscale_state=warn
+    if [ "$tailscale_installed" = "yes" ]; then
+      tailscale_summary="installed, not connected"
+    else
+      tailscale_summary="not installed"
+    fi
   fi
 
   cloudflared_installed=no
@@ -3387,25 +3417,15 @@ apply_guided_readiness() {
       cloudflared_configured_status="no/unknown"
     fi
   fi
-  ui_line ""
-  ui_line "cloudflared:"
-  ui_line "  installed: $cloudflared_installed"
-  ui_line "  configured: $cloudflared_configured_status"
-  ui_line "  ready: $(readiness_bool "$cloudflared_configured_status")"
+  cloudflared_state=ok
+  cloudflared_summary="configured"
   if [ "$cloudflared_configured_status" != "yes" ]; then
-    ui_line ""
-    ui_line "  Cloudflare tunnel credentials are not configured yet."
-    ui_line ""
-    ui_line "  When ready:"
-    ui_line "    cloudflared tunnel login"
-    ui_line "    cloudflared tunnel create ..."
-    ui_line "    cloudflared tunnel route ..."
-    ui_line ""
-    ui_line "  Expected result:"
-    ui_line "    - tunnel credentials present"
-    ui_line "    - tunnel configuration detected"
-    ui_line "    - readiness becomes yes"
-    ui_line "  next: cloudflared tunnel login/create/configure"
+    cloudflared_state=warn
+    if [ "$cloudflared_installed" = "yes" ]; then
+      cloudflared_summary="installed, not configured"
+    else
+      cloudflared_summary="not installed"
+    fi
   fi
 
   services_deployed=no
@@ -3440,6 +3460,66 @@ apply_guided_readiness() {
         ;;
     esac
   fi
+  services_state=ok
+  services_summary="deployed + validated"
+  if [ "$services_validated" != "yes" ]; then
+    services_state=warn
+    if [ "$services_deployed" = "yes" ]; then
+      services_summary="deployed, validation needed"
+    else
+      services_summary="not deployed"
+    fi
+  fi
+
+  readiness_line "docker" "$docker_state" "$docker_summary"
+  readiness_line "tailscale" "$tailscale_state" "$tailscale_summary"
+  readiness_line "cloudflared" "$cloudflared_state" "$cloudflared_summary"
+  readiness_line "services" "$services_state" "$services_summary"
+
+  ui_section "Next actions"
+  next_index=1
+  if [ "$docker_ready" != "yes" ]; then
+    ui_line "$next_index. sh seed-kit.sh package apply-guided <package> --step install-modules"
+    next_index=$((next_index + 1))
+  fi
+  if [ "$tailscale_connected" != "yes" ]; then
+    ui_line "$next_index. sudo tailscale up"
+    next_index=$((next_index + 1))
+  fi
+  if [ "$cloudflared_configured_status" != "yes" ]; then
+    ui_line "$next_index. cloudflared tunnel login/create/configure"
+    next_index=$((next_index + 1))
+  fi
+  if [ "$services_validated" != "yes" ]; then
+    ui_line "$next_index. sh seed-kit.sh package apply-guided <package> --step deploy-configs"
+  fi
+  if [ "$next_index" -eq 1 ]; then
+    ui_line "none"
+  fi
+
+  ui_section "Nothing was changed"
+  ui_line "No tailscale up, cloudflared login, compose up/pull, service start, Caddy reload/restart, secrets, DNS/cutover, reboot, network restart, or file copy was attempted."
+
+  ui_line ""
+  ui_section "Details"
+  ui_line "docker:"
+  ui_line "  installed: $docker_installed"
+  ui_line "  service active: $docker_service_active"
+  ui_line "  compose: $docker_compose_available"
+  ui_line "  ready: $docker_ready"
+  if [ "$tailscale_connected" != "yes" ]; then
+    ui_line ""
+    ui_line "tailscale:"
+    ui_line "  This node is not connected to your tailnet yet."
+    ui_line "  The next step will open a browser authentication URL."
+    ui_line "  Expected result: node appears in your tailnet and tailscale ip returns an IP."
+  fi
+  if [ "$cloudflared_configured_status" != "yes" ]; then
+    ui_line ""
+    ui_line "cloudflared:"
+    ui_line "  Credentials/tunnel are not configured yet."
+    ui_line "  Expected result: tunnel credentials and configuration are detected."
+  fi
   ui_line ""
   ui_line "services:"
   ui_line "  deploy root: ~/seed-kit-deploy/$deploy_id"
@@ -3447,13 +3527,40 @@ apply_guided_readiness() {
   ui_line "  docker compose config: $compose_ok"
   ui_line "  caddy validate: $caddy_ok"
   ui_line "  validated: $services_validated"
-  ui_line "  ready: $services_validated"
-  if [ "$services_validated" != "yes" ]; then
-    ui_line "  next: sh seed-kit.sh package apply-guided <package> --step deploy-configs, then --step validate-deployed"
-  fi
+}
 
-  ui_line ""
-  ui_line "No tailscale up, cloudflared login, compose up/pull, service start, Caddy reload/restart, secrets, DNS/cutover, reboot, network restart, or file copy was attempted."
+apply_guided_mode_label() {
+  case "$1" in
+    install-modules)
+      printf '%s\n' "SAFE install-only"
+      ;;
+    deploy-configs)
+      printf '%s\n' "SAFE guided copy"
+      ;;
+    *)
+      printf '%s\n' "SAFE read-only"
+      ;;
+  esac
+}
+
+apply_guided_print_header() {
+  guided_step=$1
+  package_file=$2
+  package_id=$3
+  profile_id=$4
+
+  package_label=${package_id:-${package_file##*/}}
+  profile_label=${profile_id:-unknown}
+  mode_label=$(apply_guided_mode_label "$guided_step")
+
+  ui_separator "========================================"
+  ui_line "PACKAGE APPLY GUIDED"
+  ui_line "Seed-Kit > package apply-guided > $guided_step"
+  ui_line "Step: $guided_step"
+  ui_line "Package: $package_label"
+  ui_line "Profile: $profile_label"
+  ui_line "Mode: $mode_label"
+  ui_separator "========================================"
 }
 
 apply_guided_package() {
@@ -3469,29 +3576,36 @@ apply_guided_package() {
       ;;
   esac
 
-  ui_separator "========================================"
-  ui_line "PACKAGE APPLY GUIDED"
-  ui_line "SAFE prototype"
-  ui_separator "========================================"
+  package_entries=""
+  if [ -f "$package_file" ] && command -v tar >/dev/null 2>&1; then
+    package_entries=$(tar -tzf "$package_file" 2>/dev/null || true)
+  fi
+  read_package_metadata "$package_file" "$package_entries"
+  apply_guided_print_header "$guided_step" "$package_file" "$PACKAGE_METADATA_PACKAGE_ID" "$PACKAGE_METADATA_PROFILE_ID"
 
-  ui_section "[1/5] verify package"
+  ui_section "Progress"
+  PACKAGE_OUTPUT_COMPACT=1
   if ! verify_package_archive "$package_file"; then
+    PACKAGE_OUTPUT_COMPACT=0
     ui_line "Apply guided: stopped because verification failed"
     return 2
   fi
+  ui_report_ok "verify"
 
-  ui_section "[2/5] stage package"
   stage_output=$(stage_package_archive "$package_file") || {
+    PACKAGE_OUTPUT_COMPACT=0
     printf '%s\n' "$stage_output"
     ui_line "Apply guided: stopped because staging failed"
     return 2
   }
-  printf '%s\n' "$stage_output"
   stage_dir=$(printf '%s\n' "$stage_output" | sed -n 's/^Stage dir: //p' | sed -n '1p')
   if [ -z "$stage_dir" ]; then
+    PACKAGE_OUTPUT_COMPACT=0
     ui_line "Apply guided: unable to find stage directory"
     return 2
   fi
+  ui_report_ok "stage"
+  ui_line "Stage dir: $stage_dir"
   package_root=$(find_stage_package_root "$stage_dir")
   descriptor_content=""
   if [ -n "$package_root" ] && [ -r "$package_root/seed-kit-package.sh" ]; then
@@ -3505,33 +3619,43 @@ apply_guided_package() {
   guided_services=$(package_descriptor_list_value "$descriptor_content" "SERVICES")
   guided_manual_identities=$(package_descriptor_list_value "$descriptor_content" "MANUAL_IDENTITIES")
 
-  ui_section "[3/5] inspect staged package"
-  inspect_stage_package "$stage_dir"
+  inspect_output=$(inspect_stage_package "$stage_dir") || {
+    PACKAGE_OUTPUT_COMPACT=0
+    printf '%s\n' "$inspect_output"
+    ui_line "Apply guided: stopped because staged package inspection failed"
+    return 2
+  }
+  PACKAGE_OUTPUT_COMPACT=0
+  ui_report_ok "inspect"
+  printf '%s\n' "$inspect_output" | sed 's/^/  /'
+  ui_report_active "$guided_step"
 
-  ui_section "[4/5] proposed future actions"
-  ui_line "- install missing system packages"
-  ui_line "- review services/configs"
-  if [ -n "$guided_manual_identities" ]; then
-    for identity in $guided_manual_identities; do
-      ui_line "- reconnect $identity manually"
-    done
-  else
-    ui_line "- reconnect identities manually"
-  fi
-  if [ -n "$guided_services" ]; then
-    ui_line "- validate declared services"
-  else
-    ui_line "- validate compose/configs"
-  fi
-  ui_line "- optional manual service start"
+  if [ "$guided_step" = "preview" ]; then
+    ui_section "Proposed future actions"
+    ui_line "- install missing system packages"
+    ui_line "- review services/configs"
+    if [ -n "$guided_manual_identities" ]; then
+      for identity in $guided_manual_identities; do
+        ui_line "- reconnect $identity manually"
+      done
+    else
+      ui_line "- reconnect identities manually"
+    fi
+    if [ -n "$guided_services" ]; then
+      ui_line "- validate declared services"
+    else
+      ui_line "- validate compose/configs"
+    fi
+    ui_line "- optional manual service start"
 
-  ui_section "[5/5] SAFE status"
-  ui_line "No restore was attempted."
-  ui_line "No service was started."
-  ui_line "No secret was copied."
-  ui_line "No DNS/cutover was attempted."
-  ui_line "No reboot or network restart was attempted."
-  ui_line "Package apply remains disabled in V1."
+    ui_section "Nothing was changed"
+    ui_line "No restore was attempted."
+    ui_line "No service was started."
+    ui_line "No secret was copied."
+    ui_line "No DNS/cutover was attempted."
+    ui_line "No reboot or network restart was attempted."
+    ui_line "Package apply remains disabled in V1."
+  fi
 
   if [ "$guided_step" = "install-modules" ]; then
     apply_guided_install_modules "$guided_system"
