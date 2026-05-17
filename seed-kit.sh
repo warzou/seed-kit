@@ -1554,6 +1554,7 @@ seed_kit_usage() {
   echo "  modules deps <module>  show read-only module dependency declaration"
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
+  echo "  package inspect-stage <dir>  inspect staged package without applying it"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --apply --package <file> [--components=a,b]  preview package apply only"
   echo "  --apply-module=<module> [--yes|-y]  apply one module only"
@@ -2659,6 +2660,108 @@ stage_package_archive() {
   ui_line "  rm -rf $stage_dir"
 }
 
+package_stage_safe_dir() {
+  stage_dir=$1
+
+  case "$stage_dir" in
+    /tmp/seed-kit-package-stage.*)
+      [ -d "$stage_dir" ]
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+find_stage_package_root() {
+  stage_dir=$1
+
+  if [ -f "$stage_dir/seed-kit-package.sh" ]; then
+    printf '%s\n' "$stage_dir"
+    return 0
+  fi
+
+  find "$stage_dir" -mindepth 2 -maxdepth 2 -type f -name seed-kit-package.sh 2>/dev/null | sed 's#/seed-kit-package\.sh$##' | sed -n '1p'
+}
+
+stage_subdir_status() {
+  package_root=$1
+  subdir=$2
+
+  if [ -d "$package_root/$subdir" ]; then
+    count=$(find "$package_root/$subdir" -type f 2>/dev/null | wc -l | sed 's/[[:space:]]//g')
+    ui_line "$subdir detected: ${count:-0} file(s)"
+  else
+    ui_line "$subdir detected: no"
+  fi
+}
+
+inspect_stage_package() {
+  stage_dir=$1
+
+  ui_header "Package stage inspect" "read-only"
+  ui_line "Stage dir: $stage_dir"
+
+  if ! package_stage_safe_dir "$stage_dir"; then
+    ui_line "Refusing path outside /tmp/seed-kit-package-stage.*"
+    return 2
+  fi
+
+  package_root=$(find_stage_package_root "$stage_dir")
+  if [ -z "$package_root" ] || [ ! -d "$package_root" ]; then
+    ui_line "Package root: not found"
+    return 2
+  fi
+
+  descriptor="$package_root/seed-kit-package.sh"
+  descriptor_content=""
+  if [ -r "$descriptor" ]; then
+    descriptor_content=$(sed -n '1,80p' "$descriptor")
+  fi
+
+  profile_file=$(find "$package_root/profiles" -maxdepth 1 -type f -name '*.profile' 2>/dev/null | sed -n '1p')
+  profile_content=""
+  if [ -n "$profile_file" ] && [ -r "$profile_file" ]; then
+    profile_content=$(sed -n '1,80p' "$profile_file")
+  fi
+
+  package_id=$(package_descriptor_value "$descriptor_content" "PACKAGE_ID")
+  profile_id=$(package_descriptor_value "$descriptor_content" "PROFILE_ID")
+  components=$(package_descriptor_value "$descriptor_content" "COMPONENTS")
+  secrets_policy=$(package_descriptor_value "$descriptor_content" "SECRETS_POLICY")
+  node_role=$(package_descriptor_value "$profile_content" "NODE_ROLE")
+  reconstruction_mode=$(package_descriptor_value "$profile_content" "RECONSTRUCTION_MODE")
+
+  ui_line "Package root: $package_root"
+  ui_line "Package ID: ${package_id:-unknown}"
+  ui_line "Profile ID: ${profile_id:-unknown}"
+  if [ -n "$components" ]; then
+    ui_line "Components:"
+    for component in $components; do
+      ui_line "  - $component"
+    done
+  else
+    ui_line "Components: unknown"
+  fi
+  ui_line "Secrets policy: ${secrets_policy:-unknown}"
+  ui_line "Node role: ${node_role:-unknown}"
+  ui_line "Reconstruction mode: ${reconstruction_mode:-unknown}"
+
+  ui_section "Detected content"
+  stage_subdir_status "$package_root" "services"
+  stage_subdir_status "$package_root" "configs"
+  stage_subdir_status "$package_root" "docs"
+  stage_subdir_status "$package_root" "profiles"
+
+  ui_section "Next manual steps"
+  ui_line "- verify identity"
+  ui_line "- tailscale up manual"
+  ui_line "- cloudflared login/tunnel manual"
+  ui_line "- review compose/configs"
+
+  ui_line "No restore, compose up, secrets, DNS/cutover, reboot, or network restart was attempted."
+}
+
 show_package_plan() {
   package_file=$1
 
@@ -3201,9 +3304,18 @@ case "${1:-}" in
         fi
         stage_package_archive "$1"
         ;;
+      inspect-stage)
+        shift
+        if [ -z "${1:-}" ]; then
+          echo "usage: sh seed-kit.sh package inspect-stage <dir>" >&2
+          exit 2
+        fi
+        inspect_stage_package "$1"
+        ;;
       *)
         echo "usage: sh seed-kit.sh package verify <file>" >&2
         echo "       sh seed-kit.sh package stage <file>" >&2
+        echo "       sh seed-kit.sh package inspect-stage <dir>" >&2
         exit 2
         ;;
     esac
