@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import socket
 import subprocess
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -14,10 +15,13 @@ from urllib.parse import parse_qs, urlparse
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 WIFI_KIT_SH = SCRIPT_DIR.parent / "wifi-kit.sh"
+AP_SETUP_TEST_SH = SCRIPT_DIR.parent / "ap-setup-test.sh"
 INDEX_HTML = SCRIPT_DIR / "index.html"
 NORMAL_UI_PORT = 18089
 RECOVERY_UI_PORT = 80
 RECOVERY_AP_TEST_PASSWORD = "12345678"
+AP_ONLY_NM_STATE = Path("/tmp/wifi-kit-ap-only-nm-state")
+RECONNECT_PREVIOUS_LOG = Path("/tmp/wifi-kit-reconnect-previous.log")
 
 CAPTIVE_PATHS = {
     "/generate_204",
@@ -77,6 +81,66 @@ def run_text_command(args: list[str], timeout: float = 2.0) -> str:
     if result.returncode != 0:
         return ""
     return result.stdout.strip()
+
+
+def read_ap_only_state_value(key: str) -> str:
+    try:
+        for line in AP_ONLY_NM_STATE.read_text(encoding="utf-8").splitlines():
+            name, sep, value = line.partition("=")
+            if sep and name == key:
+                return value
+    except OSError:
+        return ""
+    return ""
+
+
+def start_reconnect_previous() -> dict:
+    previous_connection = read_ap_only_state_value("active_connection") or "unknown"
+    if os.geteuid() != 0:
+        return {
+            "status": "failure",
+            "error": "root-required",
+            "previous_connection": previous_connection,
+            "reconnect_started": False,
+        }
+
+    try:
+        RECONNECT_PREVIOUS_LOG.write_text("[wifi-kit] reconnect-previous requested\n", encoding="utf-8")
+    except OSError:
+        pass
+
+    try:
+        subprocess.Popen(
+            [
+                "sh",
+                "-c",
+                'sleep 1; exec sh "$1" stop >> "$2" 2>&1',
+                "wifi-kit-reconnect-previous",
+                str(AP_SETUP_TEST_SH),
+                str(RECONNECT_PREVIOUS_LOG),
+            ],
+            cwd=str(SCRIPT_DIR.parent),
+            start_new_session=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError as exc:
+        return {
+            "status": "failure",
+            "error": f"start-failed: {exc}",
+            "previous_connection": previous_connection,
+            "reconnect_started": False,
+        }
+
+    return {
+        "status": "success",
+        "action": "reconnect-previous",
+        "previous_connection": previous_connection,
+        "reconnect_started": True,
+        "log": str(RECONNECT_PREVIOUS_LOG),
+        "note": "Recovery UI may disappear while wlan0 returns to NetworkManager.",
+    }
 
 
 def safe_diagnose() -> dict:
@@ -276,10 +340,29 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         return getattr(self.server, "wifi_kit_recovery", {})
 
     def do_POST(self) -> None:
+        parsed = urlparse(self.path)
+        if parsed.path == "/reconnect-previous":
+            if not self.recovery.get("active"):
+                self.send_json(
+                    {
+                        "status": "failure",
+                        "error": "recovery-not-active",
+                        "previous_connection": read_ap_only_state_value("active_connection") or "unknown",
+                        "reconnect_started": False,
+                        "safety": "No recovery cleanup was started from normal mode.",
+                    },
+                    status=409,
+                )
+                return
+
+            payload = start_reconnect_previous()
+            self.send_json(payload, status=200 if payload.get("status") == "success" else 500)
+            return
+
         self.send_json(
             {
                 "error": "method-not-allowed",
-                "safety": "read-only GET endpoints only",
+                "safety": "Only POST /reconnect-previous can mutate recovery state.",
             },
             status=405,
         )
@@ -391,7 +474,7 @@ def main() -> None:
         "action_endpoints": sorted(ACTION_PATHS.keys()),
     }
     print(f"wifi-kit read-only HTTP on http://{args.host}:{args.port}")
-    print("GET only; no network mutation endpoints")
+    print("GET read-only; POST /reconnect-previous only when recovery is active")
     server.serve_forever()
 
 

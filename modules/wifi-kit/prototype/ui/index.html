@@ -1436,22 +1436,47 @@
 
     function networkActionPlan(action) {
       const plans = {
-        'reconnect-previous': "Plan: arreter l'UI recovery, dnsmasq et hostapd Wifi-Kit, supprimer les configs temporaires, retirer 192.168.50.1/24, puis reconnecter NetworkManager a l'ancien Wi-Fi. Action HTTP encore plan-only.",
+        'reconnect-previous': "Retour au Wi-Fi precedent: l'AP recovery, DHCP, DNS et cette UI vont s'arreter, puis wlan0 revient a NetworkManager. Le portail peut disparaitre pendant le retour.",
         'start-recovery': "Plan: snapshot NetworkManager, passer wlan0 en AP-only, lancer hostapd avec le mot de passe AP recovery de test 12345678, dnsmasq DHCP/DNS captive et l'UI locale sur 192.168.50.1:80. Lancement reel uniquement par script confirme."
       };
       return plans[action] || `Action ${action}: plan-only.`;
     }
 
     async function triggerNetworkAction(action) {
+      const button = document.querySelector(`[data-network-action="${action}"]`);
+      const originalText = button ? button.textContent : '';
       showNetworkActionResult(networkActionPlan(action));
       if (window.location.protocol === 'file:') return;
       try {
-        const response = await fetch(`/${action}`, { cache: 'no-store' });
-        if (!response.ok) return;
+        if (action === 'reconnect-previous') {
+          if (button) {
+            button.disabled = true;
+            button.textContent = 'Retour au Wi-Fi precedent...';
+          }
+          showNetworkActionResult("Retour au Wi-Fi precedent... Le portail recovery va disparaitre quand le node aura repris l'ancien Wi-Fi.");
+        }
+        const response = await fetch(`/${action}`, {
+          cache: 'no-store',
+          method: action === 'reconnect-previous' ? 'POST' : 'GET'
+        });
         const payload = await response.json();
+        if (action === 'reconnect-previous') {
+          showNetworkActionResult(payload.reconnect_started
+            ? `Retour lance vers le Wi-Fi par defaut (${payload.previous_connection || 'connexion inconnue'}). Cette page peut devenir inaccessible dans quelques secondes.`
+            : `Retour non lance: ${payload.error || payload.status}.`);
+          return;
+        }
+        if (!response.ok) return;
         showNetworkActionResult(`${networkActionPlan(action)} Serveur: ${payload.mutation || payload.status}.`);
-      } catch {
-        // The visible local plan above is enough in the read-only prototype.
+      } catch (error) {
+        if (action === 'reconnect-previous') {
+          showNetworkActionResult(`Connexion au portail perdue pendant le retour Wi-Fi. C'est attendu si le node quitte le mode recovery. Detail: ${error.message}`);
+        }
+      } finally {
+        if (action !== 'reconnect-previous' && button) {
+          button.disabled = false;
+          button.textContent = originalText;
+        }
       }
     }
 
