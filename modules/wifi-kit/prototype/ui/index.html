@@ -679,6 +679,65 @@
 
     .recovery-result[hidden] { display: none; }
 
+    .node-state-panel,
+    .config-panel,
+    .network-actions-panel {
+      display: grid;
+      gap: 12px;
+    }
+
+    .node-grid,
+    .config-grid,
+    .action-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .mode-line {
+      display: grid;
+      gap: 7px;
+      border: 1px solid rgba(68, 212, 230, 0.16);
+      border-radius: 18px;
+      background: rgba(68, 212, 230, 0.06);
+      padding: 11px;
+    }
+
+    .mode-line strong {
+      font-size: 1rem;
+    }
+
+    .config-form {
+      display: grid;
+      gap: 10px;
+    }
+
+    .action-card {
+      display: grid;
+      gap: 7px;
+      min-height: 112px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.045);
+      padding: 11px;
+    }
+
+    .action-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .action-card .button {
+      align-self: end;
+      width: 100%;
+      min-height: 42px;
+      border-radius: 15px;
+      padding: 8px 10px;
+      font-size: 0.8rem;
+      line-height: 1.15;
+    }
+
     .mini-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -764,6 +823,8 @@
       .shell { padding: 20px 18px 18px; }
       .overview-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .recovery-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .node-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .action-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .network-orb {
         width: 64px;
         height: 64px;
@@ -860,6 +921,83 @@
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-server"></use></svg></span><div><span>Backend</span><strong id="status-backend">...</strong></div></div>
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-wifi"></use></svg></span><div><span>Reseau actuel</span><strong id="status-ssid">...</strong></div></div>
       </div>
+    </section>
+
+    <section class="panel node-state-panel" aria-labelledby="node-state-title">
+      <div class="section-head">
+        <div>
+          <h2 id="node-state-title">Etat du node</h2>
+          <p class="section-copy" id="mode-copy">Mode normal: le node reste connecte au Wi-Fi habituel.</p>
+        </div>
+        <span class="chip" id="mode-chip">Mode normal</span>
+      </div>
+      <div class="mode-line">
+        <strong id="mode-summary">Wifi-Kit observe le reseau sans mutation.</strong>
+        <p class="section-copy" id="mode-detail">Le mode recovery demarre seulement sur demande explicite ou quand aucun Wi-Fi utilisable n'est disponible.</p>
+      </div>
+      <div class="node-grid" aria-label="Etat detaille du node">
+        <div class="metric"><span>Hostname</span><strong id="node-hostname">...</strong></div>
+        <div class="metric"><span>IP actuelle</span><strong id="node-ip">...</strong></div>
+        <div class="metric"><span>Wi-Fi actuel</span><strong id="node-wifi">...</strong></div>
+        <div class="metric"><span>NetworkManager</span><strong id="node-nm">...</strong></div>
+        <div class="metric"><span>Uptime</span><strong id="node-uptime">...</strong></div>
+        <div class="metric"><span>Temperature</span><strong id="node-temp">...</strong></div>
+        <div class="metric"><span>Recovery</span><strong id="node-recovery">...</strong></div>
+        <div class="metric"><span>AP</span><strong id="node-ap">...</strong></div>
+        <div class="metric"><span>DHCP</span><strong id="node-dhcp">...</strong></div>
+        <div class="metric"><span>Dernier evenement</span><strong id="node-last-event">...</strong></div>
+      </div>
+    </section>
+
+    <section class="panel config-panel" aria-labelledby="config-title">
+      <div class="section-head">
+        <div>
+          <h2 id="config-title">Configuration Wifi-Kit</h2>
+          <p class="section-copy">Ce mot de passe protege uniquement le Wi-Fi recovery Wifi-Kit.</p>
+        </div>
+        <span class="chip">Plan-only</span>
+      </div>
+      <div class="config-grid">
+        <div class="metric"><span>SSID recovery</span><strong id="config-recovery-ssid">...</strong></div>
+        <div class="metric"><span>Persistance</span><strong>non activee</strong></div>
+      </div>
+      <div class="config-form">
+        <label class="field-label">
+          Mot de passe AP recovery
+          <span class="field-hint">Runtime-only pour l'instant; rien n'est enregistre par ce prototype.</span>
+          <input id="config-ap-password" class="password-local" type="password" autocomplete="new-password" placeholder="Nouveau mot de passe recovery">
+        </label>
+        <button id="config-save-password" class="button" type="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-lock"></use></svg>Modifier en simulation</button>
+        <div id="config-result" class="callout recovery-result" hidden></div>
+      </div>
+    </section>
+
+    <section class="panel network-actions-panel" aria-labelledby="network-actions-title">
+      <div class="section-head">
+        <div>
+          <h2 id="network-actions-title">Actions reseau</h2>
+          <p class="section-copy">Chaque action affiche son plan avant toute future mutation.</p>
+        </div>
+        <span class="chip">SAFE</span>
+      </div>
+      <div class="action-grid">
+        <div class="action-card">
+          <strong>Reprendre l'ancien Wi-Fi</strong>
+          <p>Quitte recovery, arrete les services temporaires, puis redonne wlan0 a NetworkManager.</p>
+          <button class="button" type="button" data-network-action="reconnect-previous">Afficher le plan</button>
+        </div>
+        <div class="action-card">
+          <strong>Choisir un autre Wi-Fi</strong>
+          <p>Ouvre la selection reseau; le vrai changement Wi-Fi reste reporte au connect-safe NetworkManager.</p>
+          <button class="button secondary" type="button" data-network-action="choose-other-wifi">Afficher le plan</button>
+        </div>
+        <div class="action-card">
+          <strong>Demarrer le mode recovery</strong>
+          <p>Prevoit AP, DHCP, DNS captive et UI locale; lancement reel seulement via script garde.</p>
+          <button class="button secondary" type="button" data-network-action="start-recovery">Afficher le plan</button>
+        </div>
+      </div>
+      <div id="network-action-result" class="callout recovery-result" hidden></div>
     </section>
 
     <section class="panel recovery-panel" id="recovery-panel" aria-labelledby="recovery-title">
@@ -980,6 +1118,24 @@
       "/reconnect-previous"
     ]
   },
+  "system": {
+    "hostname": "node",
+    "mode": "normal",
+    "ip": "unknown",
+    "wifi": "unknown",
+    "interface": "unknown",
+    "networkmanager": "unknown",
+    "uptime": "unknown",
+    "temperature": "unknown",
+    "recovery_active": false,
+    "ap_state": "inactive",
+    "dhcp_state": "inactive",
+    "dns_state": "inactive",
+    "ui_state": "read-only",
+    "recovery_ssid": "Wifi-Kit-node",
+    "recovery_ip": "192.168.50.1",
+    "last_recovery_event": "normal-client-mode"
+  },
   "scan": {
     "backend": "wpa_cli",
     "interface": "unknown",
@@ -1017,9 +1173,19 @@
       return data.recovery || {};
     }
 
+    function systemState() {
+      return data.system || {};
+    }
+
+    function setText(id, text) {
+      const node = document.getElementById(id);
+      if (node) node.textContent = String(text ?? 'inconnu');
+    }
+
     function serviceLabel(value) {
       const text = String(value || 'planned');
       if (text === 'active') return 'actif';
+      if (text === 'inactive') return 'inactif';
       if (text === 'read-only') return 'lecture seule';
       if (text === 'planned') return 'prevu';
       if (text === 'basic') return 'basique';
@@ -1027,9 +1193,10 @@
     }
 
     function describeConnection() {
-      const ip = value(data.diagnose, 'current_ip');
-      const iface = value(data.diagnose, 'interface');
-      const ssid = value(data.diagnose, 'current_ssid_state');
+      const system = systemState();
+      const ip = system.ip || value(data.diagnose, 'current_ip');
+      const iface = system.interface || value(data.diagnose, 'interface');
+      const ssid = system.wifi || value(data.diagnose, 'current_ssid_state');
       const backend = data.scan?.backend || value(data.diagnose, 'backend');
       document.getElementById('status-interface').textContent = iface;
       document.getElementById('status-ip').textContent = ip;
@@ -1120,10 +1287,75 @@
       document.getElementById('recovery-ui').textContent = `${serviceLabel(recovery.ui)}:${recovery.ui_port || 80}`;
     }
 
+    function renderNodeOverview() {
+      const system = systemState();
+      const normal = system.mode !== 'recovery';
+      setText('mode-chip', normal ? 'Mode normal' : 'Mode recovery');
+      setText('mode-summary', normal
+        ? 'Le node reste client du Wi-Fi habituel.'
+        : 'Le node sert le Wi-Fi recovery local.');
+      setText('mode-detail', normal
+        ? 'AP recovery inactif. Wifi-Kit observe, prepare et affiche les plans sans mutation HTTP.'
+        : 'AP, DHCP, DNS captive et UI locale sont temporaires et doivent revenir a NetworkManager au cleanup.');
+      setText('node-hostname', system.hostname || 'inconnu');
+      setText('node-ip', system.ip || value(data.diagnose, 'current_ip'));
+      setText('node-wifi', system.wifi || value(data.diagnose, 'current_ssid_state'));
+      setText('node-nm', system.networkmanager || 'inconnu');
+      setText('node-uptime', system.uptime || 'inconnu');
+      setText('node-temp', system.temperature || 'inconnu');
+      setText('node-recovery', system.recovery_active ? 'actif' : 'inactif');
+      setText('node-ap', serviceLabel(system.ap_state));
+      setText('node-dhcp', serviceLabel(system.dhcp_state));
+      setText('node-last-event', system.last_recovery_event || 'inconnu');
+    }
+
+    function renderConfiguration() {
+      const system = systemState();
+      const recovery = recoveryState();
+      setText('config-recovery-ssid', recovery.ssid || system.recovery_ssid || 'Wifi-Kit-node');
+    }
+
     function showRecoveryResult(message) {
       const target = document.getElementById('recovery-action-result');
       target.textContent = message;
       target.hidden = false;
+    }
+
+    function showNetworkActionResult(message) {
+      const target = document.getElementById('network-action-result');
+      target.textContent = message;
+      target.hidden = false;
+    }
+
+    function showConfigResult(message) {
+      const target = document.getElementById('config-result');
+      target.textContent = message;
+      target.hidden = false;
+    }
+
+    function networkActionPlan(action) {
+      const plans = {
+        'reconnect-previous': "Plan: arreter l'UI recovery, dnsmasq et hostapd Wifi-Kit, supprimer les configs temporaires, retirer 192.168.50.1/24, puis reconnecter NetworkManager a l'ancien Wi-Fi. Action HTTP encore plan-only.",
+        'choose-other-wifi': "Plan: choisir un SSID, garder le mot de passe runtime-only, lancer plus tard connect-safe NetworkManager avec rollback, puis revenir en recovery si validation KO. Encore stub.",
+        'start-recovery': "Plan: snapshot NetworkManager, passer wlan0 en AP-only, lancer hostapd, dnsmasq DHCP/DNS captive et l'UI locale sur 192.168.50.1:80. Lancement reel uniquement par script confirme."
+      };
+      return plans[action] || `Action ${action}: plan-only.`;
+    }
+
+    async function triggerNetworkAction(action) {
+      if (action === 'choose-other-wifi') {
+        document.getElementById('network-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      showNetworkActionResult(networkActionPlan(action));
+      if (window.location.protocol === 'file:') return;
+      try {
+        const response = await fetch(`/${action}`, { cache: 'no-store' });
+        if (!response.ok) return;
+        const payload = await response.json();
+        showNetworkActionResult(`${networkActionPlan(action)} Serveur: ${payload.mutation || payload.status}.`);
+      } catch {
+        // The visible local plan above is enough in the read-only prototype.
+      }
     }
 
     async function triggerRecoveryAction(action) {
@@ -1341,6 +1573,8 @@
 
     function renderAll() {
       describeConnection();
+      renderNodeOverview();
+      renderConfiguration();
       renderRecovery();
       renderNodeState();
       renderNetworks();
@@ -1369,6 +1603,17 @@
     }
 
     document.getElementById('refresh').addEventListener('click', refreshScanFromServer);
+    document.getElementById('config-save-password').addEventListener('click', () => {
+      const field = document.getElementById('config-ap-password');
+      const length = field.value.length;
+      field.value = '';
+      showConfigResult(length
+        ? 'Mot de passe recovery prepare en simulation. Rien n est persiste et aucun secret n est envoye.'
+        : 'Saisis un mot de passe recovery pour afficher le plan. Aucun enregistrement reel dans cette version.');
+    });
+    document.querySelectorAll('[data-network-action]').forEach((button) => {
+      button.addEventListener('click', () => triggerNetworkAction(button.dataset.networkAction));
+    });
     document.querySelectorAll('[data-recovery-action]').forEach((button) => {
       button.addEventListener('click', () => triggerRecoveryAction(button.dataset.recoveryAction));
     });

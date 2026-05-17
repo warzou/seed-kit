@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import socket
 import subprocess
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -26,8 +27,11 @@ CAPTIVE_PATHS = {
 
 ACTION_PATHS = {
     "/reconnect-previous": "reconnect-previous",
+    "/choose-other-wifi": "choose-other-wifi",
+    "/start-recovery": "start-recovery",
     "/exit-recovery": "exit-recovery",
     "/reboot-recovery": "reboot-recovery",
+    "/set-recovery-password": "set-recovery-password",
 }
 
 
@@ -57,6 +61,22 @@ def run_json_command(args: list[str]) -> dict:
         }
 
 
+def run_text_command(args: list[str], timeout: float = 2.0) -> str:
+    try:
+        result = subprocess.run(
+            args,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
 def safe_diagnose() -> dict:
     return run_json_command(["safe-diagnose", "--json"])
 
@@ -72,10 +92,75 @@ def snapshot_preview() -> dict:
     return run_json_command(["state-snapshot", "--simulate", "--json"])
 
 
-def ui_data(recovery: dict | None = None) -> dict:
-    snapshot = snapshot_preview()
+def uptime_label() -> str:
+    try:
+        seconds = int(float(Path("/proc/uptime").read_text(encoding="utf-8").split()[0]))
+    except (OSError, ValueError, IndexError):
+        return "unknown"
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes = rem // 60
+    if days:
+        return f"{days}d {hours}h"
+    if hours:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m"
+
+
+def temperature_label() -> str:
+    try:
+        raw = Path("/sys/class/thermal/thermal_zone0/temp").read_text(encoding="utf-8").strip()
+        value = int(raw) / 1000
+    except (OSError, ValueError):
+        return "unknown"
+    return f"{value:.1f} C"
+
+
+def networkmanager_state() -> str:
+    state = run_text_command(["nmcli", "-t", "-f", "RUNNING", "general"])
+    return state or "unknown"
+
+
+def wlan_connection() -> str:
+    output = run_text_command(["nmcli", "-t", "-f", "DEVICE,CONNECTION", "device", "status"])
+    for line in output.splitlines():
+        device, _, connection = line.partition(":")
+        if device == "wlan0":
+            return connection or "unknown"
+    return "unknown"
+
+
+def system_info(diagnose: dict, recovery: dict | None = None) -> dict:
+    recovery = recovery or {}
+    recovery_active = bool(recovery.get("active"))
+    hostname = socket.gethostname() or "unknown"
+    recovery_ssid = recovery.get("ssid") or f"Wifi-Kit-{hostname}"
     return {
-        "diagnose": safe_diagnose(),
+        "hostname": hostname,
+        "mode": "recovery" if recovery_active else "normal",
+        "ip": diagnose.get("current_ip") or "unknown",
+        "wifi": diagnose.get("current_ssid_state") or wlan_connection(),
+        "interface": diagnose.get("interface") or "unknown",
+        "networkmanager": networkmanager_state(),
+        "uptime": uptime_label(),
+        "temperature": temperature_label(),
+        "recovery_active": recovery_active,
+        "ap_state": "active" if recovery_active else "inactive",
+        "dhcp_state": recovery.get("dhcp") or "inactive",
+        "dns_state": recovery.get("dns") or "inactive",
+        "ui_state": recovery.get("ui") or "read-only",
+        "recovery_ssid": recovery_ssid,
+        "recovery_ip": recovery.get("ip") or "192.168.50.1",
+        "last_recovery_event": "recovery-captive-ui-validated" if recovery_active else "normal-client-mode",
+    }
+
+
+def ui_data(recovery: dict | None = None) -> dict:
+    diagnose = safe_diagnose()
+    snapshot = snapshot_preview()
+    hostname = socket.gethostname() or "node"
+    return {
+        "diagnose": diagnose,
         "snapshot": snapshot,
         "runtime_state": {
             "source": "state-snapshot --simulate --json",
@@ -88,7 +173,7 @@ def ui_data(recovery: dict | None = None) -> dict:
         },
         "recovery": recovery or {
             "active": False,
-            "ssid": "Wifi-Kit-node",
+            "ssid": f"Wifi-Kit-{hostname}",
             "ip": "192.168.50.1",
             "ui_port": 80,
             "dhcp": "planned",
@@ -97,6 +182,7 @@ def ui_data(recovery: dict | None = None) -> dict:
             "captive_portal": "planned",
             "actions": "plan-only",
         },
+        "system": system_info(diagnose, recovery),
         "scan": scan(),
     }
 
@@ -176,6 +262,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
                     "status": "ok",
                     "mode": "recovery" if self.recovery.get("active") else "readonly",
                     "recovery": self.recovery,
+                    "system": ui_data(self.recovery)["system"],
                     "actions": "plan-only",
                 }
             )
@@ -232,10 +319,11 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    hostname = socket.gethostname() or "node"
     server = ThreadingHTTPServer((args.host, args.port), WifiKitReadOnlyHandler)
     server.wifi_kit_recovery = {
         "active": bool(args.recovery_mode),
-        "ssid": args.recovery_ssid or "Wifi-Kit-node",
+        "ssid": args.recovery_ssid or f"Wifi-Kit-{hostname}",
         "ip": args.recovery_ip,
         "ui_port": args.port,
         "dhcp": "active" if args.recovery_mode else "planned",
