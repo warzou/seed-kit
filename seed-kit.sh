@@ -1555,7 +1555,7 @@ seed_kit_usage() {
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
   echo "  package inspect-stage <dir>  inspect staged package without applying it"
-  echo "  package apply-guided <file> [--step install-modules|review-configs|validate-services|deploy-configs|validate-deployed]  guided SAFE package assistant"
+  echo "  package apply-guided <file> [--step install-modules|review-configs|validate-services|deploy-configs|validate-deployed|suggest-start]  guided SAFE package assistant"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --apply --package <file> [--components=a,b]  preview package apply only"
   echo "  --apply-module=<module> [--yes|-y]  apply one module only"
@@ -3166,12 +3166,75 @@ apply_guided_validate_deployed() {
   ui_line "No compose up/pull, Caddy reload/restart, secrets, DNS/cutover, reboot, or network restart was attempted."
 }
 
+apply_guided_suggest_start() {
+  package_root=$1
+  package_file=$2
+  descriptor_content=""
+  if [ -r "$package_root/seed-kit-package.sh" ]; then
+    descriptor_content=$(sed -n '1,80p' "$package_root/seed-kit-package.sh")
+  fi
+  deploy_id=$(deploy_id_from_descriptor "$descriptor_content")
+
+  if [ -z "${HOME:-}" ]; then
+    ui_line "Suggest start: HOME is not set"
+    return 2
+  fi
+
+  deploy_root="$HOME/seed-kit-deploy/$deploy_id"
+  compose_file="$deploy_root/docker-compose.yml"
+  caddy_file="$deploy_root/Caddyfile"
+  homepage_dir="$deploy_root/homepage"
+
+  ui_section "SUGGESTED MANUAL START"
+  ui_line "Deploy root:"
+  ui_line "  ~/seed-kit-deploy/$deploy_id"
+  ui_line "  $deploy_root"
+
+  ui_line ""
+  ui_line "Expected deployed files:"
+  if [ -f "$compose_file" ]; then
+    ui_line "  - docker-compose.yml: present"
+  else
+    ui_line "  - docker-compose.yml: missing"
+  fi
+  if [ -f "$caddy_file" ]; then
+    ui_line "  - Caddyfile: present"
+  else
+    ui_line "  - Caddyfile: missing"
+  fi
+  if [ -d "$homepage_dir" ]; then
+    ui_line "  - homepage/: present"
+  else
+    ui_line "  - homepage/: missing"
+  fi
+
+  ui_line ""
+  ui_line "Review first:"
+  ui_line "  sh seed-kit.sh package apply-guided $package_file --step validate-deployed"
+
+  ui_line ""
+  ui_line "Manual commands:"
+  ui_line "  cd ~/seed-kit-deploy/$deploy_id"
+  ui_line "  docker compose up -d"
+  ui_line "  docker compose ps"
+  ui_line "  curl http://127.0.0.1:8080"
+
+  ui_line ""
+  ui_line "Identity/manual steps:"
+  ui_line "  sudo tailscale up"
+  ui_line "  cloudflared tunnel login/create/configure"
+
+  ui_line ""
+  ui_line "Seed-Kit did not start services."
+  ui_line "No compose up/pull, service start, Caddy reload/restart, tailscale up, cloudflared login, secrets, DNS/cutover, reboot, or network restart was attempted."
+}
+
 apply_guided_package() {
   package_file=$1
   guided_step=${2:-preview}
 
   case "$guided_step" in
-    preview|install-modules|review-configs|validate-services|deploy-configs|validate-deployed)
+    preview|install-modules|review-configs|validate-services|deploy-configs|validate-deployed|suggest-start)
       ;;
     *)
       echo "unknown apply-guided step: $guided_step" >&2
@@ -3260,6 +3323,13 @@ apply_guided_package() {
       return 2
     fi
     apply_guided_validate_deployed "$package_root"
+  fi
+  if [ "$guided_step" = "suggest-start" ]; then
+    if [ -z "$package_root" ]; then
+      ui_line "Suggest start: package root not found"
+      return 2
+    fi
+    apply_guided_suggest_start "$package_root" "$package_file"
   fi
 }
 
