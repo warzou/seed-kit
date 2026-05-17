@@ -52,6 +52,134 @@ ui_card_pair() { ui_kv "$1" "$2"; ui_kv "$3" "$4"; ui_kv "$5" "$6"; }
 ui_choice_bar() { ui_line "1 plan  2 detect  3 modules  q quit"; }
 ui_pause() { :; }
 
+seed_lang() {
+  case "${SEED_KIT_LANG:-en}" in
+    fr)
+      printf '%s\n' "fr"
+      ;;
+    *)
+      printf '%s\n' "en"
+      ;;
+  esac
+}
+
+seed_msg() {
+  key=$1
+
+  if [ "$(seed_lang)" = "fr" ]; then
+    case "$key" in
+      mode_safe_read_only) printf '%s\n' "SAFE lecture seule" ;;
+      mode_safe_install_only) printf '%s\n' "SAFE installation seule" ;;
+      mode_safe_guided_copy) printf '%s\n' "SAFE copie guidée" ;;
+      apply_guided_title) printf '%s\n' "RAPPORT APPLY-GUIDED" ;;
+      step_label) printf '%s\n' "Étape" ;;
+      package_label) printf '%s\n' "Package" ;;
+      profile_label) printf '%s\n' "Profil" ;;
+      mode_label) printf '%s\n' "Mode" ;;
+      progress) printf '%s\n' "Progression" ;;
+      readiness) printf '%s\n' "État de préparation" ;;
+      next_actions) printf '%s\n' "Actions suivantes" ;;
+      nothing_changed) printf '%s\n' "Aucun changement effectué" ;;
+      details) printf '%s\n' "Détails" ;;
+      proposed_future_actions) printf '%s\n' "Actions futures proposées" ;;
+      ready) printf '%s\n' "prêt" ;;
+      installed_not_ready) printf '%s\n' "installé, pas prêt" ;;
+      not_installed) printf '%s\n' "non installé" ;;
+      connected) printf '%s\n' "connecté" ;;
+      installed_not_connected) printf '%s\n' "installé, non connecté" ;;
+      configured) printf '%s\n' "configuré" ;;
+      installed_not_configured) printf '%s\n' "installé, non configuré" ;;
+      deployed_validated) printf '%s\n' "déployés et validés" ;;
+      deployed_validation_needed) printf '%s\n' "déployés, validation requise" ;;
+      not_deployed) printf '%s\n' "non déployés" ;;
+      none) printf '%s\n' "aucune" ;;
+      no_change_summary) printf '%s\n' "Aucun tailscale up, login cloudflared, compose up/pull, démarrage service, reload/restart Caddy, secret, DNS/cutover, reboot, restart réseau ou copie fichier n'a été tenté." ;;
+      no_restore) printf '%s\n' "Aucun restore n'a été tenté." ;;
+      no_service_start) printf '%s\n' "Aucun service n'a été démarré." ;;
+      no_secret_copy) printf '%s\n' "Aucun secret n'a été copié." ;;
+      no_dns_cutover) printf '%s\n' "Aucun DNS/cutover n'a été tenté." ;;
+      no_reboot_network) printf '%s\n' "Aucun reboot ou restart réseau n'a été tenté." ;;
+      package_apply_disabled) printf '%s\n' "Package apply reste désactivé en V1." ;;
+      future_install_system) printf '%s\n' "- installer les paquets système manquants" ;;
+      future_review_configs) printf '%s\n' "- relire services/configs" ;;
+      future_reconnect_identity) printf '%s\n' "- reconnecter %s manuellement" ;;
+      future_reconnect_identities) printf '%s\n' "- reconnecter les identités manuellement" ;;
+      future_validate_services) printf '%s\n' "- valider les services déclarés" ;;
+      future_validate_configs) printf '%s\n' "- valider compose/configs" ;;
+      future_optional_start) printf '%s\n' "- démarrage manuel optionnel des services" ;;
+      details_docker_service_active) printf '%s\n' "  service actif: %s" ;;
+      details_ready) printf '%s\n' "  prêt: %s" ;;
+      details_tailscale_not_connected) printf '%s\n' "  Ce noeud n'est pas encore connecté à votre tailnet." ;;
+      details_tailscale_auth) printf '%s\n' "  La prochaine étape ouvrira une URL d'authentification dans le navigateur." ;;
+      details_tailscale_expected) printf '%s\n' "  Résultat attendu: le noeud apparaît dans votre tailnet et tailscale ip retourne une IP." ;;
+      details_cloudflared_missing) printf '%s\n' "  Credentials/tunnel ne sont pas encore configurés." ;;
+      details_cloudflared_expected) printf '%s\n' "  Résultat attendu: credentials de tunnel et configuration sont détectés." ;;
+      details_deploy_root) printf '%s\n' "  racine deploy: %s" ;;
+      details_deployed) printf '%s\n' "  déployé: %s" ;;
+      details_validated) printf '%s\n' "  validé: %s" ;;
+      *)
+        printf '%s\n' "$key"
+        ;;
+    esac
+    return 0
+  fi
+
+  case "$key" in
+    mode_safe_read_only) printf '%s\n' "SAFE read-only" ;;
+    mode_safe_install_only) printf '%s\n' "SAFE install-only" ;;
+    mode_safe_guided_copy) printf '%s\n' "SAFE guided copy" ;;
+    apply_guided_title) printf '%s\n' "PACKAGE APPLY GUIDED" ;;
+    step_label) printf '%s\n' "Step" ;;
+    package_label) printf '%s\n' "Package" ;;
+    profile_label) printf '%s\n' "Profile" ;;
+    mode_label) printf '%s\n' "Mode" ;;
+    progress) printf '%s\n' "Progress" ;;
+    readiness) printf '%s\n' "Readiness" ;;
+    next_actions) printf '%s\n' "Next actions" ;;
+    nothing_changed) printf '%s\n' "Nothing was changed" ;;
+    details) printf '%s\n' "Details" ;;
+    proposed_future_actions) printf '%s\n' "Proposed future actions" ;;
+    ready) printf '%s\n' "ready" ;;
+    installed_not_ready) printf '%s\n' "installed, not ready" ;;
+    not_installed) printf '%s\n' "not installed" ;;
+    connected) printf '%s\n' "connected" ;;
+    installed_not_connected) printf '%s\n' "installed, not connected" ;;
+    configured) printf '%s\n' "configured" ;;
+    installed_not_configured) printf '%s\n' "installed, not configured" ;;
+    deployed_validated) printf '%s\n' "deployed + validated" ;;
+    deployed_validation_needed) printf '%s\n' "deployed, validation needed" ;;
+    not_deployed) printf '%s\n' "not deployed" ;;
+    none) printf '%s\n' "none" ;;
+    no_change_summary) printf '%s\n' "No tailscale up, cloudflared login, compose up/pull, service start, Caddy reload/restart, secrets, DNS/cutover, reboot, network restart, or file copy was attempted." ;;
+    no_restore) printf '%s\n' "No restore was attempted." ;;
+    no_service_start) printf '%s\n' "No service was started." ;;
+    no_secret_copy) printf '%s\n' "No secret was copied." ;;
+    no_dns_cutover) printf '%s\n' "No DNS/cutover was attempted." ;;
+    no_reboot_network) printf '%s\n' "No reboot or network restart was attempted." ;;
+    package_apply_disabled) printf '%s\n' "Package apply remains disabled in V1." ;;
+    future_install_system) printf '%s\n' "- install missing system packages" ;;
+    future_review_configs) printf '%s\n' "- review services/configs" ;;
+    future_reconnect_identity) printf '%s\n' "- reconnect %s manually" ;;
+    future_reconnect_identities) printf '%s\n' "- reconnect identities manually" ;;
+    future_validate_services) printf '%s\n' "- validate declared services" ;;
+    future_validate_configs) printf '%s\n' "- validate compose/configs" ;;
+    future_optional_start) printf '%s\n' "- optional manual service start" ;;
+    details_docker_service_active) printf '%s\n' "  service active: %s" ;;
+    details_ready) printf '%s\n' "  ready: %s" ;;
+    details_tailscale_not_connected) printf '%s\n' "  This node is not connected to your tailnet yet." ;;
+    details_tailscale_auth) printf '%s\n' "  The next step will open a browser authentication URL." ;;
+    details_tailscale_expected) printf '%s\n' "  Expected result: node appears in your tailnet and tailscale ip returns an IP." ;;
+    details_cloudflared_missing) printf '%s\n' "  Credentials/tunnel are not configured yet." ;;
+    details_cloudflared_expected) printf '%s\n' "  Expected result: tunnel credentials and configuration are detected." ;;
+    details_deploy_root) printf '%s\n' "  deploy root: %s" ;;
+    details_deployed) printf '%s\n' "  deployed: %s" ;;
+    details_validated) printf '%s\n' "  validated: %s" ;;
+    *)
+      printf '%s\n' "$key"
+      ;;
+  esac
+}
+
 bootstrap_init_runtime() {
   mkdir -p "$ROOT_DIR/lib" "$ROOT_DIR/modules" "$ROOT_DIR/backends"
 
@@ -3359,7 +3487,7 @@ apply_guided_readiness() {
   caddy_file="$deploy_root/Caddyfile"
   homepage_dir="$deploy_root/homepage"
 
-  ui_section "Readiness"
+  ui_section "$(seed_msg readiness)"
 
   docker_installed=no
   docker_service_active=no
@@ -3377,14 +3505,14 @@ apply_guided_readiness() {
   if [ "$docker_installed" = "yes" ] && [ "$docker_service_active" = "yes" ] && [ "$docker_compose_available" = "yes" ]; then
     docker_ready=yes
   fi
-  docker_summary="ready"
+  docker_summary=$(seed_msg ready)
   docker_state=ok
   if [ "$docker_ready" != "yes" ]; then
     docker_state=warn
     if [ "$docker_installed" = "yes" ]; then
-      docker_summary="installed, not ready"
+      docker_summary=$(seed_msg installed_not_ready)
     else
-      docker_summary="not installed"
+      docker_summary=$(seed_msg not_installed)
     fi
   fi
 
@@ -3397,13 +3525,13 @@ apply_guided_readiness() {
     fi
   fi
   tailscale_state=ok
-  tailscale_summary="connected"
+  tailscale_summary=$(seed_msg connected)
   if [ "$tailscale_connected" != "yes" ]; then
     tailscale_state=warn
     if [ "$tailscale_installed" = "yes" ]; then
-      tailscale_summary="installed, not connected"
+      tailscale_summary=$(seed_msg installed_not_connected)
     else
-      tailscale_summary="not installed"
+      tailscale_summary=$(seed_msg not_installed)
     fi
   fi
 
@@ -3418,13 +3546,13 @@ apply_guided_readiness() {
     fi
   fi
   cloudflared_state=ok
-  cloudflared_summary="configured"
+  cloudflared_summary=$(seed_msg configured)
   if [ "$cloudflared_configured_status" != "yes" ]; then
     cloudflared_state=warn
     if [ "$cloudflared_installed" = "yes" ]; then
-      cloudflared_summary="installed, not configured"
+      cloudflared_summary=$(seed_msg installed_not_configured)
     else
-      cloudflared_summary="not installed"
+      cloudflared_summary=$(seed_msg not_installed)
     fi
   fi
 
@@ -3461,13 +3589,13 @@ apply_guided_readiness() {
     esac
   fi
   services_state=ok
-  services_summary="deployed + validated"
+  services_summary=$(seed_msg deployed_validated)
   if [ "$services_validated" != "yes" ]; then
     services_state=warn
     if [ "$services_deployed" = "yes" ]; then
-      services_summary="deployed, validation needed"
+      services_summary=$(seed_msg deployed_validation_needed)
     else
-      services_summary="not deployed"
+      services_summary=$(seed_msg not_deployed)
     fi
   fi
 
@@ -3476,7 +3604,7 @@ apply_guided_readiness() {
   readiness_line "cloudflared" "$cloudflared_state" "$cloudflared_summary"
   readiness_line "services" "$services_state" "$services_summary"
 
-  ui_section "Next actions"
+  ui_section "$(seed_msg next_actions)"
   next_index=1
   if [ "$docker_ready" != "yes" ]; then
     ui_line "$next_index. sh seed-kit.sh package apply-guided <package> --step install-modules"
@@ -3494,51 +3622,51 @@ apply_guided_readiness() {
     ui_line "$next_index. sh seed-kit.sh package apply-guided <package> --step deploy-configs"
   fi
   if [ "$next_index" -eq 1 ]; then
-    ui_line "none"
+    ui_line "$(seed_msg none)"
   fi
 
-  ui_section "Nothing was changed"
-  ui_line "No tailscale up, cloudflared login, compose up/pull, service start, Caddy reload/restart, secrets, DNS/cutover, reboot, network restart, or file copy was attempted."
+  ui_section "$(seed_msg nothing_changed)"
+  ui_line "$(seed_msg no_change_summary)"
 
   ui_line ""
-  ui_section "Details"
+  ui_section "$(seed_msg details)"
   ui_line "docker:"
   ui_line "  installed: $docker_installed"
-  ui_line "  service active: $docker_service_active"
+  printf "$(seed_msg details_docker_service_active)\\n" "$docker_service_active"
   ui_line "  compose: $docker_compose_available"
-  ui_line "  ready: $docker_ready"
+  printf "$(seed_msg details_ready)\\n" "$docker_ready"
   if [ "$tailscale_connected" != "yes" ]; then
     ui_line ""
     ui_line "tailscale:"
-    ui_line "  This node is not connected to your tailnet yet."
-    ui_line "  The next step will open a browser authentication URL."
-    ui_line "  Expected result: node appears in your tailnet and tailscale ip returns an IP."
+    ui_line "$(seed_msg details_tailscale_not_connected)"
+    ui_line "$(seed_msg details_tailscale_auth)"
+    ui_line "$(seed_msg details_tailscale_expected)"
   fi
   if [ "$cloudflared_configured_status" != "yes" ]; then
     ui_line ""
     ui_line "cloudflared:"
-    ui_line "  Credentials/tunnel are not configured yet."
-    ui_line "  Expected result: tunnel credentials and configuration are detected."
+    ui_line "$(seed_msg details_cloudflared_missing)"
+    ui_line "$(seed_msg details_cloudflared_expected)"
   fi
   ui_line ""
   ui_line "services:"
-  ui_line "  deploy root: ~/seed-kit-deploy/$deploy_id"
-  ui_line "  deployed: $services_deployed"
+  printf "$(seed_msg details_deploy_root)\\n" "~/seed-kit-deploy/$deploy_id"
+  printf "$(seed_msg details_deployed)\\n" "$services_deployed"
   ui_line "  docker compose config: $compose_ok"
   ui_line "  caddy validate: $caddy_ok"
-  ui_line "  validated: $services_validated"
+  printf "$(seed_msg details_validated)\\n" "$services_validated"
 }
 
 apply_guided_mode_label() {
   case "$1" in
     install-modules)
-      printf '%s\n' "SAFE install-only"
+      seed_msg mode_safe_install_only
       ;;
     deploy-configs)
-      printf '%s\n' "SAFE guided copy"
+      seed_msg mode_safe_guided_copy
       ;;
     *)
-      printf '%s\n' "SAFE read-only"
+      seed_msg mode_safe_read_only
       ;;
   esac
 }
@@ -3554,12 +3682,19 @@ apply_guided_print_header() {
   mode_label=$(apply_guided_mode_label "$guided_step")
 
   ui_separator "========================================"
-  ui_line "PACKAGE APPLY GUIDED"
+  ui_line "$(seed_msg apply_guided_title)"
   ui_line "Seed-Kit > package apply-guided > $guided_step"
-  ui_line "Step: $guided_step"
-  ui_line "Package: $package_label"
-  ui_line "Profile: $profile_label"
-  ui_line "Mode: $mode_label"
+  if [ "$(seed_lang)" = "fr" ]; then
+    ui_line "$(seed_msg step_label) : $guided_step"
+    ui_line "$(seed_msg package_label) : $package_label"
+    ui_line "$(seed_msg profile_label) : $profile_label"
+    ui_line "$(seed_msg mode_label) : $mode_label"
+  else
+    ui_line "$(seed_msg step_label): $guided_step"
+    ui_line "$(seed_msg package_label): $package_label"
+    ui_line "$(seed_msg profile_label): $profile_label"
+    ui_line "$(seed_msg mode_label): $mode_label"
+  fi
   ui_separator "========================================"
 }
 
@@ -3583,7 +3718,7 @@ apply_guided_package() {
   read_package_metadata "$package_file" "$package_entries"
   apply_guided_print_header "$guided_step" "$package_file" "$PACKAGE_METADATA_PACKAGE_ID" "$PACKAGE_METADATA_PROFILE_ID"
 
-  ui_section "Progress"
+  ui_section "$(seed_msg progress)"
   PACKAGE_OUTPUT_COMPACT=1
   if ! verify_package_archive "$package_file"; then
     PACKAGE_OUTPUT_COMPACT=0
@@ -3631,30 +3766,34 @@ apply_guided_package() {
   ui_report_active "$guided_step"
 
   if [ "$guided_step" = "preview" ]; then
-    ui_section "Proposed future actions"
-    ui_line "- install missing system packages"
-    ui_line "- review services/configs"
+    ui_section "$(seed_msg proposed_future_actions)"
+    ui_line "$(seed_msg future_install_system)"
+    ui_line "$(seed_msg future_review_configs)"
     if [ -n "$guided_manual_identities" ]; then
       for identity in $guided_manual_identities; do
-        ui_line "- reconnect $identity manually"
+        if [ "$(seed_lang)" = "fr" ]; then
+          ui_line "- reconnecter $identity manuellement"
+        else
+          ui_line "- reconnect $identity manually"
+        fi
       done
     else
-      ui_line "- reconnect identities manually"
+      ui_line "$(seed_msg future_reconnect_identities)"
     fi
     if [ -n "$guided_services" ]; then
-      ui_line "- validate declared services"
+      ui_line "$(seed_msg future_validate_services)"
     else
-      ui_line "- validate compose/configs"
+      ui_line "$(seed_msg future_validate_configs)"
     fi
-    ui_line "- optional manual service start"
+    ui_line "$(seed_msg future_optional_start)"
 
-    ui_section "Nothing was changed"
-    ui_line "No restore was attempted."
-    ui_line "No service was started."
-    ui_line "No secret was copied."
-    ui_line "No DNS/cutover was attempted."
-    ui_line "No reboot or network restart was attempted."
-    ui_line "Package apply remains disabled in V1."
+    ui_section "$(seed_msg nothing_changed)"
+    ui_line "$(seed_msg no_restore)"
+    ui_line "$(seed_msg no_service_start)"
+    ui_line "$(seed_msg no_secret_copy)"
+    ui_line "$(seed_msg no_dns_cutover)"
+    ui_line "$(seed_msg no_reboot_network)"
+    ui_line "$(seed_msg package_apply_disabled)"
   fi
 
   if [ "$guided_step" = "install-modules" ]; then
