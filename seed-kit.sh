@@ -1555,7 +1555,7 @@ seed_kit_usage() {
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
   echo "  package inspect-stage <dir>  inspect staged package without applying it"
-  echo "  package apply-guided <file>  guided SAFE package assistant without applying it"
+  echo "  package apply-guided <file> [--step install-modules]  guided SAFE package assistant"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --apply --package <file> [--components=a,b]  preview package apply only"
   echo "  --apply-module=<module> [--yes|-y]  apply one module only"
@@ -2771,8 +2771,84 @@ inspect_stage_package() {
   ui_line "No restore, compose up, secrets, DNS/cutover, reboot, or network restart was attempted."
 }
 
+apply_guided_install_modules() {
+  components=$1
+
+  ui_section "install-modules step"
+  installable_modules=""
+  installed_modules=""
+  missing_modules=""
+  manual_modules=""
+
+  for component in $components; do
+    case "$component" in
+      docker|tailscale|cloudflared|caddy)
+        if module_is_installed "$component"; then
+          installed_modules="${installed_modules}${component} "
+        else
+          missing_modules="${missing_modules}${component} "
+          installable_modules="${installable_modules}${component} "
+        fi
+        ;;
+      homepage)
+        manual_modules="${manual_modules}${component} "
+        ;;
+      *)
+        manual_modules="${manual_modules}${component} "
+        ;;
+    esac
+  done
+
+  ui_line "Declared components:"
+  for component in $components; do
+    ui_line "  - $component"
+  done
+  ui_line "Already present: ${installed_modules:-none}"
+  ui_line "Missing: ${missing_modules:-none}"
+  ui_line "Install-only candidates: ${installable_modules:-none}"
+  ui_line "Manual/future: ${manual_modules:-none}"
+
+  if [ -z "$installable_modules" ]; then
+    ui_line "No install-only modules selected for apply."
+    return 0
+  fi
+
+  ui_line "SAFE boundary:"
+  ui_line "  - no staged configs copied to /etc"
+  ui_line "  - no restore"
+  ui_line "  - no compose pull/up"
+  ui_line "  - no secrets"
+  ui_line "  - no tailscale up"
+  ui_line "  - no cloudflared login"
+  ui_line "  - no DNS/cutover"
+  ui_line "  - no reboot or network restart"
+
+  APPLY_AUTO=0
+  APPLY_CONFIRMED=0
+  APPLY_MODULES=$(printf '%s\n' "$installable_modules" | sed 's/[[:space:]]*$//')
+  APPLY_CONFIRM_TARGET="package apply-guided step=install-modules modules=$APPLY_MODULES"
+  APPLY_DONE_MODULES=""
+  APPLY_MANUAL_STEPS=""
+
+  if ! apply_safe_confirm; then
+    return 2
+  fi
+
+  run_apply_modules
+}
+
 apply_guided_package() {
   package_file=$1
+  guided_step=${2:-preview}
+
+  case "$guided_step" in
+    preview|install-modules)
+      ;;
+    *)
+      echo "unknown apply-guided step: $guided_step" >&2
+      return 2
+      ;;
+  esac
 
   ui_separator "========================================"
   ui_line "PACKAGE APPLY GUIDED"
@@ -2797,6 +2873,12 @@ apply_guided_package() {
     ui_line "Apply guided: unable to find stage directory"
     return 2
   fi
+  package_root=$(find_stage_package_root "$stage_dir")
+  descriptor_content=""
+  if [ -n "$package_root" ] && [ -r "$package_root/seed-kit-package.sh" ]; then
+    descriptor_content=$(sed -n '1,80p' "$package_root/seed-kit-package.sh")
+  fi
+  guided_components=$(package_descriptor_value "$descriptor_content" "COMPONENTS")
 
   ui_section "[3/5] inspect staged package"
   inspect_stage_package "$stage_dir"
@@ -2816,6 +2898,10 @@ apply_guided_package() {
   ui_line "No DNS/cutover was attempted."
   ui_line "No reboot or network restart was attempted."
   ui_line "Package apply remains disabled in V1."
+
+  if [ "$guided_step" = "install-modules" ]; then
+    apply_guided_install_modules "$guided_components"
+  fi
 }
 
 show_package_plan() {
@@ -3374,7 +3460,30 @@ case "${1:-}" in
           echo "usage: sh seed-kit.sh package apply-guided <file>" >&2
           exit 2
         fi
-        apply_guided_package "$1"
+        package_file=$1
+        guided_step=preview
+        shift
+        while [ "$#" -gt 0 ]; do
+          case "$1" in
+            --step)
+              if [ -z "${2:-}" ]; then
+                echo "missing value for --step" >&2
+                exit 2
+              fi
+              guided_step="${2:-}"
+              shift 2
+              ;;
+            --step=*)
+              guided_step="${1#--step=}"
+              shift
+              ;;
+            *)
+              echo "unknown option for package apply-guided: $1" >&2
+              exit 2
+              ;;
+          esac
+        done
+        apply_guided_package "$package_file" "$guided_step"
         ;;
       *)
         echo "usage: sh seed-kit.sh package verify <file>" >&2
