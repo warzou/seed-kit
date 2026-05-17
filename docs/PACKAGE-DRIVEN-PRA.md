@@ -58,6 +58,18 @@ System entries can be used by guided install-only steps. Services are never
 treated as installable Seed-Kit modules. Module entries are reserved for
 internal Seed-Kit modules.
 
+## Ready model
+
+Package-driven PRA follows the Ready model:
+
+```text
+Installed -> Configured -> Validated -> Ready
+```
+
+Installing `SYSTEM` entries is not enough to declare a replacement node ready.
+Manual identities such as Tailscale and Cloudflared still require operator-owned
+login, trust, and configuration steps. See `docs/READY-MODEL.md`.
+
 ## Secrets
 
 Secrets are never restored automatically.

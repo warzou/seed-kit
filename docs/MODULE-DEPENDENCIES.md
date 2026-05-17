@@ -55,6 +55,14 @@ sh seed-kit.sh modules deps docker
 It should print the module declaration and exit. It must not inspect the remote
 network, run apt, call sudo, or mutate the machine.
 
+## Ready model
+
+Dependency declarations only describe what may be needed. They do not mean a
+module or system package is ready for use.
+
+Seed-Kit uses the Ready model to separate installation from configuration,
+validation, and operator-owned identity steps. See `docs/READY-MODEL.md`.
+
 ## Why not a resolver yet?
 
 Field use is still shaping the real module graph. A resolver would be premature
