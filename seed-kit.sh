@@ -573,6 +573,12 @@ ui_rule() {
   ui_line "========================================"
 }
 
+ui_phase() {
+  ui_rule
+  ui_line "$1"
+  ui_rule
+}
+
 require_network_for_apply() {
   label=${1:-apply}
 
@@ -591,7 +597,7 @@ require_network_for_apply() {
 }
 
 apply_safe_confirm() {
-  if [ "$APPLY_AUTO" -eq 1 ]; then
+  if [ "${APPLY_CONFIRMED:-0}" -eq 1 ] || [ "${APPLY_AUTO:-0}" -eq 1 ]; then
     return 0
   fi
 
@@ -611,6 +617,7 @@ apply_safe_confirm() {
   IFS= read -r answer || return 1
   case "$answer" in
     y|Y)
+      APPLY_CONFIRMED=1
       return 0
       ;;
     *)
@@ -618,6 +625,27 @@ apply_safe_confirm() {
       return 2
       ;;
   esac
+}
+
+apply_note_module() {
+  module=$1
+  case " ${APPLY_DONE_MODULES:-} " in
+    *" $module "*) return 0 ;;
+  esac
+  if [ -z "${APPLY_DONE_MODULES:-}" ]; then
+    APPLY_DONE_MODULES="$module"
+  else
+    APPLY_DONE_MODULES="$APPLY_DONE_MODULES $module"
+  fi
+}
+
+apply_note_manual_step() {
+  step=$1
+  case "${APPLY_MANUAL_STEPS:-}" in
+    *"$step"*) return 0 ;;
+  esac
+  APPLY_MANUAL_STEPS="${APPLY_MANUAL_STEPS:-}${step}
+"
 }
 
 require_sudo_for_system_action() {
@@ -651,9 +679,11 @@ require_sudo_for_system_action() {
 }
 
 apply_module_git() {
+  ui_phase "MODULE START: git"
   apply_step "git: checking installation"
   if module_is_installed git; then
     apply_skip "git already installed"
+    apply_note_module git
     return 0
   fi
 
@@ -693,9 +723,11 @@ apply_module_git() {
     return 5
   fi
 
+  ui_phase "VERIFY: git"
   apply_step "git: verifying installation"
   if module_is_installed git; then
     apply_step "git: installed"
+    apply_note_module git
     return 0
   fi
 
@@ -747,6 +779,7 @@ docker_repo_codename() {
 }
 
 apply_module_docker() {
+  ui_phase "MODULE START: docker"
   apply_step "docker: checking installation"
   if module_is_installed docker; then
     apply_skip "docker already installed"
@@ -760,6 +793,8 @@ apply_module_docker() {
       systemctl is-active docker || true
     fi
     ui_line "Optional manual step: add your user to the docker group only if you choose passwordless docker."
+    apply_note_module docker
+    apply_note_manual_step "  - add your user to the docker group only if you choose passwordless docker"
     return 0
   fi
 
@@ -863,6 +898,7 @@ apply_module_docker() {
     return 12
   fi
 
+  ui_phase "VERIFY: docker"
   apply_step "docker: verifying installation"
   if ! module_is_installed docker; then
     echo "[docker] post-install check failed: binary not found" >&2
@@ -880,6 +916,8 @@ apply_module_docker() {
   fi
   ui_line "No containers or compose stacks were started."
   ui_line "Optional manual step: add your user to the docker group only if you choose passwordless docker."
+  apply_note_module docker
+  apply_note_manual_step "  - add your user to the docker group only if you choose passwordless docker"
 }
 
 is_raspberry_pi() {
@@ -1089,10 +1127,13 @@ tailscale_repo_codename() {
 }
 
 apply_module_tailscale() {
+  ui_phase "MODULE START: tailscale"
   apply_step "tailscale: checking installation"
   if module_is_installed tailscale; then
     apply_skip "tailscale already installed"
     ui_line "Next manual step: sudo tailscale up"
+    apply_note_module tailscale
+    apply_note_manual_step "  - sudo tailscale up"
     return 0
   fi
 
@@ -1182,10 +1223,13 @@ apply_module_tailscale() {
     return 12
   fi
 
+  ui_phase "VERIFY: tailscale"
   apply_step "tailscale: verifying installation"
   if module_is_installed tailscale; then
     apply_step "tailscale: installed"
     ui_line "Next manual step: sudo tailscale up"
+    apply_note_module tailscale
+    apply_note_manual_step "  - sudo tailscale up"
     return 0
   fi
 
@@ -1194,10 +1238,13 @@ apply_module_tailscale() {
 }
 
 apply_module_cloudflared() {
+  ui_phase "MODULE START: cloudflared"
   apply_step "cloudflared: checking installation"
   if module_is_installed cloudflared; then
     apply_skip "cloudflared already installed"
     ui_line "Next manual step: cloudflared tunnel login/create/configure outside Seed-Kit"
+    apply_note_module cloudflared
+    apply_note_manual_step "  - cloudflared tunnel login/create/configure outside Seed-Kit"
     return 0
   fi
 
@@ -1279,10 +1326,13 @@ apply_module_cloudflared() {
     return 12
   fi
 
+  ui_phase "VERIFY: cloudflared"
   apply_step "cloudflared: verifying installation"
   if module_is_installed cloudflared; then
     apply_step "cloudflared: installed"
     ui_line "Next manual step: cloudflared tunnel login/create/configure outside Seed-Kit"
+    apply_note_module cloudflared
+    apply_note_manual_step "  - cloudflared tunnel login/create/configure outside Seed-Kit"
     return 0
   fi
 
@@ -2267,17 +2317,79 @@ parse_apply_module_options() {
 show_package_plan() {
   package_file=$1
 
-  ui_header "package-driven PRA" "design/preview only"
+  ui_header "Package-driven PRA preview" "design/preview only"
   ui_line "Package: $package_file"
-  if [ -f "$package_file" ]; then
-    ui_line "Status: present"
-  else
+  if [ ! -f "$package_file" ]; then
     echo "package not found: $package_file" >&2
+    echo "Next: copy package to this node, then rerun --plan --package $package_file" >&2
     return 2
   fi
-  ui_line "Mode: verify/plan preview only"
-  ui_line "No extraction, staging, restore, service start, secret write, reboot, or DNS cutover."
-  ui_line "Future package must embed its profile."
+
+  ui_line "Status: present"
+  if command -v wc >/dev/null 2>&1; then
+    size_bytes=$(wc -c < "$package_file" 2>/dev/null || echo "unknown")
+    ui_line "Size: $size_bytes bytes"
+  fi
+
+  if command -v gzip >/dev/null 2>&1; then
+    if gzip -t "$package_file" 2>/dev/null; then
+      ui_line "Gzip: OK"
+    else
+      ui_line "Gzip: unable to verify"
+    fi
+  else
+    ui_line "Gzip: unavailable"
+  fi
+
+  package_entries=""
+  if command -v tar >/dev/null 2>&1; then
+    if package_entries=$(tar -tzf "$package_file" 2>/dev/null); then
+      ui_line "Tar listing: OK"
+    else
+      ui_line "Tar listing: unavailable"
+    fi
+  else
+    ui_line "Tar listing: tar unavailable"
+  fi
+
+  ui_section "Key files"
+  if [ -n "$package_entries" ]; then
+    for pattern in \
+      "MANIFEST.txt" \
+      "SHA256SUMS" \
+      "seed-kit-package." \
+      "profiles/" \
+      "services/" \
+      "configs/" \
+      "docs/"
+    do
+      if printf '%s\n' "$package_entries" | grep -q "$pattern"; then
+        ui_line "- $pattern present"
+      else
+        ui_line "- $pattern missing/unknown"
+      fi
+    done
+  else
+    ui_line "- unknown: archive contents not listed"
+  fi
+
+  ui_section "Preview"
+  ui_line "Profile: embedded / unknown"
+  ui_line "Components: detected / unknown"
+  ui_line "Would verify manifest/checksums later"
+  ui_line "Would install required modules later"
+  ui_line "Would stage safe files later"
+  ui_line "Would require manual identity reconnection"
+
+  ui_section "Replacement preparation"
+  ui_line "- hostname review"
+  ui_line "- tailscale login/state manual"
+  ui_line "- cloudflare tunnel credentials manual"
+  ui_line "- SSH trust validation"
+  ui_line "- DNS/cutover manual"
+
+  ui_line "Apply package: disabled"
+  ui_line "No extraction, staging, restore, service start, secret write, reboot, DNS, or cutover."
   ui_line "Docs: docs/PACKAGE-DRIVEN-PRA.md"
 }
 
@@ -2419,7 +2531,7 @@ uninstall_seed_runtime() {
 }
 
 show_apply_preview() {
-  ui_rule
+  ui_phase "PREVIEW"
   ui_header "apply mode preview"
   ui_whisper "minimal actions in V0"
   ui_line "selected modules: $1"
@@ -2428,6 +2540,19 @@ show_apply_preview() {
   ui_line "[2/4] prepare plan"
   ui_line "[3/4] confirm safe steps"
   ui_line "[4/4] apply"
+}
+
+show_apply_summary() {
+  ui_phase "APPLY COMPLETE"
+  ui_line "Modules: ${APPLY_DONE_MODULES:-$APPLY_MODULES}"
+  ui_line "Changed: install-only packages/services"
+  ui_line "Not done: containers, secrets, reboot, network restart"
+  ui_line "Next manual steps:"
+  if [ -n "$APPLY_MANUAL_STEPS" ]; then
+    printf '%s' "$APPLY_MANUAL_STEPS"
+  else
+    ui_line "  - none"
+  fi
   ui_rule
 }
 
@@ -2465,7 +2590,9 @@ run_apply_modules() {
         ui_line "unknown module: $module"
         ;;
     esac
+    apply_note_module "$module"
   done
+  show_apply_summary
 }
 
 show_ui_demo() {
@@ -2565,6 +2692,12 @@ case "${1:-}" in
       exit 0
     fi
     APPLY_CONFIRM_TARGET="modules=$APPLY_MODULES"
+    APPLY_CONFIRMED=0
+    APPLY_DONE_MODULES=""
+    APPLY_MANUAL_STEPS=""
+    if ! apply_safe_confirm; then
+      exit 2
+    fi
     run_apply_modules
     ;;
   --apply-module=*)
