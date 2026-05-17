@@ -637,6 +637,48 @@
       font-size: 0.9rem;
     }
 
+    .recovery-panel {
+      display: grid;
+      gap: 12px;
+    }
+
+    .recovery-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .recovery-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+
+    .recovery-actions .button {
+      min-width: 0;
+      width: 100%;
+      min-height: 48px;
+      border-radius: 16px;
+      padding: 9px 10px;
+      font-size: 0.82rem;
+      line-height: 1.15;
+    }
+
+    .recovery-actions .button.secondary {
+      border-color: rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.075);
+      box-shadow: none;
+      color: var(--soft);
+    }
+
+    .recovery-actions .button.warn {
+      border-color: rgba(255, 177, 61, 0.42);
+      background: linear-gradient(135deg, rgba(255, 177, 61, 0.24), rgba(255, 85, 77, 0.18));
+      box-shadow: none;
+    }
+
+    .recovery-result[hidden] { display: none; }
+
     .mini-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -721,6 +763,7 @@
     @media (min-width: 760px) {
       .shell { padding: 20px 18px 18px; }
       .overview-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .recovery-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
       .network-orb {
         width: 64px;
         height: 64px;
@@ -819,6 +862,30 @@
       </div>
     </section>
 
+    <section class="panel recovery-panel" id="recovery-panel" aria-labelledby="recovery-title">
+      <div class="section-head">
+        <div>
+          <h2 id="recovery-title">Mode recovery Wifi-Kit</h2>
+          <p class="section-copy" id="recovery-copy">AP temporaire avec DHCP, DNS local et UI captive sur le node.</p>
+        </div>
+        <span class="chip" id="recovery-chip">Plan-only</span>
+      </div>
+      <div class="recovery-grid" aria-label="Etat du recovery">
+        <div class="metric"><span>SSID</span><strong id="recovery-ssid">...</strong></div>
+        <div class="metric"><span>IP locale</span><strong id="recovery-ip">...</strong></div>
+        <div class="metric"><span>DHCP</span><strong id="recovery-dhcp">...</strong></div>
+        <div class="metric"><span>DNS</span><strong id="recovery-dns">...</strong></div>
+        <div class="metric"><span>UI</span><strong id="recovery-ui">...</strong></div>
+      </div>
+      <div class="recovery-actions" aria-label="Actions recovery visibles">
+        <button class="button" type="button" data-recovery-action="reconnect-previous">Reprendre l'ancien Wi-Fi</button>
+        <button class="button secondary" type="button" data-recovery-action="choose-other-wifi">Choisir un autre Wi-Fi</button>
+        <button class="button secondary" type="button" data-recovery-action="reboot-recovery">Redemarrer recovery</button>
+        <button class="button warn" type="button" data-recovery-action="exit-recovery">Quitter recovery</button>
+      </div>
+      <div id="recovery-action-result" class="callout recovery-result" hidden></div>
+    </section>
+
     <section class="panel" aria-labelledby="network-title">
       <div class="section-head">
         <div>
@@ -897,6 +964,22 @@
     "apply_endpoint": "not-implemented",
     "ap_services_started": false
   },
+  "recovery": {
+    "active": false,
+    "ssid": "Wifi-Kit-node",
+    "ip": "192.168.50.1",
+    "ui_port": 80,
+    "dhcp": "planned",
+    "dns": "planned",
+    "ui": "read-only",
+    "captive_portal": "planned",
+    "actions": "plan-only",
+    "action_endpoints": [
+      "/exit-recovery",
+      "/reboot-recovery",
+      "/reconnect-previous"
+    ]
+  },
   "scan": {
     "backend": "wpa_cli",
     "interface": "unknown",
@@ -928,6 +1011,19 @@
 
     function yesNo(flag) {
       return flag ? 'activee' : 'desactivee';
+    }
+
+    function recoveryState() {
+      return data.recovery || {};
+    }
+
+    function serviceLabel(value) {
+      const text = String(value || 'planned');
+      if (text === 'active') return 'actif';
+      if (text === 'read-only') return 'lecture seule';
+      if (text === 'planned') return 'prevu';
+      if (text === 'basic') return 'basique';
+      return text;
     }
 
     function describeConnection() {
@@ -1008,6 +1104,47 @@
 
     function displaySsid(network) {
       return network?.ssid_hidden ? 'Reseau masque' : (network?.ssid || 'Reseau masque');
+    }
+
+    function renderRecovery() {
+      const recovery = recoveryState();
+      const active = Boolean(recovery.active);
+      document.getElementById('recovery-chip').textContent = active ? 'Recovery actif' : 'Plan-only';
+      document.getElementById('recovery-copy').textContent = active
+        ? 'Connecte-toi au Wi-Fi recovery puis ouvre cette page locale.'
+        : 'Ce panneau prepare le flow AP recovery; les actions HTTP restent en plan-only.';
+      document.getElementById('recovery-ssid').textContent = recovery.ssid || 'Wifi-Kit-node';
+      document.getElementById('recovery-ip').textContent = recovery.ip || '192.168.50.1';
+      document.getElementById('recovery-dhcp').textContent = serviceLabel(recovery.dhcp);
+      document.getElementById('recovery-dns').textContent = serviceLabel(recovery.dns);
+      document.getElementById('recovery-ui').textContent = `${serviceLabel(recovery.ui)}:${recovery.ui_port || 80}`;
+    }
+
+    function showRecoveryResult(message) {
+      const target = document.getElementById('recovery-action-result');
+      target.textContent = message;
+      target.hidden = false;
+    }
+
+    async function triggerRecoveryAction(action) {
+      if (action === 'choose-other-wifi') {
+        document.getElementById('network-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        showRecoveryResult('Choix Wi-Fi visible ici. La reconnexion reelle reste gardee cote script, avec rollback.');
+        return;
+      }
+
+      if (window.location.protocol === 'file:') {
+        showRecoveryResult(`Action ${action}: plan-only dans cette page locale.`);
+        return;
+      }
+
+      try {
+        const response = await fetch(`/${action}`, { cache: 'no-store' });
+        const payload = await response.json();
+        showRecoveryResult(`${payload.action || action}: ${payload.mutation || payload.status}. ${payload.safety || 'Aucune mutation depuis HTTP V1.'}`);
+      } catch (error) {
+        showRecoveryResult(`Action ${action} indisponible: ${error.message}`);
+      }
     }
 
     function selectNetwork(network) {
@@ -1204,6 +1341,7 @@
 
     function renderAll() {
       describeConnection();
+      renderRecovery();
       renderNodeState();
       renderNetworks();
       renderSafety();
@@ -1231,6 +1369,9 @@
     }
 
     document.getElementById('refresh').addEventListener('click', refreshScanFromServer);
+    document.querySelectorAll('[data-recovery-action]').forEach((button) => {
+      button.addEventListener('click', () => triggerRecoveryAction(button.dataset.recoveryAction));
+    });
     renderAll();
   </script>
 </body>

@@ -25,7 +25,7 @@ temporary_dnsmasq_log="/tmp/wifi-kit-dnsmasq-recovery.log"
 temporary_dnsmasq_pid="/tmp/wifi-kit-dnsmasq-recovery.pid"
 temporary_ui_log="/tmp/wifi-kit-ui-recovery.log"
 temporary_ui_pid="/tmp/wifi-kit-ui-recovery.pid"
-ui_port="8080"
+ui_port="80"
 confirm_phrase=""
 dangerous_real_apply="0"
 
@@ -66,7 +66,7 @@ Options:
   --duration-seconds <n>   Future short AP test duration. Default: 30
   --max-seconds <n>        Future manual AP max duration. Default: 300
                             AP+STA dedicated-interface default: 600
-  --ui-port <n>            Future recovery UI port. Default: 8080
+  --ui-port <n>            Recovery UI port. Default: 80
   --confirm <phrase>       Required for apply-short-test: WIFI-KIT AP SHORT TEST
                             Required for apply-manual-test: WIFI-KIT AP MANUAL TEST
   --dangerous-real-apply   Future execution gate. Do not use without a separate validation prompt.
@@ -148,6 +148,24 @@ is_test_dnsmasq_pid() {
 test_dnsmasq_pid_from_file() {
   [ -r "$temporary_dnsmasq_pid" ] || return 0
   sed -n '1p' "$temporary_dnsmasq_pid" 2>/dev/null || true
+}
+
+is_test_ui_pid() {
+  pid=$1
+  [ -n "$pid" ] || return 1
+  case "$pid" in *[!0-9]*|'') return 1 ;; esac
+  [ -d "/proc/$pid" ] || return 1
+  cmdline="$(tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null || true)"
+  case "$cmdline" in
+    *python*modules/wifi-kit/prototype/ui/serve-readonly.py*"--host $ap_recovery_ip"*"--port $ui_port"*) return 0 ;;
+    *python*serve-readonly.py*"--host $ap_recovery_ip"*"--port $ui_port"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+test_ui_pid_from_file() {
+  [ -r "$temporary_ui_pid" ] || return 0
+  sed -n '1p' "$temporary_ui_pid" 2>/dev/null || true
 }
 
 host_label() {
@@ -321,6 +339,13 @@ port53_listeners() {
     sed -n '1,5p'
 }
 
+port_listeners() {
+  port=$1
+  ss -lnutp 2>/dev/null |
+    awk -v port="$port" 'NR > 1 && ($5 ~ ":" port "$" || $5 ~ "[.]" port "$" || $5 ~ "[*]:" port "$") { print }' |
+    sed -n '1,5p'
+}
+
 write_dnsmasq_recovery_config_plan() {
   cat <<EOF
 interface=$iface
@@ -356,6 +381,15 @@ stop_test_dnsmasq_best_effort() {
   rm -f "$temporary_dnsmasq_pid" 2>/dev/null || true
 }
 
+stop_test_ui_best_effort() {
+  ui_pid="$(test_ui_pid_from_file || true)"
+  if [ -n "$ui_pid" ] && is_test_ui_pid "$ui_pid"; then
+    kill "$ui_pid" 2>/dev/null || true
+    wait "$ui_pid" 2>/dev/null || true
+  fi
+  rm -f "$temporary_ui_pid" 2>/dev/null || true
+}
+
 remove_ap_recovery_ip_best_effort() {
   [ "$(id -u 2>/dev/null || printf 1)" = "0" ] || return 0
   ip_bin="$(find_tool ip 2>/dev/null || true)"
@@ -378,6 +412,7 @@ cmd_plan_ap_recovery() {
   dnsmasq_path="$(find_tool dnsmasq 2>/dev/null || true)"
   python3_path="$(find_tool python3 2>/dev/null || true)"
   port53="$(port53_listeners || true)"
+  portui="$(port_listeners "$ui_port" || true)"
 
   printf '[wifi-kit] AP recovery UX plan\n'
   kv "mode" "plan-ap-recovery"
@@ -408,6 +443,7 @@ cmd_plan_ap_recovery() {
   kv "ui_log" "$temporary_ui_log"
   kv "ui_pidfile" "$temporary_ui_pid"
   kv "port53_listener_detected" "$([ -n "$port53" ] && printf yes || printf no)"
+  kv "ui_port_listener_detected" "$([ -n "$portui" ] && printf yes || printf no)"
   kv "root_required" "yes"
 
   section "port-53-listeners"
@@ -415,6 +451,12 @@ cmd_plan_ap_recovery() {
     printf '%s\n' "$port53"
   else
     kv "port53" "free-or-not-visible"
+  fi
+  section "ui-port-listeners"
+  if [ -n "$portui" ]; then
+    printf '%s\n' "$portui"
+  else
+    kv "ui_port" "free-or-not-visible"
   fi
 
   section "target-architecture"
@@ -424,9 +466,9 @@ cmd_plan_ap_recovery() {
   kv "04.hostapd" "serve SSID $ssid on channel $ap_channel"
   kv "05.dnsmasq_dhcp" "lease $ap_recovery_dhcp_start-$ap_recovery_dhcp_end"
   kv "06.dnsmasq_dns" "answer local DNS and redirect unknown names to $ap_recovery_ip"
-  kv "07.ui_future" "python3 UI will later listen on http://$ap_recovery_ip:$ui_port/"
-  kv "08.captive_portal_future" "Android/iOS detection endpoints redirect to local UI"
-  kv "09.current_test_scope" "hostapd plus dnsmasq DHCP only; no UI process"
+  kv "07.ui" "python3 UI listens on http://$ap_recovery_ip:$ui_port/"
+  kv "08.captive_portal" "basic Android/iOS/Windows detection endpoints redirect to local UI"
+  kv "09.current_test_scope" "hostapd plus dnsmasq DHCP/DNS plus local UI; actions are plan-only"
   kv "10.exit" "future UI reconnects normal Wi-Fi, stops AP recovery, restores NetworkManager"
 
   section "planned-hostapd-config"
@@ -444,8 +486,8 @@ cmd_plan_ap_recovery() {
   kv "06.start_hostapd" "sudo hostapd -d $(shell_quote "$temporary_hostapd_conf") > $(shell_quote "$temporary_hostapd_log") 2>&1"
   kv "07.write_dnsmasq" "create $(shell_quote "$temporary_dnsmasq_conf")"
   kv "08.start_dnsmasq" "sudo dnsmasq --no-daemon --conf-file=$(shell_quote "$temporary_dnsmasq_conf") --log-facility=$(shell_quote "$temporary_dnsmasq_log")"
-  kv "09.ui_current_scope" "not started in this DHCP test"
-  kv "10.captive_portal_future" "not implemented yet; later serve /generate_204, /hotspot-detect.html, /ncsi.txt, and DNS redirects"
+  kv "09.start_ui" "sudo python3 modules/wifi-kit/prototype/ui/serve-readonly.py --host $ap_recovery_ip --port $ui_port --recovery-mode --recovery-ssid $ssid"
+  kv "10.captive_portal" "basic endpoints redirect or serve local recovery UI"
   kv "11.stop" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
   kv "12.cleanup" "stop UI/dnsmasq/hostapd; delete temp configs with secrets; keep logs/redacted hostapd config"
   kv "13.restore_nm" "sudo nmcli device set $iface managed yes; sudo nmcli connection up <previous> ifname $iface || sudo nmcli device connect $iface"
@@ -455,7 +497,7 @@ cmd_plan_ap_recovery() {
   kv "confirmation" "WIFI-KIT AP RECOVERY MANUAL TEST"
   kv "dnsmasq_start" "no"
   kv "hostapd_start" "no"
-  kv "ui_start" "no"
+  kv "ui_start" "only-in-confirmed-real-apply"
   kv "network_changes" "no"
   kv "persistent_system_files" "none"
   kv "save_config" "not-called"
@@ -487,14 +529,18 @@ cmd_apply_ap_recovery_manual_test() {
   find_tool dnsmasq >/dev/null 2>&1 || fail "dnsmasq is required for AP recovery DHCP"
   find_tool nmcli >/dev/null 2>&1 || fail "nmcli is required for AP recovery rollback"
   find_tool ip >/dev/null 2>&1 || fail "ip is required for AP recovery addressing"
+  find_tool python3 >/dev/null 2>&1 || fail "python3 is required for AP recovery UI"
 
   port53="$(port53_listeners || true)"
   [ -z "$port53" ] || fail "port 53 is already in use; refusing to start temporary dnsmasq"
+  portui="$(port_listeners "$ui_port" || true)"
+  [ -z "$portui" ] || fail "UI port $ui_port is already in use; refusing to start temporary recovery UI"
 
   hostapd_bin="$(find_tool hostapd)"
   dnsmasq_bin="$(find_tool dnsmasq)"
   nmcli_bin="$(find_tool nmcli)"
   ip_bin="$(find_tool ip)"
+  python3_bin="$(find_tool python3)"
   ssid="$(effective_ap_ssid)"
   channel="$(current_channel || true)"
   if [ -z "$ap_channel" ]; then
@@ -509,6 +555,10 @@ cmd_apply_ap_recovery_manual_test() {
   if [ -n "$existing_dnsmasq_pid" ] && is_test_dnsmasq_pid "$existing_dnsmasq_pid"; then
     fail "wifi-kit test dnsmasq already running with pid $existing_dnsmasq_pid"
   fi
+  existing_ui_pid="$(test_ui_pid_from_file || true)"
+  if [ -n "$existing_ui_pid" ] && is_test_ui_pid "$existing_ui_pid"; then
+    fail "wifi-kit recovery UI already running with pid $existing_ui_pid"
+  fi
 
   passphrase="$(runtime_ap_passphrase)"
   case "$passphrase" in
@@ -520,7 +570,13 @@ cmd_apply_ap_recovery_manual_test() {
   previous_state="$(device_state || true)"
   hostapd_pid=""
   dnsmasq_pid=""
+  ui_pid=""
   cleanup_ap_recovery() {
+    if [ -n "${ui_pid:-}" ] && is_test_ui_pid "$ui_pid"; then
+      kill "$ui_pid" 2>/dev/null || true
+      wait "$ui_pid" 2>/dev/null || true
+    fi
+    stop_test_ui_best_effort
     if [ -n "${dnsmasq_pid:-}" ] && is_test_dnsmasq_pid "$dnsmasq_pid"; then
       kill "$dnsmasq_pid" 2>/dev/null || true
       wait "$dnsmasq_pid" 2>/dev/null || true
@@ -532,16 +588,17 @@ cmd_apply_ap_recovery_manual_test() {
     fi
     write_redacted_hostapd_config_copy
     write_redacted_dnsmasq_config_copy
-    rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid" "$temporary_dnsmasq_conf" "$temporary_dnsmasq_pid"
+    rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid" "$temporary_dnsmasq_conf" "$temporary_dnsmasq_pid" "$temporary_ui_pid"
     remove_ap_recovery_ip_best_effort
     restore_nm_from_ap_only_state_best_effort
   }
   trap cleanup_ap_recovery EXIT INT TERM HUP
 
-  rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid" "$temporary_dnsmasq_conf" "$temporary_dnsmasq_pid"
+  rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid" "$temporary_dnsmasq_conf" "$temporary_dnsmasq_pid" "$temporary_ui_pid"
   : >"$temporary_hostapd_log"
   : >"$temporary_dnsmasq_log"
-  chmod 600 "$temporary_hostapd_log" "$temporary_dnsmasq_log"
+  : >"$temporary_ui_log"
+  chmod 600 "$temporary_hostapd_log" "$temporary_dnsmasq_log" "$temporary_ui_log"
   write_ap_only_nm_state "$iface" "$previous_connection"
 
   section "real-apply"
@@ -558,9 +615,12 @@ cmd_apply_ap_recovery_manual_test() {
   kv "hostapd_pidfile" "$temporary_hostapd_pid"
   kv "dnsmasq_log" "$temporary_dnsmasq_log"
   kv "dnsmasq_pidfile" "$temporary_dnsmasq_pid"
+  kv "ui_log" "$temporary_ui_log"
+  kv "ui_pidfile" "$temporary_ui_pid"
+  kv "ui_url" "http://$ap_recovery_ip:$ui_port/"
   kv "runtime_secret" "not-logged"
-  kv "captive_portal" "not-used"
-  kv "ui" "not-started"
+  kv "captive_portal" "basic"
+  kv "ui" "starting"
   kv "stop_command" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
 
   "$nmcli_bin" device disconnect "$iface"
@@ -581,10 +641,21 @@ cmd_apply_ap_recovery_manual_test() {
   dnsmasq_pid=$!
   printf '%s\n' "$dnsmasq_pid" >"$temporary_dnsmasq_pid"
   kv "dnsmasq_pid" "$dnsmasq_pid"
+  "$python3_bin" modules/wifi-kit/prototype/ui/serve-readonly.py \
+    --host "$ap_recovery_ip" \
+    --port "$ui_port" \
+    --recovery-mode \
+    --recovery-ssid "$ssid" \
+    --recovery-ip "$ap_recovery_ip" \
+    >"$temporary_ui_log" 2>&1 &
+  ui_pid=$!
+  printf '%s\n' "$ui_pid" >"$temporary_ui_pid"
+  kv "ui_pid" "$ui_pid"
   kv "client_check" "connect to SSID $ssid and verify DHCP address 192.168.50.x"
+  kv "browser_check" "open http://$ap_recovery_ip/ or captive portal prompt"
 
   elapsed=0
-  while is_test_hostapd_pid "$hostapd_pid" && is_test_dnsmasq_pid "$dnsmasq_pid"; do
+  while is_test_hostapd_pid "$hostapd_pid" && is_test_dnsmasq_pid "$dnsmasq_pid" && is_test_ui_pid "$ui_pid"; do
     if [ "$elapsed" -ge "$ap_max_seconds" ]; then
       kv "auto_stop" "max-seconds-reached"
       break
@@ -600,6 +671,7 @@ cmd_apply_ap_recovery_manual_test() {
   kv "elapsed_seconds" "$elapsed"
   kv "hostapd_log" "$temporary_hostapd_log"
   kv "dnsmasq_log" "$temporary_dnsmasq_log"
+  kv "ui_log" "$temporary_ui_log"
   kv "config_cleanup" "done"
   kv "ap_ip_cleanup" "attempted"
   kv "networkmanager_restore" "attempted"
@@ -1075,6 +1147,7 @@ cmd_plan() {
 cmd_status() {
   pid="$(test_pid_from_file || true)"
   dnsmasq_pid="$(test_dnsmasq_pid_from_file || true)"
+  ui_pid="$(test_ui_pid_from_file || true)"
 
   printf '[wifi-kit] AP setup test status\n'
   kv "mode" "status-readonly"
@@ -1084,6 +1157,9 @@ cmd_status() {
   kv "dnsmasq_pidfile" "$temporary_dnsmasq_pid"
   kv "dnsmasq_log_path" "$temporary_dnsmasq_log"
   kv "temporary_dnsmasq_conf" "$temporary_dnsmasq_conf"
+  kv "ui_pidfile" "$temporary_ui_pid"
+  kv "ui_log_path" "$temporary_ui_log"
+  kv "ui_bind" "$ap_recovery_ip:$ui_port"
   if [ -n "$pid" ] && is_test_hostapd_pid "$pid"; then
     kv "test_hostapd_running" "yes"
     kv "pid" "$pid"
@@ -1098,6 +1174,13 @@ cmd_status() {
   else
     kv "test_dnsmasq_running" "no"
     kv "dnsmasq_pid" "${dnsmasq_pid:-missing}"
+  fi
+  if [ -n "$ui_pid" ] && is_test_ui_pid "$ui_pid"; then
+    kv "test_ui_running" "yes"
+    kv "ui_pid" "$ui_pid"
+  else
+    kv "test_ui_running" "no"
+    kv "ui_pid" "${ui_pid:-missing}"
   fi
 }
 
@@ -1146,16 +1229,22 @@ cmd_stop() {
     kv "stop_status" "no-pidfile"
     write_redacted_hostapd_config_copy
     write_redacted_dnsmasq_config_copy
+    stop_test_ui_best_effort
     stop_test_dnsmasq_best_effort
     cleanup_test_ap_interface_best_effort
     remove_ap_recovery_ip_best_effort
     restore_nm_from_ap_only_state_best_effort
-    rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid" "$temporary_dnsmasq_conf" "$temporary_dnsmasq_pid" 2>/dev/null || true
+    rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid" "$temporary_dnsmasq_conf" "$temporary_dnsmasq_pid" "$temporary_ui_pid" 2>/dev/null || true
     return 0
   fi
   if ! is_test_hostapd_pid "$pid"; then
     kv "stop_status" "pid-not-matching-wifi-kit-hostapd"
     kv "pid" "$pid"
+    write_redacted_dnsmasq_config_copy
+    stop_test_ui_best_effort
+    stop_test_dnsmasq_best_effort
+    remove_ap_recovery_ip_best_effort
+    restore_nm_from_ap_only_state_best_effort
     return 1
   fi
   if kill "$pid" 2>/dev/null; then
@@ -1163,11 +1252,12 @@ cmd_stop() {
     kv "pid" "$pid"
     write_redacted_hostapd_config_copy
     write_redacted_dnsmasq_config_copy
+    stop_test_ui_best_effort
     stop_test_dnsmasq_best_effort
     cleanup_test_ap_interface_best_effort
     remove_ap_recovery_ip_best_effort
     restore_nm_from_ap_only_state_best_effort
-    rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid" "$temporary_dnsmasq_conf" "$temporary_dnsmasq_pid" 2>/dev/null || true
+    rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid" "$temporary_dnsmasq_conf" "$temporary_dnsmasq_pid" "$temporary_ui_pid" 2>/dev/null || true
     return 0
   fi
   fail "could not stop test hostapd pid $pid; run with sudo if it was started as root"

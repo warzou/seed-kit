@@ -15,6 +15,21 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 WIFI_KIT_SH = SCRIPT_DIR.parent / "wifi-kit.sh"
 INDEX_HTML = SCRIPT_DIR / "index.html"
 
+CAPTIVE_PATHS = {
+    "/generate_204",
+    "/gen_204",
+    "/hotspot-detect.html",
+    "/library/test/success.html",
+    "/connecttest.txt",
+    "/ncsi.txt",
+}
+
+ACTION_PATHS = {
+    "/reconnect-previous": "reconnect-previous",
+    "/exit-recovery": "exit-recovery",
+    "/reboot-recovery": "reboot-recovery",
+}
+
 
 def run_json_command(args: list[str]) -> dict:
     result = subprocess.run(
@@ -57,7 +72,7 @@ def snapshot_preview() -> dict:
     return run_json_command(["state-snapshot", "--simulate", "--json"])
 
 
-def ui_data() -> dict:
+def ui_data(recovery: dict | None = None) -> dict:
     snapshot = snapshot_preview()
     return {
         "diagnose": safe_diagnose(),
@@ -69,15 +84,26 @@ def ui_data() -> dict:
         "connect_options": {
             "keep_ap_active_default": True,
             "apply_endpoint": "not-implemented",
-            "ap_services_started": False,
+            "ap_services_started": bool(recovery and recovery.get("active")),
+        },
+        "recovery": recovery or {
+            "active": False,
+            "ssid": "Wifi-Kit-node",
+            "ip": "192.168.50.1",
+            "ui_port": 80,
+            "dhcp": "planned",
+            "dns": "planned",
+            "ui": "read-only",
+            "captive_portal": "planned",
+            "actions": "plan-only",
         },
         "scan": scan(),
     }
 
 
-def render_index() -> str:
+def render_index(recovery: dict | None = None) -> str:
     html = INDEX_HTML.read_text(encoding="utf-8")
-    data = json.dumps(ui_data(), indent=2).replace("<", "\\u003c")
+    data = json.dumps(ui_data(recovery), indent=2).replace("<", "\\u003c")
     start = '<script id="wifi-kit-data" type="application/json">'
     end = "</script>"
     before, rest = html.split(start, 1)
@@ -103,6 +129,19 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         body = json.dumps(payload, indent=2).encode("utf-8") + b"\n"
         self.send_bytes(status, "application/json; charset=utf-8", body)
 
+    def send_redirect(self, location: str = "/recovery") -> None:
+        body = b"Wifi-Kit recovery\n"
+        self.send_response(302)
+        self.send_header("Location", location)
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    @property
+    def recovery(self) -> dict:
+        return getattr(self.server, "wifi_kit_recovery", {})
+
     def do_POST(self) -> None:
         self.send_json(
             {
@@ -123,8 +162,35 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         path = parsed.path
         query = parse_qs(parsed.query)
 
-        if path in ("/", "/index.html"):
-            self.send_bytes(200, "text/html; charset=utf-8", render_index().encode("utf-8"))
+        if path in CAPTIVE_PATHS:
+            self.send_redirect("/recovery")
+            return
+
+        if path in ("/", "/index.html", "/recovery"):
+            self.send_bytes(200, "text/html; charset=utf-8", render_index(self.recovery).encode("utf-8"))
+            return
+
+        if path == "/status":
+            self.send_json(
+                {
+                    "status": "ok",
+                    "mode": "recovery" if self.recovery.get("active") else "readonly",
+                    "recovery": self.recovery,
+                    "actions": "plan-only",
+                }
+            )
+            return
+
+        if path in ACTION_PATHS:
+            self.send_json(
+                {
+                    "status": "planned",
+                    "action": ACTION_PATHS[path],
+                    "mutation": "not-implemented",
+                    "safety": "visible in UI only; no network mutation from HTTP V1",
+                    "recovery": self.recovery,
+                }
+            )
             return
 
         if path == "/api/safe-diagnose":
@@ -144,11 +210,11 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/runtime-state":
-            self.send_json(ui_data()["runtime_state"])
+            self.send_json(ui_data(self.recovery)["runtime_state"])
             return
 
         if path == "/api/ui-data":
-            self.send_json(ui_data())
+            self.send_json(ui_data(self.recovery))
             return
 
         self.send_json({"error": "not-found"}, status=404)
@@ -158,12 +224,27 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="wifi-kit read-only local HTTP prototype")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8088)
+    parser.add_argument("--recovery-mode", action="store_true")
+    parser.add_argument("--recovery-ssid", default="")
+    parser.add_argument("--recovery-ip", default="192.168.50.1")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     server = ThreadingHTTPServer((args.host, args.port), WifiKitReadOnlyHandler)
+    server.wifi_kit_recovery = {
+        "active": bool(args.recovery_mode),
+        "ssid": args.recovery_ssid or "Wifi-Kit-node",
+        "ip": args.recovery_ip,
+        "ui_port": args.port,
+        "dhcp": "active" if args.recovery_mode else "planned",
+        "dns": "active" if args.recovery_mode else "planned",
+        "ui": "active" if args.recovery_mode else "read-only",
+        "captive_portal": "basic" if args.recovery_mode else "planned",
+        "actions": "plan-only",
+        "action_endpoints": sorted(ACTION_PATHS.keys()),
+    }
     print(f"wifi-kit read-only HTTP on http://{args.host}:{args.port}")
     print("GET only; no network mutation endpoints")
     server.serve_forever()
