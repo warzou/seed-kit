@@ -1555,7 +1555,7 @@ seed_kit_usage() {
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
   echo "  package inspect-stage <dir>  inspect staged package without applying it"
-  echo "  package apply-guided <file> [--step install-modules]  guided SAFE package assistant"
+  echo "  package apply-guided <file> [--step install-modules|review-configs]  guided SAFE package assistant"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --apply --package <file> [--components=a,b]  preview package apply only"
   echo "  --apply-module=<module> [--yes|-y]  apply one module only"
@@ -2837,12 +2837,56 @@ apply_guided_install_modules() {
   run_apply_modules
 }
 
+review_text_file_preview() {
+  file=$1
+  label=$2
+
+  if [ -f "$file" ]; then
+    ui_line ""
+    ui_line "$label:"
+    sed -n '1,40p' "$file" | sed 's/^/  /'
+  fi
+}
+
+apply_guided_review_configs() {
+  package_root=$1
+
+  ui_section "CONFIG REVIEW"
+  ui_line "Staged root: $package_root"
+  ui_line "Detected:"
+  if [ -f "$package_root/services/docker-compose.yml" ]; then
+    ui_line "  - services/docker-compose.yml"
+  fi
+  if [ -f "$package_root/configs/caddy/Caddyfile" ]; then
+    ui_line "  - configs/caddy/Caddyfile"
+  fi
+  if [ -d "$package_root/configs/homepage" ]; then
+    ui_line "  - configs/homepage/..."
+  fi
+  if [ -f "$package_root/docs/reconstruction.txt" ]; then
+    ui_line "  - docs/reconstruction.txt"
+  fi
+
+  ui_line "Future destinations:"
+  ui_line "  - Caddyfile -> manual review before /etc/caddy/Caddyfile or Docker Caddy config"
+  ui_line "  - homepage config -> manual review before compose volume/config path"
+  ui_line "  - docker-compose.yml -> manual review before service directory"
+
+  review_text_file_preview "$package_root/configs/caddy/Caddyfile" "Preview configs/caddy/Caddyfile"
+  review_text_file_preview "$package_root/services/docker-compose.yml" "Preview services/docker-compose.yml"
+  review_text_file_preview "$package_root/docs/reconstruction.txt" "Preview docs/reconstruction.txt"
+
+  ui_line ""
+  ui_line "No files were copied."
+  ui_line "No restore, compose up/pull, Caddy reload, secrets, DNS/cutover, reboot, or network restart was attempted."
+}
+
 apply_guided_package() {
   package_file=$1
   guided_step=${2:-preview}
 
   case "$guided_step" in
-    preview|install-modules)
+    preview|install-modules|review-configs)
       ;;
     *)
       echo "unknown apply-guided step: $guided_step" >&2
@@ -2901,6 +2945,13 @@ apply_guided_package() {
 
   if [ "$guided_step" = "install-modules" ]; then
     apply_guided_install_modules "$guided_components"
+  fi
+  if [ "$guided_step" = "review-configs" ]; then
+    if [ -z "$package_root" ]; then
+      ui_line "Review configs: package root not found"
+      return 2
+    fi
+    apply_guided_review_configs "$package_root"
   fi
 }
 
