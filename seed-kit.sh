@@ -1555,7 +1555,7 @@ seed_kit_usage() {
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
   echo "  package inspect-stage <dir>  inspect staged package without applying it"
-  echo "  package apply-guided <file> [--step install-modules|review-configs|validate-services|deploy-configs]  guided SAFE package assistant"
+  echo "  package apply-guided <file> [--step install-modules|review-configs|validate-services|deploy-configs|validate-deployed]  guided SAFE package assistant"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --apply --package <file> [--components=a,b]  preview package apply only"
   echo "  --apply-module=<module> [--yes|-y]  apply one module only"
@@ -3000,12 +3000,9 @@ deploy_config_copy_dir() {
   ui_line "  - $dest"
 }
 
-apply_guided_deploy_configs() {
-  package_root=$1
-  descriptor_content=""
-  if [ -r "$package_root/seed-kit-package.sh" ]; then
-    descriptor_content=$(sed -n '1,80p' "$package_root/seed-kit-package.sh")
-  fi
+deploy_id_from_descriptor() {
+  descriptor_content=$1
+
   deploy_id=$(package_descriptor_value "$descriptor_content" "PROFILE_ID")
   if [ -z "$deploy_id" ]; then
     deploy_id=$(package_descriptor_value "$descriptor_content" "PACKAGE_ID")
@@ -3015,6 +3012,17 @@ apply_guided_deploy_configs() {
       deploy_id="package"
       ;;
   esac
+
+  printf '%s\n' "$deploy_id"
+}
+
+apply_guided_deploy_configs() {
+  package_root=$1
+  descriptor_content=""
+  if [ -r "$package_root/seed-kit-package.sh" ]; then
+    descriptor_content=$(sed -n '1,80p' "$package_root/seed-kit-package.sh")
+  fi
+  deploy_id=$(deploy_id_from_descriptor "$descriptor_content")
 
   if [ -z "${HOME:-}" ]; then
     ui_line "Deploy configs: HOME is not set"
@@ -3087,12 +3095,83 @@ apply_guided_deploy_configs() {
   ui_line "Staging kept for inspection."
 }
 
+apply_guided_validate_deployed() {
+  package_root=$1
+  descriptor_content=""
+  if [ -r "$package_root/seed-kit-package.sh" ]; then
+    descriptor_content=$(sed -n '1,80p' "$package_root/seed-kit-package.sh")
+  fi
+  deploy_id=$(deploy_id_from_descriptor "$descriptor_content")
+
+  if [ -z "${HOME:-}" ]; then
+    ui_line "Validate deployed: HOME is not set"
+    return 2
+  fi
+
+  deploy_root="$HOME/seed-kit-deploy/$deploy_id"
+  compose_file="$deploy_root/docker-compose.yml"
+  caddy_file="$deploy_root/Caddyfile"
+  homepage_dir="$deploy_root/homepage"
+
+  ui_section "DEPLOYED CONFIG VALIDATION"
+  ui_line "Deploy root:"
+  ui_line "  ~/seed-kit-deploy/$deploy_id/"
+  ui_line "  $deploy_root"
+
+  ui_line ""
+  ui_line "docker compose:"
+  if [ ! -f "$compose_file" ]; then
+    ui_line "  missing: docker-compose.yml"
+  elif docker compose version >/dev/null 2>&1; then
+    if docker compose -f "$compose_file" config >/dev/null 2>&1; then
+      ui_line "  OK"
+    else
+      ui_line "  warning: docker compose config failed"
+    fi
+  else
+    ui_line "  warning: docker compose unavailable, skipped"
+  fi
+
+  ui_line ""
+  ui_line "caddy config:"
+  if [ ! -f "$caddy_file" ]; then
+    ui_line "  missing: Caddyfile"
+  elif command -v caddy >/dev/null 2>&1; then
+    if caddy validate --config "$caddy_file" >/dev/null 2>&1; then
+      ui_line "  OK"
+    else
+      ui_line "  warning: caddy validate failed"
+    fi
+  else
+    ui_line "  warning: caddy unavailable, skipped"
+  fi
+
+  ui_line ""
+  ui_line "homepage configs:"
+  if [ -d "$homepage_dir" ]; then
+    ui_line "  detected"
+  else
+    ui_line "  missing: homepage/"
+  fi
+
+  ui_line ""
+  ui_line "Suggested next manual steps:"
+  ui_line "  - docker compose up"
+  ui_line "  - caddy reload"
+  ui_line "  - tailscale up"
+  ui_line "  - cloudflared login"
+  ui_line ""
+  ui_line "No services were started."
+  ui_line "No configs were copied."
+  ui_line "No compose up/pull, Caddy reload/restart, secrets, DNS/cutover, reboot, or network restart was attempted."
+}
+
 apply_guided_package() {
   package_file=$1
   guided_step=${2:-preview}
 
   case "$guided_step" in
-    preview|install-modules|review-configs|validate-services|deploy-configs)
+    preview|install-modules|review-configs|validate-services|deploy-configs|validate-deployed)
       ;;
     *)
       echo "unknown apply-guided step: $guided_step" >&2
@@ -3174,6 +3253,13 @@ apply_guided_package() {
     apply_guided_review_configs "$package_root"
     apply_guided_validate_services "$package_root"
     apply_guided_deploy_configs "$package_root"
+  fi
+  if [ "$guided_step" = "validate-deployed" ]; then
+    if [ -z "$package_root" ]; then
+      ui_line "Validate deployed: package root not found"
+      return 2
+    fi
+    apply_guided_validate_deployed "$package_root"
   fi
 }
 
