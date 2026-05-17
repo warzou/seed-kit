@@ -39,6 +39,24 @@ rpi-edge-service.tar.gz
 - manifests/checksums
 - optional selected small runtime state
 
+## Package declaration
+
+`seed-kit-package.sh` uses declarative shell values:
+
+```text
+SYSTEM="docker tailscale cloudflared"
+MODULES=""
+SERVICES="caddy homepage"
+MANUAL_IDENTITIES="tailscale cloudflared"
+```
+
+- `SYSTEM` is for host packages/installations.
+- `MODULES` is only for internal Seed-Kit modules.
+- `SERVICES` is for application services carried by the package.
+- `MANUAL_IDENTITIES` documents logins/trust that remain manual.
+
+Legacy `COMPONENTS` packages remain readable as a compatibility fallback.
+
 ## Explicitly excluded
 
 - machine-id

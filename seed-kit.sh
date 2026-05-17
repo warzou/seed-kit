@@ -2366,6 +2366,37 @@ package_descriptor_value() {
   strip_package_value_quotes "$line"
 }
 
+package_descriptor_list_value() {
+  content=$1
+  key=$2
+
+  value=$(package_descriptor_value "$content" "$key")
+  if [ -n "$value" ]; then
+    printf '%s\n' "$value"
+    return 0
+  fi
+
+  printf '%s\n' "$content" | awk -v key="$key" '
+    $0 == key "=\"" { in_block = 1; next }
+    in_block && $0 == "\"" { exit }
+    in_block { print }
+  ' | sed '/^[[:space:]]*$/d'
+}
+
+package_print_list() {
+  label=$1
+  values=$2
+
+  if [ -n "$values" ]; then
+    ui_line "$label"
+    for value in $values; do
+      ui_line "  - $value"
+    done
+  else
+    ui_line "$label none"
+  fi
+}
+
 read_package_metadata() {
   package_file=$1
   package_entries=$2
@@ -2374,6 +2405,10 @@ read_package_metadata() {
   PACKAGE_METADATA_PACKAGE_ID=""
   PACKAGE_METADATA_PROFILE_ID=""
   PACKAGE_METADATA_COMPONENTS=""
+  PACKAGE_METADATA_SYSTEM=""
+  PACKAGE_METADATA_MODULES=""
+  PACKAGE_METADATA_SERVICES=""
+  PACKAGE_METADATA_MANUAL_IDENTITIES=""
   PACKAGE_METADATA_SECRETS_POLICY=""
 
   [ -n "$package_entries" ] || return 0
@@ -2392,7 +2427,14 @@ read_package_metadata() {
 
   PACKAGE_METADATA_PACKAGE_ID=$(package_descriptor_value "$descriptor_content" "PACKAGE_ID")
   PACKAGE_METADATA_PROFILE_ID=$(package_descriptor_value "$descriptor_content" "PROFILE_ID")
-  PACKAGE_METADATA_COMPONENTS=$(package_descriptor_value "$descriptor_content" "COMPONENTS")
+  PACKAGE_METADATA_COMPONENTS=$(package_descriptor_list_value "$descriptor_content" "COMPONENTS")
+  PACKAGE_METADATA_SYSTEM=$(package_descriptor_list_value "$descriptor_content" "SYSTEM")
+  PACKAGE_METADATA_MODULES=$(package_descriptor_list_value "$descriptor_content" "MODULES")
+  PACKAGE_METADATA_SERVICES=$(package_descriptor_list_value "$descriptor_content" "SERVICES")
+  PACKAGE_METADATA_MANUAL_IDENTITIES=$(package_descriptor_list_value "$descriptor_content" "MANUAL_IDENTITIES")
+  if [ -z "$PACKAGE_METADATA_SYSTEM" ] && [ -n "$PACKAGE_METADATA_COMPONENTS" ]; then
+    PACKAGE_METADATA_SYSTEM="$PACKAGE_METADATA_COMPONENTS"
+  fi
   PACKAGE_METADATA_SECRETS_POLICY=$(package_descriptor_value "$descriptor_content" "SECRETS_POLICY")
   PACKAGE_METADATA_STATUS="present"
 }
@@ -2736,7 +2778,14 @@ inspect_stage_package() {
 
   package_id=$(package_descriptor_value "$descriptor_content" "PACKAGE_ID")
   profile_id=$(package_descriptor_value "$descriptor_content" "PROFILE_ID")
-  components=$(package_descriptor_value "$descriptor_content" "COMPONENTS")
+  components=$(package_descriptor_list_value "$descriptor_content" "COMPONENTS")
+  system_items=$(package_descriptor_list_value "$descriptor_content" "SYSTEM")
+  module_items=$(package_descriptor_list_value "$descriptor_content" "MODULES")
+  service_items=$(package_descriptor_list_value "$descriptor_content" "SERVICES")
+  manual_identities=$(package_descriptor_list_value "$descriptor_content" "MANUAL_IDENTITIES")
+  if [ -z "$system_items" ] && [ -n "$components" ]; then
+    system_items="$components"
+  fi
   secrets_policy=$(package_descriptor_value "$descriptor_content" "SECRETS_POLICY")
   node_role=$(package_descriptor_value "$profile_content" "NODE_ROLE")
   reconstruction_mode=$(package_descriptor_value "$profile_content" "RECONSTRUCTION_MODE")
@@ -2744,14 +2793,10 @@ inspect_stage_package() {
   ui_line "Package root: $package_root"
   ui_line "Package ID: ${package_id:-unknown}"
   ui_line "Profile ID: ${profile_id:-unknown}"
-  if [ -n "$components" ]; then
-    ui_line "Components:"
-    for component in $components; do
-      ui_line "  - $component"
-    done
-  else
-    ui_line "Components: unknown"
-  fi
+  package_print_list "System:" "$system_items"
+  package_print_list "Modules:" "$module_items"
+  package_print_list "Services:" "$service_items"
+  package_print_list "Manual identities:" "$manual_identities"
   ui_line "Secrets policy: ${secrets_policy:-unknown}"
   ui_line "Node role: ${node_role:-unknown}"
   ui_line "Reconstruction mode: ${reconstruction_mode:-unknown}"
@@ -2772,7 +2817,7 @@ inspect_stage_package() {
 }
 
 apply_guided_install_modules() {
-  components=$1
+  system_items=$1
 
   ui_section "install-modules step"
   installable_modules=""
@@ -2780,29 +2825,30 @@ apply_guided_install_modules() {
   missing_modules=""
   manual_modules=""
 
-  for component in $components; do
-    case "$component" in
-      docker|tailscale|cloudflared|caddy)
-        if module_is_installed "$component"; then
-          installed_modules="${installed_modules}${component} "
+  for system_item in $system_items; do
+    case "$system_item" in
+      git|docker|tailscale|cloudflared|caddy)
+        if module_is_installed "$system_item"; then
+          installed_modules="${installed_modules}${system_item} "
         else
-          missing_modules="${missing_modules}${component} "
-          installable_modules="${installable_modules}${component} "
+          missing_modules="${missing_modules}${system_item} "
+          installable_modules="${installable_modules}${system_item} "
         fi
         ;;
-      homepage)
-        manual_modules="${manual_modules}${component} "
-        ;;
       *)
-        manual_modules="${manual_modules}${component} "
+        manual_modules="${manual_modules}${system_item} "
         ;;
     esac
   done
 
-  ui_line "Declared components:"
-  for component in $components; do
-    ui_line "  - $component"
-  done
+  ui_line "Declared system:"
+  if [ -n "$system_items" ]; then
+    for system_item in $system_items; do
+      ui_line "  - $system_item"
+    done
+  else
+    ui_line "  none"
+  fi
   ui_line "Already present: ${installed_modules:-none}"
   ui_line "Missing: ${missing_modules:-none}"
   ui_line "Install-only candidates: ${installable_modules:-none}"
@@ -3270,17 +3316,32 @@ apply_guided_package() {
   if [ -n "$package_root" ] && [ -r "$package_root/seed-kit-package.sh" ]; then
     descriptor_content=$(sed -n '1,80p' "$package_root/seed-kit-package.sh")
   fi
-  guided_components=$(package_descriptor_value "$descriptor_content" "COMPONENTS")
+  guided_system=$(package_descriptor_list_value "$descriptor_content" "SYSTEM")
+  if [ -z "$guided_system" ]; then
+    guided_system=$(package_descriptor_list_value "$descriptor_content" "COMPONENTS")
+  fi
+  guided_modules=$(package_descriptor_list_value "$descriptor_content" "MODULES")
+  guided_services=$(package_descriptor_list_value "$descriptor_content" "SERVICES")
+  guided_manual_identities=$(package_descriptor_list_value "$descriptor_content" "MANUAL_IDENTITIES")
 
   ui_section "[3/5] inspect staged package"
   inspect_stage_package "$stage_dir"
 
   ui_section "[4/5] proposed future actions"
-  ui_line "- install missing modules"
-  ui_line "- review configs"
-  ui_line "- reconnect tailscale manually"
-  ui_line "- reconnect cloudflare manually"
-  ui_line "- validate compose"
+  ui_line "- install missing system packages"
+  ui_line "- review services/configs"
+  if [ -n "$guided_manual_identities" ]; then
+    for identity in $guided_manual_identities; do
+      ui_line "- reconnect $identity manually"
+    done
+  else
+    ui_line "- reconnect identities manually"
+  fi
+  if [ -n "$guided_services" ]; then
+    ui_line "- validate declared services"
+  else
+    ui_line "- validate compose/configs"
+  fi
   ui_line "- optional manual service start"
 
   ui_section "[5/5] SAFE status"
@@ -3292,7 +3353,7 @@ apply_guided_package() {
   ui_line "Package apply remains disabled in V1."
 
   if [ "$guided_step" = "install-modules" ]; then
-    apply_guided_install_modules "$guided_components"
+    apply_guided_install_modules "$guided_system"
   fi
   if [ "$guided_step" = "review-configs" ]; then
     if [ -z "$package_root" ]; then
@@ -3399,14 +3460,10 @@ show_package_plan() {
     present)
       ui_line "Package ID: ${PACKAGE_METADATA_PACKAGE_ID:-unknown}"
       ui_line "Profile: ${PACKAGE_METADATA_PROFILE_ID:-unknown}"
-      if [ -n "$PACKAGE_METADATA_COMPONENTS" ]; then
-        ui_line "Components:"
-        for component in $PACKAGE_METADATA_COMPONENTS; do
-          ui_line "  - $component"
-        done
-      else
-        ui_line "Components: unknown"
-      fi
+      package_print_list "System:" "$PACKAGE_METADATA_SYSTEM"
+      package_print_list "Modules:" "$PACKAGE_METADATA_MODULES"
+      package_print_list "Services:" "$PACKAGE_METADATA_SERVICES"
+      package_print_list "Manual identities:" "$PACKAGE_METADATA_MANUAL_IDENTITIES"
       ui_line "Secrets policy: ${PACKAGE_METADATA_SECRETS_POLICY:-unknown}"
       ;;
     missing)
@@ -3424,13 +3481,13 @@ show_package_plan() {
 
   ui_section "Preview"
   ui_line "Profile: ${PACKAGE_METADATA_PROFILE_ID:-embedded / unknown}"
-  if [ -n "$PACKAGE_METADATA_COMPONENTS" ]; then
-    ui_line "Components: detected"
+  if [ -n "$PACKAGE_METADATA_SYSTEM$PACKAGE_METADATA_MODULES$PACKAGE_METADATA_SERVICES" ]; then
+    ui_line "System/modules/services: detected"
   else
-    ui_line "Components: detected / unknown"
+    ui_line "System/modules/services: detected / unknown"
   fi
   ui_line "Would verify manifest/checksums later"
-  ui_line "Would install required modules later"
+  ui_line "Would install required system packages later"
   ui_line "Would stage safe files later"
   ui_line "Would require manual identity reconnection"
 
@@ -3452,7 +3509,7 @@ show_package_apply_preview_only() {
 
   ui_header "package-driven PRA apply" "preview only"
   ui_line "Package: $package_file"
-  ui_line "Components: $components"
+  ui_line "Selection: $components"
   ui_line "Package apply is disabled in V1."
   if [ ! -f "$package_file" ]; then
     ui_line "Status: package not found"

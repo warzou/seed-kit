@@ -12,15 +12,23 @@ Target commands:
 ```sh
 sh seed-kit.sh --plan --package <file.tar.gz>
 sh seed-kit.sh --apply --package <file.tar.gz>
-sh seed-kit.sh --apply --package <file.tar.gz> --components docker,homepage
+sh seed-kit.sh package apply-guided <file.tar.gz> --step install-modules
+sh seed-kit.sh package apply-guided <file.tar.gz> --step review-configs
 ```
 
 ## Model
 
 - package: source of truth for one reconstruction candidate
 - profile: included in the package, not passed separately
-- components: selectable parts of the package
+- system: host packages/installations such as docker, tailscale, cloudflared, caddy, or git
+- modules: internal Seed-Kit modules such as wifi-stability or wifi-kit
+- services: application services carried by the package, such as homepage or a compose stack
+- manual identities: trust/login steps that must be reconnected by the operator
 - Seed-Kit: SAFE engine that verifies, plans, stages, and guides partial apply
+
+Older packages may still expose `COMPONENTS`. Seed-Kit treats that as a
+temporary compatibility fallback while V1 packages move to `SYSTEM`, `MODULES`,
+`SERVICES`, and `MANUAL_IDENTITIES`.
 
 ## Possible package layout
 
@@ -34,17 +42,21 @@ configs/
 docs/
 ```
 
-## Components
+## Package Declaration
 
-Components allow a partial guided flow:
+`seed-kit-package.sh` is declarative shell data. Seed-Kit reads it without
+`source` or `eval`.
 
-```sh
-sh seed-kit.sh --apply --package rpi-edge-service.tar.gz --components docker,homepage
+```text
+SYSTEM="docker tailscale cloudflared"
+MODULES=""
+SERVICES="caddy homepage"
+MANUAL_IDENTITIES="tailscale cloudflared"
 ```
 
-Component selection must not become dependency orchestration. If one component
-requires another, the package profile should say so and Seed-Kit should show it
-before any apply.
+System entries can be used by guided install-only steps. Services are never
+treated as installable Seed-Kit modules. Module entries are reserved for
+internal Seed-Kit modules.
 
 ## Secrets
 

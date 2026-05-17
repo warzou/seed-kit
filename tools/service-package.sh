@@ -121,7 +121,10 @@ write_package_descriptor() {
   {
     echo 'PACKAGE_ID="rpi-edge-service"'
     echo 'PROFILE_ID="rpi-edge"'
-    echo 'COMPONENTS="docker tailscale cloudflared caddy homepage"'
+    echo 'SYSTEM="docker tailscale cloudflared"'
+    echo 'MODULES=""'
+    echo 'SERVICES="caddy homepage"'
+    echo 'MANUAL_IDENTITIES="tailscale cloudflared"'
     echo 'SECRETS_POLICY="manual-reconnect"'
   } > "$descriptor"
 }
@@ -132,7 +135,10 @@ write_profile() {
   {
     echo 'PROFILE_ID="rpi-edge"'
     echo 'NODE_ROLE="edge-service"'
-    echo 'MODULES="docker tailscale cloudflared caddy homepage"'
+    echo 'SYSTEM="docker tailscale cloudflared"'
+    echo 'MODULES=""'
+    echo 'SERVICES="caddy homepage"'
+    echo 'MANUAL_IDENTITIES="tailscale cloudflared"'
     echo 'RECONSTRUCTION_MODE="manual"'
   } > "$profile"
 }

@@ -82,6 +82,12 @@ pass "create dry-run"
 [ -f "$staging_dir/docs/reconstruction.txt" ] || fail "missing reconstruction notes"
 pass "expected files generated"
 
+grep -q '^SYSTEM="docker tailscale cloudflared"$' "$staging_dir/seed-kit-package.sh" || fail "missing descriptor system"
+grep -q '^MODULES=""$' "$staging_dir/seed-kit-package.sh" || fail "missing descriptor modules"
+grep -q '^SERVICES="caddy homepage"$' "$staging_dir/seed-kit-package.sh" || fail "missing descriptor services"
+grep -q '^MANUAL_IDENTITIES="tailscale cloudflared"$' "$staging_dir/seed-kit-package.sh" || fail "missing descriptor manual identities"
+pass "descriptor content"
+
 grep -q '^service-name: rpi-edge-vps$' "$staging_dir/MANIFEST.txt" || fail "missing manifest service name"
 grep -q '^package-id: rpi-edge-service$' "$staging_dir/MANIFEST.txt" || fail "missing manifest package id"
 grep -q '^profile-id: rpi-edge$' "$staging_dir/MANIFEST.txt" || fail "missing manifest profile id"
