@@ -831,7 +831,7 @@
 
     @media (min-width: 760px) {
       .shell { padding: 20px 18px 18px; }
-      .overview-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .overview-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .recovery-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
       .node-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .action-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -929,7 +929,6 @@
       <div class="overview-grid" aria-label="Etat actuel du node">
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Interface</span><strong id="status-interface">...</strong></div></div>
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-location"></use></svg></span><div><span>Adresse IP</span><strong id="status-ip">...</strong></div></div>
-        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-server"></use></svg></span><div><span>Backend</span><strong id="status-backend">...</strong></div></div>
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-wifi"></use></svg></span><div><span>Wi-Fi actuel</span><strong id="status-ssid">...</strong></div></div>
       </div>
     </section>
@@ -1257,10 +1256,8 @@
       const ssid = system.mode === 'recovery'
         ? (recovery.ssid || system.recovery_ssid || 'Wifi-Kit-node')
         : (system.wifi || value(data.diagnose, 'current_ssid_state'));
-      const backend = system.backend || value(data.diagnose, 'backend') || data.scan?.backend;
       document.getElementById('status-interface').textContent = iface;
       document.getElementById('status-ip').textContent = ip;
-      document.getElementById('status-backend').textContent = backend || 'inconnu';
       document.getElementById('status-ssid').textContent = ssid;
     }
 
