@@ -227,7 +227,7 @@ interface: wlan0
 ssid: Wifi-Kit-<hostname>
 ap_ip: 192.168.50.1/24
 dhcp_range: 192.168.50.20-192.168.50.80
-ui_url: http://192.168.50.1:8080/
+ui_url: http://192.168.50.1/
 ```
 
 Target startup order:
@@ -253,6 +253,28 @@ Future endpoints should cover common platform probes such as Android
 checks. Those endpoints should redirect or serve the local Wifi-Kit UI without
 requiring internet access.
 
+### Recovery Captive UI V1 hardware result
+
+Recovery Captive UI V1 is validated on pocket-node / Raspberry Pi Zero 2 W.
+The real test confirmed:
+
+- AP-only recovery starts with SSID `Wifi-Kit-pocket-node`;
+- DHCP leases a client address in `192.168.50.x`;
+- the node advertises `192.168.50.1` as gateway and DNS;
+- local DNS captive resolution redirects unknown names to `192.168.50.1`;
+- the Python UI is reachable on port 80;
+- captive-portal detection opens or redirects to the local Wifi-Kit UI;
+- cleanup stops UI, dnsmasq, and hostapd;
+- temporary configs containing secrets are removed;
+- logs and redacted configs may remain under `/tmp` for diagnosis;
+- NetworkManager is restored and `wlan0` reconnects to the previous client
+  network.
+
+The current recovery UI buttons are intentionally visible but still
+stub/plan-only. The validated V1 proves the recovery shell, DHCP, DNS captive
+behavior, UI serving, and rollback. It does not yet validate changing Wi-Fi
+from inside the recovery UI.
+
 Exit from recovery should happen through a future UI action:
 
 1. User selects a Wi-Fi target and enters the password locally.
@@ -264,6 +286,39 @@ Exit from recovery should happen through a future UI action:
 
 No AP password, Wi-Fi password, admin password, or backend secret should be
 written to repository files, persistent configs, or unredacted logs.
+
+## Recovery UI action design
+
+Button implementation should be staged in this order:
+
+1. `Quitter recovery` / `Reprendre l'ancien Wi-Fi`;
+2. `Choisir un autre Wi-Fi`;
+3. `Redemarrer recovery`.
+
+The first action is the safest next product step because it does not need a new
+target SSID or new Wi-Fi secret. It should call a local, guarded endpoint that
+performs the same cleanup path already validated by the CLI:
+
+```text
+stop UI process last or return a final HTML/JSON acknowledgement first
+stop dnsmasq test process only by Wifi-Kit pidfile/cmdline match
+stop hostapd test process only by Wifi-Kit pidfile/cmdline match
+remove temporary configs containing secrets
+remove 192.168.50.1/24 from wlan0
+return wlan0 to NetworkManager
+reconnect previous active connection best effort
+```
+
+This button must remain guarded against accidental broad cleanup. It must not
+stop global services, call `systemctl restart NetworkManager`, reboot, call
+`save_config`, delete unrelated `/tmp` files, or kill unrelated `dnsmasq` /
+`hostapd` processes.
+
+Choosing another Wi-Fi is intentionally later. It needs a dedicated
+NetworkManager connect-safe action that accepts the password at runtime only,
+validates gateway/internet/rollback, and returns to AP recovery if the target
+network fails. Redemarrer recovery is also later because it should be designed
+as a controlled stop-and-start sequence rather than a blind process restart.
 
 ## Recovery guard
 
