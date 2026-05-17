@@ -2314,6 +2314,77 @@ parse_apply_module_options() {
   done
 }
 
+find_package_entry() {
+  entries=$1
+  wanted=$2
+
+  printf '%s\n' "$entries" | while IFS= read -r entry; do
+    case "$entry" in
+      "$wanted"|*/"$wanted")
+        printf '%s\n' "$entry"
+        return 0
+        ;;
+    esac
+  done
+}
+
+strip_package_value_quotes() {
+  value=$1
+
+  case "$value" in
+    \"*\")
+      value=${value#\"}
+      value=${value%\"}
+      ;;
+    \'*\')
+      value=${value#\'}
+      value=${value%\'}
+      ;;
+  esac
+
+  printf '%s\n' "$value"
+}
+
+package_descriptor_value() {
+  content=$1
+  key=$2
+
+  line=$(printf '%s\n' "$content" | sed -n "s/^$key=//p" | sed -n '1p')
+  [ -n "$line" ] || return 0
+  strip_package_value_quotes "$line"
+}
+
+read_package_metadata() {
+  package_file=$1
+  package_entries=$2
+
+  PACKAGE_METADATA_STATUS="unavailable"
+  PACKAGE_METADATA_PACKAGE_ID=""
+  PACKAGE_METADATA_PROFILE_ID=""
+  PACKAGE_METADATA_COMPONENTS=""
+  PACKAGE_METADATA_SECRETS_POLICY=""
+
+  [ -n "$package_entries" ] || return 0
+  command -v tar >/dev/null 2>&1 || return 0
+
+  descriptor_path=$(find_package_entry "$package_entries" "seed-kit-package.sh")
+  if [ -z "$descriptor_path" ]; then
+    PACKAGE_METADATA_STATUS="missing"
+    return 0
+  fi
+
+  if ! descriptor_content=$(tar -xOzf "$package_file" "$descriptor_path" 2>/dev/null); then
+    PACKAGE_METADATA_STATUS="unreadable"
+    return 0
+  fi
+
+  PACKAGE_METADATA_PACKAGE_ID=$(package_descriptor_value "$descriptor_content" "PACKAGE_ID")
+  PACKAGE_METADATA_PROFILE_ID=$(package_descriptor_value "$descriptor_content" "PROFILE_ID")
+  PACKAGE_METADATA_COMPONENTS=$(package_descriptor_value "$descriptor_content" "COMPONENTS")
+  PACKAGE_METADATA_SECRETS_POLICY=$(package_descriptor_value "$descriptor_content" "SECRETS_POLICY")
+  PACKAGE_METADATA_STATUS="present"
+}
+
 show_package_plan() {
   package_file=$1
 
@@ -2373,9 +2444,41 @@ show_package_plan() {
     ui_line "- unknown: archive contents not listed"
   fi
 
+  read_package_metadata "$package_file" "$package_entries"
+
+  ui_section "Package metadata"
+  case "$PACKAGE_METADATA_STATUS" in
+    present)
+      ui_line "Package ID: ${PACKAGE_METADATA_PACKAGE_ID:-unknown}"
+      ui_line "Profile: ${PACKAGE_METADATA_PROFILE_ID:-unknown}"
+      if [ -n "$PACKAGE_METADATA_COMPONENTS" ]; then
+        ui_line "Components:"
+        for component in $PACKAGE_METADATA_COMPONENTS; do
+          ui_line "  - $component"
+        done
+      else
+        ui_line "Components: unknown"
+      fi
+      ui_line "Secrets policy: ${PACKAGE_METADATA_SECRETS_POLICY:-unknown}"
+      ;;
+    missing)
+      ui_line "Package metadata: seed-kit-package.sh missing"
+      ;;
+    unreadable)
+      ui_line "Package metadata: unable to read seed-kit-package.sh"
+      ;;
+    *)
+      ui_line "Package metadata: unavailable"
+      ;;
+  esac
+
   ui_section "Preview"
-  ui_line "Profile: embedded / unknown"
-  ui_line "Components: detected / unknown"
+  ui_line "Profile: ${PACKAGE_METADATA_PROFILE_ID:-embedded / unknown}"
+  if [ -n "$PACKAGE_METADATA_COMPONENTS" ]; then
+    ui_line "Components: detected"
+  else
+    ui_line "Components: detected / unknown"
+  fi
   ui_line "Would verify manifest/checksums later"
   ui_line "Would install required modules later"
   ui_line "Would stage safe files later"
