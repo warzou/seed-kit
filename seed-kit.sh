@@ -1555,7 +1555,7 @@ seed_kit_usage() {
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
   echo "  package inspect-stage <dir>  inspect staged package without applying it"
-  echo "  package apply-guided <file> [--step install-modules|review-configs|validate-services|deploy-configs|validate-deployed|suggest-start]  guided SAFE package assistant"
+  echo "  package apply-guided <file> [--step install-modules|review-configs|validate-services|deploy-configs|validate-deployed|suggest-start|readiness]  guided SAFE package assistant"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --apply --package <file> [--components=a,b]  preview package apply only"
   echo "  --apply-module=<module> [--yes|-y]  apply one module only"
@@ -3275,12 +3275,164 @@ apply_guided_suggest_start() {
   ui_line "No compose up/pull, service start, Caddy reload/restart, tailscale up, cloudflared login, secrets, DNS/cutover, reboot, or network restart was attempted."
 }
 
+readiness_bool() {
+  if [ "$1" = "yes" ]; then
+    printf '%s\n' "yes"
+  else
+    printf '%s\n' "no"
+  fi
+}
+
+cloudflared_configured() {
+  for path in \
+    "$HOME/.cloudflared/config.yml" \
+    "$HOME/.cloudflared/config.yaml" \
+    "$HOME/.cloudflared/cert.pem" \
+    /etc/cloudflared/config.yml \
+    /etc/cloudflared/config.yaml
+  do
+    if [ -e "$path" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+apply_guided_readiness() {
+  package_root=$1
+  descriptor_content=""
+  if [ -r "$package_root/seed-kit-package.sh" ]; then
+    descriptor_content=$(sed -n '1,80p' "$package_root/seed-kit-package.sh")
+  fi
+  deploy_id=$(deploy_id_from_descriptor "$descriptor_content")
+
+  if [ -z "${HOME:-}" ]; then
+    ui_line "Readiness: HOME is not set"
+    return 2
+  fi
+
+  deploy_root="$HOME/seed-kit-deploy/$deploy_id"
+  compose_file="$deploy_root/docker-compose.yml"
+  caddy_file="$deploy_root/Caddyfile"
+  homepage_dir="$deploy_root/homepage"
+
+  ui_section "READINESS"
+
+  docker_installed=no
+  docker_service_active=no
+  docker_compose_available=no
+  docker_ready=no
+  if module_is_installed docker; then
+    docker_installed=yes
+  fi
+  if command -v systemctl >/dev/null 2>&1 && systemctl is-active docker >/dev/null 2>&1; then
+    docker_service_active=yes
+  fi
+  if docker compose version >/dev/null 2>&1; then
+    docker_compose_available=yes
+  fi
+  if [ "$docker_installed" = "yes" ] && [ "$docker_service_active" = "yes" ] && [ "$docker_compose_available" = "yes" ]; then
+    docker_ready=yes
+  fi
+  ui_line "docker:"
+  ui_line "  installed: $docker_installed"
+  ui_line "  service active: $docker_service_active"
+  ui_line "  compose: $docker_compose_available"
+  ui_line "  ready: $docker_ready"
+  if [ "$docker_ready" != "yes" ]; then
+    ui_line "  next: sh seed-kit.sh package apply-guided <package> --step install-modules, then verify Docker service"
+  fi
+
+  tailscale_installed=no
+  tailscale_connected=no
+  if module_is_installed tailscale; then
+    tailscale_installed=yes
+    if tailscale ip >/dev/null 2>&1 || tailscale status >/dev/null 2>&1; then
+      tailscale_connected=yes
+    fi
+  fi
+  ui_line ""
+  ui_line "tailscale:"
+  ui_line "  installed: $tailscale_installed"
+  ui_line "  connected: $tailscale_connected"
+  ui_line "  ready: $(readiness_bool "$tailscale_connected")"
+  if [ "$tailscale_connected" != "yes" ]; then
+    ui_line "  next: sudo tailscale up"
+  fi
+
+  cloudflared_installed=no
+  cloudflared_configured_status=no
+  if module_is_installed cloudflared; then
+    cloudflared_installed=yes
+    if cloudflared_configured; then
+      cloudflared_configured_status=yes
+    else
+      cloudflared_configured_status="no/unknown"
+    fi
+  fi
+  ui_line ""
+  ui_line "cloudflared:"
+  ui_line "  installed: $cloudflared_installed"
+  ui_line "  configured: $cloudflared_configured_status"
+  ui_line "  ready: $(readiness_bool "$cloudflared_configured_status")"
+  if [ "$cloudflared_configured_status" != "yes" ]; then
+    ui_line "  next: cloudflared tunnel login/create/configure"
+  fi
+
+  services_deployed=no
+  services_validated=no
+  if [ -f "$compose_file" ] && [ -f "$caddy_file" ] && [ -d "$homepage_dir" ]; then
+    services_deployed=yes
+  fi
+  compose_ok=no
+  caddy_ok=no
+  if [ -f "$compose_file" ]; then
+    if docker compose version >/dev/null 2>&1; then
+      if docker compose -f "$compose_file" config >/dev/null 2>&1; then
+        compose_ok=yes
+      fi
+    else
+      compose_ok=unknown
+    fi
+  fi
+  if [ -f "$caddy_file" ]; then
+    if command -v caddy >/dev/null 2>&1; then
+      if caddy validate --config "$caddy_file" >/dev/null 2>&1; then
+        caddy_ok=yes
+      fi
+    else
+      caddy_ok=unknown
+    fi
+  fi
+  if [ "$services_deployed" = "yes" ]; then
+    case "$compose_ok:$caddy_ok" in
+      yes:yes|yes:unknown|unknown:yes|unknown:unknown)
+        services_validated=yes
+        ;;
+    esac
+  fi
+  ui_line ""
+  ui_line "services:"
+  ui_line "  deploy root: ~/seed-kit-deploy/$deploy_id"
+  ui_line "  deployed: $services_deployed"
+  ui_line "  docker compose config: $compose_ok"
+  ui_line "  caddy validate: $caddy_ok"
+  ui_line "  validated: $services_validated"
+  ui_line "  ready: $services_validated"
+  if [ "$services_validated" != "yes" ]; then
+    ui_line "  next: sh seed-kit.sh package apply-guided <package> --step deploy-configs, then --step validate-deployed"
+  fi
+
+  ui_line ""
+  ui_line "No tailscale up, cloudflared login, compose up/pull, service start, Caddy reload/restart, secrets, DNS/cutover, reboot, network restart, or file copy was attempted."
+}
+
 apply_guided_package() {
   package_file=$1
   guided_step=${2:-preview}
 
   case "$guided_step" in
-    preview|install-modules|review-configs|validate-services|deploy-configs|validate-deployed|suggest-start)
+    preview|install-modules|review-configs|validate-services|deploy-configs|validate-deployed|suggest-start|readiness)
       ;;
     *)
       echo "unknown apply-guided step: $guided_step" >&2
@@ -3391,6 +3543,13 @@ apply_guided_package() {
       return 2
     fi
     apply_guided_suggest_start "$package_root" "$package_file"
+  fi
+  if [ "$guided_step" = "readiness" ]; then
+    if [ -z "$package_root" ]; then
+      ui_line "Readiness: package root not found"
+      return 2
+    fi
+    apply_guided_readiness "$package_root"
   fi
 }
 
