@@ -11,18 +11,26 @@ reachability_probe="1.1.1.1"
 validation_timeout="20"
 stay_on_target_seconds="0"
 keep_ap_active="1"
+confirm_phrase=""
+understand_ssh_may_drop="0"
+dangerous_real_apply="0"
+rollback_delay_seconds="${WIFI_KIT_NM_ROLLBACK_DELAY_SECONDS:-90}"
+rollback_log="${WIFI_KIT_NM_ROLLBACK_LOG:-/tmp/wifi-kit-nm-rollback.log}"
+state_log="${WIFI_KIT_NM_STATE_LOG:-/tmp/wifi-kit-nm-connect-safe.log}"
 
 usage() {
   cat <<'EOF'
 wifi-kit NetworkManager connect-safe prototype
 
-Simulation only. This script plans a future NetworkManager-backed temporary
-connect-safe transaction. It never runs nmcli connection add/up/delete/modify,
-never reads a PSK, never starts AP services, and never changes networking.
+By default this script only plans a future NetworkManager-backed temporary
+connect-safe transaction. Real apply is guarded because SSH may currently
+depend on the Wi-Fi interface being changed.
 
 Usage:
   sh modules/wifi-kit/prototype/connect-safe-networkmanager.sh preflight
   sh modules/wifi-kit/prototype/connect-safe-networkmanager.sh --dry-run
+  sh modules/wifi-kit/prototype/connect-safe-networkmanager.sh --apply \
+    --i-understand-ssh-may-drop --confirm "NETWORKMANAGER TEMP CONNECT"
 
 Options:
   --iface <name>                  Wi-Fi interface. Default: wlan0
@@ -32,10 +40,13 @@ Options:
   --gateway <ip>                  Expected gateway validation target.
   --reachability-probe <target>   Reachability probe. Default: 1.1.1.1
   --validation-timeout <seconds>  Validation timeout. Default: 20
-  --stay-on-target-seconds <sec>  Future bounded target duration. Default: 0
+  --stay-on-target-seconds <sec>  Future bounded target duration. Default: 60 for apply, 0 for dry-run.
   --keep-ap-active                Future AP policy: keep setup AP active. Default.
   --no-keep-ap-active             Future AP policy: allow AP stop after validation.
-  --apply                         Refused. Real apply is not implemented yet.
+  --i-understand-ssh-may-drop     Required with --apply.
+  --confirm <phrase>              Required with --apply: NETWORKMANAGER TEMP CONNECT
+  --dangerous-real-apply          Future execution gate. Do not use without a separate validation prompt.
+  --apply                         Prints the gated real-apply plan unless --dangerous-real-apply is also present.
 EOF
 }
 
@@ -203,6 +214,198 @@ cmd_preflight() {
   kv "preflight_status" "OK"
 }
 
+require_apply_confirmation() {
+  [ "$understand_ssh_may_drop" = "1" ] ||
+    fail "--apply requires --i-understand-ssh-may-drop"
+  [ "$confirm_phrase" = "NETWORKMANAGER TEMP CONNECT" ] ||
+    fail "--apply requires --confirm \"NETWORKMANAGER TEMP CONNECT\""
+}
+
+require_number() {
+  name=$1
+  value=$2
+  case "$value" in
+    ''|*[!0-9]*) fail "$name must be a non-negative integer" ;;
+  esac
+}
+
+cmd_apply_plan() {
+  require_apply_confirmation
+  require_number "--stay-on-target-seconds" "$stay_on_target_seconds"
+  require_number "--validation-timeout" "$validation_timeout"
+  require_number "rollback delay" "$rollback_delay_seconds"
+
+  active_label=${active_name:-"<detect-and-require-current-active-connection>"}
+  gateway_label=${gateway:-"<target-gateway-required-for-real-apply>"}
+  quoted_temp=$(shell_quote "$temporary_name")
+  quoted_iface=$(shell_quote "$iface")
+  quoted_ssid=$(shell_quote "$target_ssid")
+  quoted_active=$(shell_quote "$active_label")
+  quoted_gateway=$(shell_quote "$gateway_label")
+  quoted_probe=$(shell_quote "$reachability_probe")
+  quoted_rollback_log=$(shell_quote "$rollback_log")
+  quoted_state_log=$(shell_quote "$state_log")
+
+  printf '[wifi-kit] connect-safe NetworkManager gated apply plan\n'
+  kv "mode" "apply-plan"
+  kv "backend" "raspberrypi-networkmanager"
+  kv "real_apply_requested" "$dangerous_real_apply"
+  kv "network_writes" "false"
+  kv "secrets" "runtime-only-not-read-not-logged"
+  kv "interface" "$iface"
+  kv "active_connection_expected" "$active_label"
+  kv "temporary_connection" "$temporary_name"
+  kv "target_ssid" "$target_ssid"
+  kv "target_gateway" "$gateway_label"
+  kv "validation_timeout_seconds" "$validation_timeout"
+  kv "stay_on_target_seconds" "$stay_on_target_seconds"
+  kv "rollback_delay_seconds" "$rollback_delay_seconds"
+  kv "rollback_log" "$rollback_log"
+  kv "state_log" "$state_log"
+  kv "save_config" "not-applicable"
+
+  section "preflight-gates"
+  kv "01.preflight" "sh $0 preflight --iface $quoted_iface --temporary-name $quoted_temp"
+  kv "02.require_active_connection" "detected active connection must match $quoted_active when provided"
+  kv "03.require_runtime_secret" "WIFI_KIT_TARGET_PSK must be present only in process environment"
+  kv "04.require_no_residual_temp_profile" "nmcli -t -f NAME connection show must not contain $quoted_temp"
+
+  section "future-real-transaction"
+  kv "01.detect_active_connection" "nmcli -t -f DEVICE,CONNECTION device status"
+  kv "02.snapshot_active_profile" "nmcli connection show $quoted_active"
+  kv "03.create_temporary_profile" "nmcli connection add type wifi ifname $quoted_iface con-name $quoted_temp ssid $quoted_ssid"
+  kv "04.attach_runtime_secret" "nmcli connection modify $quoted_temp 802-11-wireless-security.psk <runtime-only-secret>"
+  kv "05.disable_autoconnect" "nmcli connection modify $quoted_temp connection.autoconnect no"
+  kv "06.arm_rollback_guard" "(sleep $rollback_delay_seconds; nmcli connection up $quoted_active; nmcli connection delete $quoted_temp) > $quoted_rollback_log 2>&1 &"
+  kv "07.rollback_guard_before_connect" "true"
+  kv "08.connect_temporary" "nmcli connection up $quoted_temp"
+  kv "09.validate_gateway_route" "ip route get $quoted_gateway"
+  kv "10.validate_gateway_ping" "ping -c 1 -W $validation_timeout $quoted_gateway"
+  kv "11.validate_reachability" "ping -c 1 -W $validation_timeout $quoted_probe"
+  kv "12.write_non_secret_state" "append status only to $quoted_state_log"
+  kv "13.bounded_stay" "sleep $stay_on_target_seconds"
+  kv "14.rollback_active" "nmcli connection up $quoted_active"
+  kv "15.cleanup_temporary_profile" "nmcli connection delete $quoted_temp"
+  kv "16.verify_return_active" "nmcli -t -f DEVICE,CONNECTION device status"
+  kv "17.verify_ssh_route" "ip route get <ssh-client-if-known>"
+
+  section "guards"
+  kv "apply_without_extra_gate" "plan-only"
+  kv "real_execution_requires" "--dangerous-real-apply plus a separate explicit validation prompt"
+  kv "must_not_modify_active_profile" "true"
+  kv "temporary_profile_autoconnect" "off"
+  kv "rollback_armed_before_bascule" "true"
+  kv "cleanup_required" "true"
+  kv "ap_actions" "none"
+  kv "forbidden" "hostapd, dnsmasq, reboot, save_config, secret logging"
+
+  if [ "$dangerous_real_apply" != "1" ]; then
+    section "apply"
+    kv "apply_status" "refused-plan-only"
+    kv "next_real_command" "WIFI_KIT_TARGET_PSK=<runtime-secret> sh $0 --apply --dangerous-real-apply --i-understand-ssh-may-drop --confirm 'NETWORKMANAGER TEMP CONNECT' --to $quoted_ssid --active-connection $quoted_active --gateway $quoted_gateway --stay-on-target-seconds $stay_on_target_seconds"
+    return 0
+  fi
+}
+
+cmd_apply_real() {
+  require_apply_confirmation
+  require_number "--stay-on-target-seconds" "$stay_on_target_seconds"
+  require_number "--validation-timeout" "$validation_timeout"
+  require_number "rollback delay" "$rollback_delay_seconds"
+
+  [ "$target_ssid" != "<target-ssid>" ] || fail "--to is required for real apply"
+  [ -n "$gateway" ] || fail "--gateway is required for real apply"
+  [ -n "${WIFI_KIT_TARGET_PSK:-}" ] || fail "WIFI_KIT_TARGET_PSK is required in the runtime environment"
+
+  warn_count=0
+  error_count=0
+  cmd_preflight || fail "preflight failed; refusing real apply"
+
+  nmcli_bin="$(find_tool nmcli 2>/dev/null || true)"
+  ip_bin="$(find_tool ip 2>/dev/null || true)"
+  ping_bin="$(find_tool ping 2>/dev/null || true)"
+  [ -n "$nmcli_bin" ] || fail "nmcli is required"
+  [ -n "$ip_bin" ] || fail "ip is required"
+  [ -n "$ping_bin" ] || fail "ping is required"
+
+  nm_running="$("$nmcli_bin" -t -f RUNNING general 2>/dev/null | sed -n '1p' || true)"
+  [ "$nm_running" = "running" ] || fail "NetworkManager is not running"
+
+  detected_active="$("$nmcli_bin" -t -f DEVICE,CONNECTION device status 2>/dev/null |
+    awk -F: -v iface="$iface" '$1 == iface { print $2; exit }')"
+  [ -n "$detected_active" ] && [ "$detected_active" != "--" ] ||
+    fail "active NetworkManager connection not detected for $iface"
+
+  if [ -n "$active_name" ] && [ "$detected_active" != "$active_name" ]; then
+    fail "active connection mismatch: expected $active_name, got $detected_active"
+  fi
+  active_name=$detected_active
+
+  if "$nmcli_bin" -t -f NAME connection show 2>/dev/null |
+    awk -F: -v name="$temporary_name" '$1 == name { found=1 } END { exit found ? 0 : 1 }'; then
+    fail "temporary profile already exists: $temporary_name"
+  fi
+
+  rollback_pid=""
+  cleanup_after_failure() {
+    "$nmcli_bin" connection up "$active_name" >/dev/null 2>&1 || true
+    "$nmcli_bin" connection delete "$temporary_name" >/dev/null 2>&1 || true
+    if [ -n "${rollback_pid:-}" ]; then
+      kill "$rollback_pid" 2>/dev/null || true
+    fi
+  }
+  trap cleanup_after_failure EXIT INT TERM HUP
+
+  printf '[wifi-kit] connect-safe NetworkManager real apply\n'
+  kv "mode" "apply-real"
+  kv "backend" "raspberrypi-networkmanager"
+  kv "network_writes" "true"
+  kv "secrets" "runtime-only-not-logged"
+  kv "interface" "$iface"
+  kv "active_connection_initial" "$active_name"
+  kv "temporary_connection" "$temporary_name"
+  kv "target_ssid" "$target_ssid"
+  kv "target_gateway" "$gateway"
+
+  {
+    printf 'started_at=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    printf 'interface=%s\n' "$iface"
+    printf 'active_connection_initial=%s\n' "$active_name"
+    printf 'temporary_connection=%s\n' "$temporary_name"
+    printf 'target_ssid=%s\n' "$target_ssid"
+  } >>"$state_log"
+
+  "$nmcli_bin" connection add type wifi ifname "$iface" con-name "$temporary_name" ssid "$target_ssid" >/dev/null
+  "$nmcli_bin" connection modify "$temporary_name" 802-11-wireless-security.key-mgmt wpa-psk >/dev/null
+  "$nmcli_bin" connection modify "$temporary_name" 802-11-wireless-security.psk "$WIFI_KIT_TARGET_PSK" >/dev/null
+  "$nmcli_bin" connection modify "$temporary_name" connection.autoconnect no >/dev/null
+
+  (
+    sleep "$rollback_delay_seconds"
+    "$nmcli_bin" connection up "$active_name"
+    "$nmcli_bin" connection delete "$temporary_name" >/dev/null 2>&1 || true
+  ) >"$rollback_log" 2>&1 &
+  rollback_pid=$!
+  kv "rollback_guard_armed" "yes"
+  kv "rollback_guard_pid" "$rollback_pid"
+
+  "$nmcli_bin" connection up "$temporary_name" >/dev/null
+  "$ip_bin" route get "$gateway" >/dev/null
+  "$ping_bin" -c 1 -W "$validation_timeout" "$gateway" >/dev/null
+  "$ping_bin" -c 1 -W "$validation_timeout" "$reachability_probe" >/dev/null
+  sleep "$stay_on_target_seconds"
+  "$nmcli_bin" connection up "$active_name" >/dev/null
+  "$nmcli_bin" connection delete "$temporary_name" >/dev/null
+  kill "$rollback_pid" 2>/dev/null || true
+  trap - INT TERM HUP
+
+  final_active="$("$nmcli_bin" -t -f DEVICE,CONNECTION device status 2>/dev/null |
+    awk -F: -v iface="$iface" '$1 == iface { print $2; exit }')"
+  kv "active_connection_final" "${final_active:-unknown}"
+  [ "$final_active" = "$active_name" ] || fail "rollback verification failed"
+  kv "apply_status" "OK"
+}
+
 if [ "${1:-}" = "preflight" ]; then
   mode="preflight"
   shift
@@ -264,6 +467,32 @@ while [ "$#" -gt 0 ]; do
     --no-keep-ap-active)
       keep_ap_active="0"
       ;;
+    --i-understand-ssh-may-drop)
+      understand_ssh_may_drop="1"
+      ;;
+    --confirm)
+      [ "$#" -gt 1 ] || fail "--confirm requires a value"
+      confirm_phrase="$2"
+      shift
+      ;;
+    --dangerous-real-apply)
+      dangerous_real_apply="1"
+      ;;
+    --rollback-delay-seconds)
+      [ "$#" -gt 1 ] || fail "--rollback-delay-seconds requires a value"
+      rollback_delay_seconds="$2"
+      shift
+      ;;
+    --state-log)
+      [ "$#" -gt 1 ] || fail "--state-log requires a value"
+      state_log="$2"
+      shift
+      ;;
+    --rollback-log)
+      [ "$#" -gt 1 ] || fail "--rollback-log requires a value"
+      rollback_log="$2"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -281,7 +510,16 @@ case "$mode" in
     exit $?
     ;;
   dry-run) ;;
-  apply) fail "NetworkManager connect-safe apply is not implemented yet" ;;
+  apply)
+    if [ "$stay_on_target_seconds" = "0" ]; then
+      stay_on_target_seconds="60"
+    fi
+    cmd_apply_plan
+    if [ "$dangerous_real_apply" = "1" ]; then
+      cmd_apply_real
+    fi
+    exit $?
+    ;;
   *) fail "explicit preflight or --dry-run is required" ;;
 esac
 

@@ -134,6 +134,8 @@ The first NetworkManager connect-safe prototype is simulation-only:
 ```text
 modules/wifi-kit/prototype/connect-safe-networkmanager.sh preflight
 modules/wifi-kit/prototype/connect-safe-networkmanager.sh --dry-run
+modules/wifi-kit/prototype/connect-safe-networkmanager.sh --apply \
+  --i-understand-ssh-may-drop --confirm "NETWORKMANAGER TEMP CONNECT"
 ```
 
 `preflight` is read-only and checks NetworkManager ownership, the active
@@ -142,6 +144,8 @@ profiles before any future apply is considered.
 
 It plans the future transaction without running `nmcli connection add`,
 `nmcli connection up`, `nmcli connection delete`, or `nmcli connection modify`.
+`--apply` also stays plan-only unless a later separately approved run adds the
+extra `--dangerous-real-apply` execution gate.
 
 Future transaction shape:
 
@@ -149,9 +153,27 @@ Future transaction shape:
 2. Snapshot the active profile metadata without reading secrets.
 3. Create a temporary profile with autoconnect disabled.
 4. Attach the PSK from runtime-only input.
-5. Bring up the temporary profile.
-6. Validate gateway and internet reachability.
-7. Stay on target for a bounded duration if requested.
-8. Roll back to the original active connection.
-9. Delete the temporary profile.
-10. Report final active connection and device state.
+5. Arm a local rollback guard on the node before switching Wi-Fi.
+6. Bring up the temporary profile.
+7. Validate gateway and internet reachability.
+8. Stay on target for a bounded duration if requested.
+9. Roll back to the original active connection.
+10. Delete the temporary profile.
+11. Report final active connection and device state.
+
+Future real execution command shape:
+
+```text
+WIFI_KIT_TARGET_PSK=<runtime-secret> \
+sh modules/wifi-kit/prototype/connect-safe-networkmanager.sh \
+  --apply --dangerous-real-apply \
+  --i-understand-ssh-may-drop \
+  --confirm "NETWORKMANAGER TEMP CONNECT" \
+  --to SFR_7B28 \
+  --active-connection netplan-wlan0-GL-MT6000-d53 \
+  --gateway 192.168.1.1 \
+  --stay-on-target-seconds 60
+```
+
+The PSK must remain runtime-only and must never be written to the repository,
+logs, diffs, or command output.
