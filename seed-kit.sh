@@ -2993,7 +2993,6 @@ inspect_stage_package() {
 apply_guided_install_modules() {
   system_items=$1
 
-  ui_section "install-modules step"
   installable_modules=""
   installed_modules=""
   missing_modules=""
@@ -3015,85 +3014,69 @@ apply_guided_install_modules() {
     esac
   done
 
-  ui_line "Declared system:"
-  if [ -n "$system_items" ]; then
-    for system_item in $system_items; do
-      ui_line "  - $system_item"
-    done
+  if ! seed_verbose; then
+    guided_step_heading "install-modules" "system"
+    if [ -n "$installable_modules" ]; then
+      guided_status_line "INFO" "packages" "$installable_modules"
+    else
+      guided_status_line "OK" "packages" "none"
+    fi
+    [ -n "$installed_modules" ] && guided_status_line "OK" "present" "$installed_modules"
+    [ -n "$manual_modules" ] && guided_status_line "INFO" "manual" "$manual_modules"
+
+    if [ -z "$installable_modules" ]; then
+      ui_line ""
+      ui_line "No install-only modules selected for apply."
+      return 0
+    fi
+
+    guided_persistence_install "$installable_modules"
   else
-    ui_line "  none"
-  fi
-  ui_line "Already present: ${installed_modules:-none}"
-  ui_line "Missing: ${missing_modules:-none}"
-  ui_line "Install-only candidates: ${installable_modules:-none}"
-  ui_line "Manual/future: ${manual_modules:-none}"
+    ui_section "install-modules step"
 
-  if [ -z "$installable_modules" ]; then
-    ui_line "No install-only modules selected for apply."
-    return 0
-  fi
+    ui_line "Declared system:"
+    if [ -n "$system_items" ]; then
+      for system_item in $system_items; do
+        ui_line "  - $system_item"
+      done
+    else
+      ui_line "  none"
+    fi
+    ui_line "Already present: ${installed_modules:-none}"
+    ui_line "Missing: ${missing_modules:-none}"
+    ui_line "Install-only candidates: ${installable_modules:-none}"
+    ui_line "Manual/future: ${manual_modules:-none}"
 
-  if [ "$(seed_lang)" = "fr" ]; then
-    ui_line ""
-    ui_line "Paquets système requis:"
-    for system_item in $installable_modules; do
-      ui_line "  - $system_item"
-    done
-    ui_line ""
-    ui_line "Cette action va persister:"
-    ui_line "  - paquets système installés"
-    ui_line "  - commandes système disponibles après reboot"
-    ui_line ""
-    ui_line "Temporaire dans ce flow:"
-    ui_line "  - verify package"
-    ui_line "  - stage package dans /tmp"
-    ui_line "  - inspect package"
-    ui_line ""
-    ui_line "Cette action ne fera PAS:"
-    ui_line "  - copier les configs staged vers /etc"
-    ui_line "  - restore"
-    ui_line "  - compose pull/up"
-    ui_line "  - copier de secrets"
-    ui_line "  - tailscale up"
-    ui_line "  - cloudflared login"
-    ui_line "  - DNS/cutover"
-    ui_line "  - reboot ou restart réseau"
-  else
-    ui_line ""
-    ui_line "Required system packages:"
-    for system_item in $installable_modules; do
-      ui_line "  - $system_item"
-    done
-    ui_line ""
-    ui_line "This action will persist:"
-    ui_line "  - system packages installed"
-    ui_line "  - system commands available after reboot"
-    ui_line ""
-    ui_line "Temporary in this flow:"
-    ui_line "  - package verify"
-    ui_line "  - package stage under /tmp"
-    ui_line "  - package inspect"
-    ui_line ""
-    ui_line "This action will NOT:"
-    ui_line "  - copy staged configs to /etc"
-    ui_line "  - restore"
-    ui_line "  - compose pull/up"
-    ui_line "  - copy secrets"
-    ui_line "  - tailscale up"
-    ui_line "  - cloudflared login"
-    ui_line "  - DNS/cutover"
-    ui_line "  - reboot or network restart"
-  fi
+    if [ -z "$installable_modules" ]; then
+      ui_line "No install-only modules selected for apply."
+      return 0
+    fi
 
-  ui_line "SAFE boundary:"
-  ui_line "  - no staged configs copied to /etc"
-  ui_line "  - no restore"
-  ui_line "  - no compose pull/up"
-  ui_line "  - no secrets"
-  ui_line "  - no tailscale up"
-  ui_line "  - no cloudflared login"
-  ui_line "  - no DNS/cutover"
-  ui_line "  - no reboot or network restart"
+    if [ "$(seed_lang)" = "fr" ]; then
+      ui_line ""
+      ui_line "Paquets système requis:"
+      for system_item in $installable_modules; do
+        ui_line "  - $system_item"
+      done
+    else
+      ui_line ""
+      ui_line "Required system packages:"
+      for system_item in $installable_modules; do
+        ui_line "  - $system_item"
+      done
+    fi
+    guided_persistence_install "$installable_modules"
+
+    ui_line "SAFE boundary:"
+    ui_line "  - no staged configs copied to /etc"
+    ui_line "  - no restore"
+    ui_line "  - no compose pull/up"
+    ui_line "  - no secrets"
+    ui_line "  - no tailscale up"
+    ui_line "  - no cloudflared login"
+    ui_line "  - no DNS/cutover"
+    ui_line "  - no reboot or network restart"
+  fi
 
   APPLY_AUTO=0
   APPLY_CONFIRMED=0
@@ -3158,6 +3141,98 @@ apply_guided_validate_services() {
   compose_file="$package_root/services/docker-compose.yml"
   caddy_file="$package_root/configs/caddy/Caddyfile"
   homepage_dir="$package_root/configs/homepage"
+
+  if ! seed_verbose; then
+    descriptor_content=""
+    if [ -r "$package_root/seed-kit-package.sh" ]; then
+      descriptor_content=$(sed -n '1,80p' "$package_root/seed-kit-package.sh")
+    fi
+    deploy_id=$(deploy_id_from_descriptor "$descriptor_content")
+    if [ "${APPLY_GUIDED_EMBEDDED:-0}" != "1" ]; then
+      guided_step_heading "validate-services" "$deploy_id"
+    fi
+
+    compose_status="OK"
+    compose_summary="config valid"
+    if [ ! -f "$compose_file" ]; then
+      compose_status="WARN"
+      compose_summary="missing"
+    elif docker compose version >/dev/null 2>&1; then
+      if docker compose -f "$compose_file" config >/dev/null 2>&1; then
+        compose_summary="config valid"
+      else
+        compose_status="WARN"
+        compose_summary="config failed"
+      fi
+    else
+      compose_status="INFO"
+      compose_summary="docker compose unavailable"
+    fi
+
+    caddy_status="OK"
+    caddy_summary="config valid"
+    if [ ! -f "$caddy_file" ]; then
+      caddy_status="WARN"
+      caddy_summary="missing"
+    elif command -v caddy >/dev/null 2>&1; then
+      if caddy validate --config "$caddy_file" >/dev/null 2>&1; then
+        caddy_summary="config valid"
+      else
+        caddy_status="WARN"
+        caddy_summary="validate failed"
+      fi
+    else
+      caddy_status="INFO"
+      caddy_summary="caddy unavailable"
+    fi
+
+    homepage_status="OK"
+    homepage_summary="detected"
+    if [ ! -d "$homepage_dir" ]; then
+      homepage_status="WARN"
+      homepage_summary="missing"
+    fi
+
+    if [ "$(seed_lang)" = "fr" ]; then
+      [ "$compose_summary" = "config valid" ] && compose_summary="config valide"
+      [ "$compose_summary" = "missing" ] && compose_summary="manquant"
+      [ "$compose_summary" = "config failed" ] && compose_summary="config invalide"
+      [ "$compose_summary" = "docker compose unavailable" ] && compose_summary="docker compose indisponible"
+      [ "$caddy_summary" = "config valid" ] && caddy_summary="config valide"
+      [ "$caddy_summary" = "missing" ] && caddy_summary="manquant"
+      [ "$caddy_summary" = "validate failed" ] && caddy_summary="validation échouée"
+      [ "$caddy_summary" = "caddy unavailable" ] && caddy_summary="caddy indisponible"
+      [ "$homepage_summary" = "detected" ] && homepage_summary="détecté"
+      [ "$homepage_summary" = "missing" ] && homepage_summary="manquant"
+    fi
+
+    if [ "${APPLY_GUIDED_EMBEDDED:-0}" = "1" ]; then
+      if [ "$compose_status$caddy_status$homepage_status" = "OKOKOK" ]; then
+        if [ "$(seed_lang)" = "fr" ]; then
+          guided_status_line "OK" "configs" "validées"
+        else
+          guided_status_line "OK" "configs" "validated"
+        fi
+      else
+        if [ "$(seed_lang)" = "fr" ]; then
+          guided_status_line "WARN" "configs" "à vérifier"
+        else
+          guided_status_line "WARN" "configs" "review needed"
+        fi
+      fi
+    else
+      guided_status_line "$compose_status" "compose" "$compose_summary"
+      guided_status_line "$caddy_status" "caddy" "$caddy_summary"
+      guided_status_line "$homepage_status" "homepage" "$homepage_summary"
+      ui_line ""
+      if [ "$(seed_lang)" = "fr" ]; then
+        ui_line "Aucun service démarré. Aucun fichier copié."
+      else
+        ui_line "No services were started. No files were copied."
+      fi
+    fi
+    return 0
+  fi
 
   ui_section "SERVICE VALIDATION"
   ui_line "Staged root: $package_root"
@@ -3305,6 +3380,56 @@ apply_guided_deploy_configs() {
   caddy_file="$package_root/configs/caddy/Caddyfile"
   homepage_dir="$package_root/configs/homepage"
   deploy_root="$HOME/seed-kit-deploy/$deploy_id"
+
+  if ! seed_verbose; then
+    guided_step_heading "deploy-configs" "$deploy_id"
+
+    detected=0
+    [ -f "$compose_file" ] && detected=$((detected + 1))
+    [ -f "$caddy_file" ] && detected=$((detected + 1))
+    [ -d "$homepage_dir" ] && detected=$((detected + 1))
+
+    if [ "$detected" -eq 0 ]; then
+      guided_status_line "WARN" "configs" "$(seed_msg none)"
+      ui_line ""
+      ui_line "No files were copied."
+      return 0
+    fi
+
+    if [ "$(seed_lang)" = "fr" ]; then
+      guided_status_line "OK" "configs" "détectées"
+      guided_status_line "INFO" "destination" "~/seed-kit-deploy/$deploy_id/"
+    else
+      guided_status_line "OK" "configs" "detected"
+      guided_status_line "INFO" "destination" "~/seed-kit-deploy/$deploy_id/"
+    fi
+
+    APPLY_GUIDED_EMBEDDED=1 apply_guided_validate_services "$package_root"
+    guided_persistence_deploy "~/seed-kit-deploy/$deploy_id"
+    ui_line ""
+    if [ "$(seed_lang)" = "fr" ]; then
+      if ! deploy_config_confirm "Continuer ?"; then
+        ui_line "Aucun fichier copié."
+        return 2
+      fi
+    else
+      if ! deploy_config_confirm "Continue?"; then
+        ui_line "No files were copied."
+        return 2
+      fi
+    fi
+
+    ui_line ""
+    ui_line "Copied:"
+    DEPLOY_COPIED_COUNT=0
+    deploy_config_copy_file "services/docker-compose.yml" "$compose_file" "$deploy_root" "$deploy_root/docker-compose.yml" || return 2
+    deploy_config_copy_file "configs/caddy/Caddyfile" "$caddy_file" "$deploy_root" "$deploy_root/Caddyfile" || return 2
+    deploy_config_copy_dir "configs/homepage/" "$homepage_dir" "$deploy_root" "$deploy_root/homepage" || return 2
+    if [ "$DEPLOY_COPIED_COUNT" -eq 0 ]; then
+      ui_line "  none"
+    fi
+    return 0
+  fi
 
   ui_section "GUIDED CONFIG DEPLOYMENT"
   ui_line "Detected:"
@@ -3497,6 +3622,51 @@ apply_guided_suggest_start() {
   caddy_file="$deploy_root/Caddyfile"
   homepage_dir="$deploy_root/homepage"
 
+  if ! seed_verbose; then
+    guided_step_heading "suggest-start" "$deploy_id"
+    if [ -f "$compose_file" ]; then
+      guided_status_line "OK" "compose" "present"
+    else
+      guided_status_line "WARN" "compose" "missing"
+    fi
+    if [ -f "$caddy_file" ]; then
+      guided_status_line "OK" "caddy" "present"
+    else
+      guided_status_line "WARN" "caddy" "missing"
+    fi
+    if [ -d "$homepage_dir" ]; then
+      guided_status_line "OK" "homepage" "present"
+    else
+      guided_status_line "WARN" "homepage" "missing"
+    fi
+
+    ui_line ""
+    if [ "$(seed_lang)" = "fr" ]; then
+      ui_line "Commandes manuelles suggérées :"
+    else
+      ui_line "Suggested manual commands:"
+    fi
+    ui_line "cd ~/seed-kit-deploy/$deploy_id"
+    ui_line "docker compose up -d"
+    ui_line "docker compose ps"
+    ui_line "curl http://127.0.0.1:8080"
+    ui_line ""
+    if [ "$(seed_lang)" = "fr" ]; then
+      ui_line "Identités manuelles :"
+    else
+      ui_line "Manual identities:"
+    fi
+    ui_line "sudo tailscale up"
+    ui_line "cloudflared tunnel login/create/configure"
+    ui_line ""
+    if [ "$(seed_lang)" = "fr" ]; then
+      ui_line "Seed-Kit n'a démarré aucun service."
+    else
+      ui_line "Seed-Kit did not start services."
+    fi
+    return 0
+  fi
+
   ui_section "SUGGESTED MANUAL START"
   ui_line "Deploy root:"
   ui_line "  ~/seed-kit-deploy/$deploy_id"
@@ -3573,6 +3743,128 @@ readiness_line() {
     printf '%s[OK]%s %-12s %s\n' "$COLOR_GOOD" "$COLOR_RESET" "$name" "$summary"
   else
     printf '%s[WARN]%s %-12s %s\n' "$COLOR_WARN" "$COLOR_RESET" "$name" "$summary"
+  fi
+}
+
+guided_status_line() {
+  status=$1
+  name=$2
+  summary=$3
+
+  case "$status" in
+    OK)
+      color=$COLOR_GOOD
+      ;;
+    WARN)
+      color=$COLOR_WARN
+      ;;
+    *)
+      color=$COLOR_SECTION
+      ;;
+  esac
+
+  printf '%s%-6s%s %-12s %s\n' "$color" "$status" "$COLOR_RESET" "$name" "$summary"
+}
+
+guided_step_heading() {
+  step=$1
+  profile=$2
+
+  if [ "$(seed_lang)" = "fr" ]; then
+    ui_line "Seed-Kit > $step — $profile"
+  else
+    ui_line "Seed-Kit > $step - $profile"
+  fi
+  ui_line ""
+}
+
+guided_persistence_install() {
+  installable_modules=$1
+
+  if [ "$(seed_lang)" = "fr" ]; then
+    ui_line ""
+    ui_line "Persistant :"
+    ui_line "- paquets système installés"
+    ui_line "- commandes système disponibles après reboot"
+    ui_line ""
+    ui_line "Temporaire :"
+    ui_line "- vérification package"
+    ui_line "- staging /tmp"
+    ui_line "- inspection package"
+    ui_line ""
+    ui_line "Ne fera pas :"
+    ui_line "- copie configs vers /etc"
+    ui_line "- restore"
+    ui_line "- compose up/pull"
+    ui_line "- secrets"
+    ui_line "- tailscale up"
+    ui_line "- cloudflared login"
+    ui_line "- DNS/cutover"
+    ui_line "- reboot/restart réseau"
+  else
+    ui_line ""
+    ui_line "Persistent:"
+    ui_line "- system packages installed"
+    ui_line "- system commands available after reboot"
+    ui_line ""
+    ui_line "Temporary:"
+    ui_line "- package verification"
+    ui_line "- staging /tmp"
+    ui_line "- package inspection"
+    ui_line ""
+    ui_line "Will not:"
+    ui_line "- copy configs to /etc"
+    ui_line "- restore"
+    ui_line "- compose up/pull"
+    ui_line "- secrets"
+    ui_line "- tailscale up"
+    ui_line "- cloudflared login"
+    ui_line "- DNS/cutover"
+    ui_line "- reboot/network restart"
+  fi
+}
+
+guided_persistence_deploy() {
+  persistence_deploy_root=$1
+
+  if [ "$(seed_lang)" = "fr" ]; then
+    ui_line ""
+    ui_line "Persistant :"
+    ui_line "- fichiers copiés sous $persistence_deploy_root/"
+    ui_line ""
+    ui_line "Temporaire :"
+    ui_line "- vérification package"
+    ui_line "- staging /tmp"
+    ui_line "- validations"
+    ui_line ""
+    ui_line "Ne fera pas :"
+    ui_line "- écriture dans /etc"
+    ui_line "- restore"
+    ui_line "- compose up/pull"
+    ui_line "- reload/restart Caddy"
+    ui_line "- démarrage service"
+    ui_line "- secrets"
+    ui_line "- DNS/cutover"
+    ui_line "- reboot/restart réseau"
+  else
+    ui_line ""
+    ui_line "Persistent:"
+    ui_line "- files copied under $persistence_deploy_root/"
+    ui_line ""
+    ui_line "Temporary:"
+    ui_line "- package verification"
+    ui_line "- staging /tmp"
+    ui_line "- validations"
+    ui_line ""
+    ui_line "Will not:"
+    ui_line "- write to /etc"
+    ui_line "- restore"
+    ui_line "- compose up/pull"
+    ui_line "- reload/restart Caddy"
+    ui_line "- start services"
+    ui_line "- secrets"
+    ui_line "- DNS/cutover"
+    ui_line "- reboot/network restart"
   fi
 }
 
@@ -3865,6 +4157,18 @@ apply_guided_print_header() {
   ui_separator "========================================"
 }
 
+cleanup_guided_stage_if_compact() {
+  compact=$1
+  stage_dir=$2
+
+  [ "$compact" -eq 1 ] || return 0
+  case "$stage_dir" in
+    /tmp/seed-kit-package-stage.*)
+      rm -rf "$stage_dir"
+      ;;
+  esac
+}
+
 apply_guided_package() {
   package_file=$1
   guided_step=${2:-preview}
@@ -3883,12 +4187,16 @@ apply_guided_package() {
     package_entries=$(tar -tzf "$package_file" 2>/dev/null || true)
   fi
   read_package_metadata "$package_file" "$package_entries"
-  guided_compact_readiness=0
-  if [ "$guided_step" = "readiness" ] && ! seed_verbose; then
-    guided_compact_readiness=1
+  guided_compact_step=0
+  if ! seed_verbose; then
+    case "$guided_step" in
+      install-modules|validate-services|deploy-configs|suggest-start|readiness)
+        guided_compact_step=1
+        ;;
+    esac
   fi
 
-  if [ "$guided_compact_readiness" -eq 0 ]; then
+  if [ "$guided_compact_step" -eq 0 ]; then
     apply_guided_print_header "$guided_step" "$package_file" "$PACKAGE_METADATA_PACKAGE_ID" "$PACKAGE_METADATA_PROFILE_ID"
     ui_section "$(seed_msg progress)"
   fi
@@ -3898,7 +4206,7 @@ apply_guided_package() {
     ui_line "Apply guided: stopped because verification failed"
     return 2
   fi
-  if [ "$guided_compact_readiness" -eq 0 ]; then
+  if [ "$guided_compact_step" -eq 0 ]; then
     ui_report_ok "verify"
   fi
 
@@ -3914,7 +4222,7 @@ apply_guided_package() {
     ui_line "Apply guided: unable to find stage directory"
     return 2
   fi
-  if [ "$guided_compact_readiness" -eq 0 ]; then
+  if [ "$guided_compact_step" -eq 0 ]; then
     ui_report_ok "stage"
     ui_line "Stage dir: $stage_dir"
   fi
@@ -3938,7 +4246,7 @@ apply_guided_package() {
     return 2
   }
   PACKAGE_OUTPUT_COMPACT=0
-  if [ "$guided_compact_readiness" -eq 0 ]; then
+  if [ "$guided_compact_step" -eq 0 ]; then
     ui_report_ok "inspect"
     printf '%s\n' "$inspect_output" | sed 's/^/  /'
     ui_report_active "$guided_step"
@@ -3976,7 +4284,13 @@ apply_guided_package() {
   fi
 
   if [ "$guided_step" = "install-modules" ]; then
-    apply_guided_install_modules "$guided_system"
+    if apply_guided_install_modules "$guided_system"; then
+      step_rc=0
+    else
+      step_rc=$?
+    fi
+    cleanup_guided_stage_if_compact "$guided_compact_step" "$stage_dir"
+    return "$step_rc"
   fi
   if [ "$guided_step" = "review-configs" ]; then
     if [ -z "$package_root" ]; then
@@ -3990,16 +4304,30 @@ apply_guided_package() {
       ui_line "Validate services: package root not found"
       return 2
     fi
-    apply_guided_validate_services "$package_root"
+    if apply_guided_validate_services "$package_root"; then
+      step_rc=0
+    else
+      step_rc=$?
+    fi
+    cleanup_guided_stage_if_compact "$guided_compact_step" "$stage_dir"
+    return "$step_rc"
   fi
   if [ "$guided_step" = "deploy-configs" ]; then
     if [ -z "$package_root" ]; then
       ui_line "Deploy configs: package root not found"
       return 2
     fi
-    apply_guided_review_configs "$package_root"
-    apply_guided_validate_services "$package_root"
-    apply_guided_deploy_configs "$package_root"
+    if seed_verbose; then
+      apply_guided_review_configs "$package_root"
+      apply_guided_validate_services "$package_root"
+    fi
+    if apply_guided_deploy_configs "$package_root"; then
+      step_rc=0
+    else
+      step_rc=$?
+    fi
+    cleanup_guided_stage_if_compact "$guided_compact_step" "$stage_dir"
+    return "$step_rc"
   fi
   if [ "$guided_step" = "validate-deployed" ]; then
     if [ -z "$package_root" ]; then
@@ -4013,7 +4341,13 @@ apply_guided_package() {
       ui_line "Suggest start: package root not found"
       return 2
     fi
-    apply_guided_suggest_start "$package_root" "$package_file"
+    if apply_guided_suggest_start "$package_root" "$package_file"; then
+      step_rc=0
+    else
+      step_rc=$?
+    fi
+    cleanup_guided_stage_if_compact "$guided_compact_step" "$stage_dir"
+    return "$step_rc"
   fi
   if [ "$guided_step" = "readiness" ]; then
     if [ -z "$package_root" ]; then
@@ -4022,15 +4356,11 @@ apply_guided_package() {
     fi
     apply_guided_readiness "$package_root"
     readiness_rc=$?
-    if [ "$guided_compact_readiness" -eq 1 ]; then
-      case "$stage_dir" in
-        /tmp/seed-kit-package-stage.*)
-          rm -rf "$stage_dir"
-          ;;
-      esac
-    fi
+    cleanup_guided_stage_if_compact "$guided_compact_step" "$stage_dir"
     return "$readiness_rc"
   fi
+
+  cleanup_guided_stage_if_compact "$guided_compact_step" "$stage_dir"
 }
 
 show_package_plan() {
