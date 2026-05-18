@@ -291,12 +291,24 @@ The real test confirmed:
 - NetworkManager is restored and `wlan0` reconnects to the previous client
   network.
 
-The current recovery UI buttons are intentionally visible but still
-stub/plan-only. The validated V1 proves the recovery shell, DHCP, DNS captive
-behavior, UI serving, and rollback. It does not yet validate changing Wi-Fi
-from inside the recovery UI.
+The `Wi-Fi par defaut` recovery UI button has also been validated in the real
+flow. It is the primary action that exits recovery, stops the temporary
+UI/dnsmasq/hostapd processes, returns `wlan0` to NetworkManager, and starts a
+best-effort reconnect to the previous Wi-Fi. The adjacent `Afficher le plan`
+button is informational only, so the UI distinguishes the real action from the
+simulation text. It does not yet validate changing Wi-Fi from inside the
+recovery UI.
 
-Exit from recovery should happen through a future UI action:
+Current recovery UX:
+
+- primary button: `Wi-Fi par defaut`;
+- helper text: `Arrete le mode recovery et reconnecte le Wi-Fi precedent.`;
+- click feedback: `Retour au Wi-Fi normal... le portail recovery va disparaitre.`;
+- `POST /reconnect-previous` appends a non-secret audit line to
+  `/tmp/wifi-kit-reconnect-previous.log`;
+- plan-only actions remain visibly separate from real recovery exit.
+
+Exit from recovery uses the validated `Wi-Fi par defaut` UI action:
 
 1. User selects a Wi-Fi target and enters the password locally.
 2. Wifi-Kit runs the NetworkManager connect-safe flow with rollback.
@@ -310,9 +322,10 @@ written to repository files, persistent configs, or unredacted logs.
 
 ## Recovery UI action design
 
-Button implementation should be staged in this order:
+Button implementation is staged in this order:
 
-1. `Quitter recovery` / `Reprendre l'ancien Wi-Fi`;
+1. `Wi-Fi par defaut` for reconnecting the previous Wi-Fi, validated in the
+   real recovery flow;
 2. `Choisir un autre Wi-Fi`;
 3. `Redemarrer recovery`.
 

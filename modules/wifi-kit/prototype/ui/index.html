@@ -1019,15 +1019,16 @@
         <div class="section-head">
           <div>
             <h2 id="network-actions-title">Actions recovery</h2>
-            <p class="section-copy">Chaque action affiche son plan avant toute future mutation.</p>
+            <p class="section-copy">Les actions reelles et les plans de simulation sont separes.</p>
           </div>
           <span class="chip">SAFE</span>
         </div>
         <div class="action-grid">
           <div class="action-card">
             <strong>Wi-Fi par d&eacute;faut</strong>
-            <p>Quitte recovery, arrete les services temporaires, puis redonne wlan0 a NetworkManager.</p>
-            <button class="button" type="button" data-network-action="reconnect-previous">Afficher le plan</button>
+            <p>Arr&ecirc;te le mode recovery et reconnecte le Wi-Fi pr&eacute;c&eacute;dent.</p>
+            <button class="button" type="button" data-network-action="reconnect-previous">Wi-Fi par d&eacute;faut</button>
+            <button class="button secondary" type="button" data-network-plan="reconnect-previous">Afficher le plan</button>
           </div>
           <div class="action-card">
             <strong>Demarrer le mode recovery</strong>
@@ -1445,15 +1446,17 @@
     async function triggerNetworkAction(action) {
       const button = document.querySelector(`[data-network-action="${action}"]`);
       const originalText = button ? button.textContent : '';
-      showNetworkActionResult(networkActionPlan(action));
+      if (action !== 'reconnect-previous') {
+        showNetworkActionResult(networkActionPlan(action));
+      }
       if (window.location.protocol === 'file:') return;
       try {
         if (action === 'reconnect-previous') {
           if (button) {
             button.disabled = true;
-            button.textContent = 'Retour au Wi-Fi precedent...';
+            button.textContent = 'Retour au Wi-Fi normal...';
           }
-          showNetworkActionResult("Retour au Wi-Fi precedent... Le portail recovery va disparaitre quand le node aura repris l'ancien Wi-Fi.");
+          showNetworkActionResult("Retour au Wi-Fi normal... le portail recovery va dispara\u00eetre.");
         }
         const response = await fetch(`/${action}`, {
           cache: 'no-store',
@@ -1730,6 +1733,9 @@
     });
     document.querySelectorAll('[data-network-action]').forEach((button) => {
       button.addEventListener('click', () => triggerNetworkAction(button.dataset.networkAction));
+    });
+    document.querySelectorAll('[data-network-plan]').forEach((button) => {
+      button.addEventListener('click', () => showNetworkActionResult(networkActionPlan(button.dataset.networkPlan)));
     });
     document.querySelectorAll('[data-recovery-action]').forEach((button) => {
       button.addEventListener('click', () => triggerRecoveryAction(button.dataset.recoveryAction));

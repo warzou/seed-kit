@@ -8,6 +8,7 @@ import json
 import os
 import socket
 import subprocess
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -94,20 +95,48 @@ def read_ap_only_state_value(key: str) -> str:
     return ""
 
 
+def append_reconnect_previous_log(
+    *,
+    previous_connection: str,
+    recovery_mode_active: bool,
+    reconnect_started: bool,
+    status: str,
+    error: str = "",
+) -> None:
+    timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    fields = [
+        f"timestamp={json.dumps(timestamp)}",
+        "action=reconnect-previous",
+        f"previous_connection={json.dumps(previous_connection or 'unknown')}",
+        f"recovery_mode_active={'yes' if recovery_mode_active else 'no'}",
+        f"reconnect_started={'yes' if reconnect_started else 'no'}",
+        f"status={json.dumps(status)}",
+    ]
+    if error:
+        fields.append(f"error={json.dumps(error)}")
+    try:
+        with RECONNECT_PREVIOUS_LOG.open("a", encoding="utf-8") as handle:
+            handle.write(" ".join(fields) + "\n")
+    except OSError:
+        pass
+
+
 def start_reconnect_previous() -> dict:
     previous_connection = read_ap_only_state_value("active_connection") or "unknown"
     if os.geteuid() != 0:
+        append_reconnect_previous_log(
+            previous_connection=previous_connection,
+            recovery_mode_active=True,
+            reconnect_started=False,
+            status="failure",
+            error="root-required",
+        )
         return {
             "status": "failure",
             "error": "root-required",
             "previous_connection": previous_connection,
             "reconnect_started": False,
         }
-
-    try:
-        RECONNECT_PREVIOUS_LOG.write_text("[wifi-kit] reconnect-previous requested\n", encoding="utf-8")
-    except OSError:
-        pass
 
     try:
         subprocess.Popen(
@@ -126,12 +155,26 @@ def start_reconnect_previous() -> dict:
             stderr=subprocess.DEVNULL,
         )
     except OSError as exc:
+        append_reconnect_previous_log(
+            previous_connection=previous_connection,
+            recovery_mode_active=True,
+            reconnect_started=False,
+            status="failure",
+            error=f"start-failed: {exc}",
+        )
         return {
             "status": "failure",
             "error": f"start-failed: {exc}",
             "previous_connection": previous_connection,
             "reconnect_started": False,
         }
+
+    append_reconnect_previous_log(
+        previous_connection=previous_connection,
+        recovery_mode_active=True,
+        reconnect_started=True,
+        status="success",
+    )
 
     return {
         "status": "success",
@@ -343,11 +386,19 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/reconnect-previous":
             if not self.recovery.get("active"):
+                previous_connection = read_ap_only_state_value("active_connection") or "unknown"
+                append_reconnect_previous_log(
+                    previous_connection=previous_connection,
+                    recovery_mode_active=False,
+                    reconnect_started=False,
+                    status="failure",
+                    error="recovery-not-active",
+                )
                 self.send_json(
                     {
                         "status": "failure",
                         "error": "recovery-not-active",
-                        "previous_connection": read_ap_only_state_value("active_connection") or "unknown",
+                        "previous_connection": previous_connection,
                         "reconnect_started": False,
                         "safety": "No recovery cleanup was started from normal mode.",
                     },
