@@ -3017,9 +3017,19 @@ apply_guided_install_modules() {
   if ! seed_verbose; then
     guided_step_heading "install-modules" "system"
     if [ -n "$installable_modules" ]; then
-      guided_status_line "INFO" "packages" "$installable_modules"
+      if [ "$(seed_lang)" = "fr" ]; then
+        guided_status_line "INFO" "paquets" "$installable_modules"
+      else
+        guided_status_line "INFO" "packages" "$installable_modules"
+      fi
     else
-      guided_status_line "OK" "packages" "none"
+      if [ "$(seed_lang)" = "fr" ]; then
+        guided_status_line "OK" "paquets" "aucun à installer"
+      elif [ -n "$installed_modules" ]; then
+        guided_status_line "OK" "packages" "already installed"
+      else
+        guided_status_line "OK" "packages" "nothing to install"
+      fi
     fi
     [ -n "$installed_modules" ] && guided_status_line "OK" "present" "$installed_modules"
     [ -n "$manual_modules" ] && guided_status_line "INFO" "manual" "$manual_modules"
@@ -3640,6 +3650,14 @@ apply_guided_suggest_start() {
       guided_status_line "WARN" "homepage" "missing"
     fi
 
+    ui_line ""
+    if [ "$(seed_lang)" = "fr" ]; then
+      ui_line "Avant de démarrer :"
+      ui_line "SEED_KIT_LANG=fr sh seed-kit.sh package apply-guided $package_file --step readiness"
+    else
+      ui_line "Before starting:"
+      ui_line "SEED_KIT_LANG=en sh seed-kit.sh package apply-guided $package_file --step readiness"
+    fi
     ui_line ""
     if [ "$(seed_lang)" = "fr" ]; then
       ui_line "Commandes manuelles suggérées :"
