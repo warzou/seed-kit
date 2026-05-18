@@ -143,6 +143,28 @@ write_profile() {
   } > "$profile"
 }
 
+transform_compose_for_deploy() {
+  src_file=$1
+  dst_file=$2
+
+  if [ ! -f "$src_file" ]; then
+    echo "transform compose: source missing: $src_file" >&2
+    return 2
+  fi
+
+  tmp_file="${dst_file}.seed-kit-compose-tmp.$$"
+
+  sed -e 's#\./\./config/caddy/Caddyfile#./Caddyfile#g' \
+    -e 's#\.\./config/caddy/Caddyfile#./Caddyfile#g' \
+    -e 's#\./\./config/homepage#./homepage#g' \
+    -e 's#\.\./config/homepage#./homepage#g' \
+    -e 's#${TAILSCALE_IP:-100\.110\.92\.41}#${TAILSCALE_IP:-127.0.0.1}#g' \
+    -e 's#100\.110\.92\.41#127.0.0.1#g' \
+    "$src_file" > "$tmp_file"
+
+  mv "$tmp_file" "$dst_file"
+}
+
 write_checksums() {
   staging_dir="$1"
   sums_file="$staging_dir/SHA256SUMS"
@@ -229,7 +251,9 @@ create_rpi_edge_vps() {
   write_package_descriptor "$staging_dir/seed-kit-package.sh"
   write_profile "$staging_dir/profiles/rpi-edge.profile"
 
-  copy_allowed_path "$source_dir" "$staging_dir" "compose/docker-compose.yml" "services/docker-compose.yml"
+  if copy_allowed_path "$source_dir" "$staging_dir" "compose/docker-compose.yml" "services/docker-compose.yml"; then
+    transform_compose_for_deploy "$staging_dir/services/docker-compose.yml" "$staging_dir/services/docker-compose.yml"
+  fi
   copy_allowed_path "$source_dir" "$staging_dir" "config/caddy" "configs/caddy"
   copy_allowed_path "$source_dir" "$staging_dir" "config/homepage" "configs/homepage"
 

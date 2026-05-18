@@ -3558,6 +3558,103 @@ deploy_id_from_descriptor() {
   printf '%s\n' "$deploy_id"
 }
 
+deployed_stack_check() {
+  deploy_root=$1
+  compose_file=$2
+  caddy_file=$3
+  homepage_dir=$4
+
+  DEPL_STACK_DETECTED="no"
+  DEPL_STACK_COMPOSE_PRESENT="no"
+  DEPL_STACK_COMPOSE_VALID="unknown"
+  DEPL_STACK_CADDY_PRESENT="no"
+  DEPL_STACK_CADDY_VALID="unknown"
+  DEPL_STACK_HOME_PRESENT="no"
+  DEPL_STACK_VOLUME_OK="yes"
+  DEPL_STACK_BIND_OK="yes"
+  DEPL_STACK_START_OK="no"
+  DEPL_STACK_VALIDATED="no"
+  DEPL_STACK_DEPLOYED_CONFIGURABLE="no"
+  DEPL_STACK_VALIDATION_MESSAGE=""
+
+  deployed_stack_add_msg() {
+    msg=$1
+
+    if [ -z "$DEPL_STACK_VALIDATION_MESSAGE" ]; then
+      DEPL_STACK_VALIDATION_MESSAGE="  - $msg"
+    else
+      DEPL_STACK_VALIDATION_MESSAGE="$DEPL_STACK_VALIDATION_MESSAGE\n  - $msg"
+    fi
+  }
+
+  if [ -f "$compose_file" ] && [ -f "$caddy_file" ] && [ -d "$homepage_dir" ]; then
+    DEPL_STACK_DETECTED="yes"
+  fi
+
+  if [ -f "$compose_file" ]; then
+    DEPL_STACK_COMPOSE_PRESENT="yes"
+
+    if grep -q '\.\./config/' "$compose_file" 2>/dev/null; then
+      DEPL_STACK_VOLUME_OK="no"
+      deployed_stack_add_msg "legacy source paths (../config) detected in compose"
+    fi
+
+    if grep -q '100\.110\.92\.41' "$compose_file" 2>/dev/null; then
+      DEPL_STACK_BIND_OK="no"
+      deployed_stack_add_msg "fixed bind IP from previous node detected in compose"
+    fi
+
+    if grep -q '\./Caddyfile' "$compose_file" 2>/dev/null && [ ! -f "$deploy_root/Caddyfile" ]; then
+      DEPL_STACK_VOLUME_OK="no"
+      deployed_stack_add_msg "compose mounts ./Caddyfile but deploy path is missing"
+    fi
+
+    if grep -q '\./homepage' "$compose_file" 2>/dev/null && [ ! -d "$deploy_root/homepage" ]; then
+      DEPL_STACK_VOLUME_OK="no"
+      deployed_stack_add_msg "compose mounts ./homepage but deploy path is missing"
+    fi
+
+    if docker compose version >/dev/null 2>&1; then
+      if docker compose -f "$compose_file" config >/dev/null 2>&1; then
+        DEPL_STACK_COMPOSE_VALID="yes"
+      else
+        DEPL_STACK_COMPOSE_VALID="no"
+        deployed_stack_add_msg "docker compose config failed"
+      fi
+    fi
+  fi
+
+  if [ -f "$caddy_file" ]; then
+    DEPL_STACK_CADDY_PRESENT="yes"
+    if command -v caddy >/dev/null 2>&1; then
+      if caddy validate --config "$caddy_file" >/dev/null 2>&1; then
+        DEPL_STACK_CADDY_VALID="yes"
+      else
+        DEPL_STACK_CADDY_VALID="no"
+        deployed_stack_add_msg "caddy validate failed"
+      fi
+    fi
+  fi
+
+  if [ -d "$homepage_dir" ]; then
+    DEPL_STACK_HOME_PRESENT="yes"
+  fi
+
+  if [ "$DEPL_STACK_COMPOSE_PRESENT" = "yes" ] && [ "$DEPL_STACK_CADDY_PRESENT" = "yes" ] && [ "$DEPL_STACK_HOME_PRESENT" = "yes" ]; then
+    DEPL_STACK_DEPLOYED_CONFIGURABLE="yes"
+  fi
+
+  if [ "$DEPL_STACK_COMPOSE_VALID" = "yes" ] && [ "$DEPL_STACK_CADDY_VALID" = "yes" ]; then
+    DEPL_STACK_VALIDATED="yes"
+  fi
+
+  if [ "$DEPL_STACK_COMPOSE_PRESENT" = "yes" ] && [ "$DEPL_STACK_DEPLOYED_CONFIGURABLE" = "yes" ] && [ "$DEPL_STACK_VOLUME_OK" = "yes" ] && [ "$DEPL_STACK_BIND_OK" = "yes" ] && [ "$DEPL_STACK_COMPOSE_VALID" = "yes" ] && [ "$DEPL_STACK_CADDY_VALID" = "yes" ]; then
+    DEPL_STACK_START_OK="yes"
+  else
+    DEPL_STACK_START_OK="no"
+  fi
+}
+
 apply_guided_deploy_configs() {
   package_root=$1
   descriptor_content=""
@@ -3744,6 +3841,7 @@ apply_guided_validate_deployed() {
   compose_file="$deploy_root/docker-compose.yml"
   caddy_file="$deploy_root/Caddyfile"
   homepage_dir="$deploy_root/homepage"
+  deployed_stack_check "$deploy_root" "$compose_file" "$caddy_file" "$homepage_dir"
 
   ui_section "DEPLOYED CONFIG VALIDATION"
   ui_line "Deploy root:"
@@ -3754,28 +3852,28 @@ apply_guided_validate_deployed() {
   ui_line "docker compose:"
   if [ ! -f "$compose_file" ]; then
     ui_line "  missing: docker-compose.yml"
-  elif docker compose version >/dev/null 2>&1; then
-    if docker compose -f "$compose_file" config >/dev/null 2>&1; then
+  elif [ "$DEPL_STACK_COMPOSE_VALID" = "yes" ]; then
       ui_line "  OK"
-    else
+  elif [ "$DEPL_STACK_COMPOSE_VALID" = "no" ]; then
       ui_line "  warning: docker compose config failed"
-    fi
+  elif [ "$DEPL_STACK_COMPOSE_VALID" = "unknown" ]; then
+      ui_line "  warning: docker compose unavailable, skipped"
   else
-    ui_line "  warning: docker compose unavailable, skipped"
+      ui_line "  missing: docker compose unavailable state"
   fi
 
   ui_line ""
   ui_line "caddy config:"
   if [ ! -f "$caddy_file" ]; then
     ui_line "  missing: Caddyfile"
-  elif command -v caddy >/dev/null 2>&1; then
-    if caddy validate --config "$caddy_file" >/dev/null 2>&1; then
+  elif [ "$DEPL_STACK_CADDY_VALID" = "yes" ]; then
       ui_line "  OK"
-    else
+  elif [ "$DEPL_STACK_CADDY_VALID" = "no" ]; then
       ui_line "  warning: caddy validate failed"
-    fi
+  elif [ "$DEPL_STACK_CADDY_VALID" = "unknown" ]; then
+      ui_line "  warning: caddy unavailable, skipped"
   else
-    ui_line "  warning: caddy unavailable, skipped"
+      ui_line "  missing: caddy state unavailable"
   fi
 
   ui_line ""
@@ -3787,11 +3885,23 @@ apply_guided_validate_deployed() {
   fi
 
   ui_line ""
+  if [ "$DEPL_STACK_START_OK" = "yes" ]; then
+    ui_line "Validation result: start prerequisites are likely satisfied."
+  else
+    ui_line "Validation result: start prerequisites are not satisfied."
+    if [ -n "$DEPL_STACK_VALIDATION_MESSAGE" ]; then
+      ui_line ""
+      ui_line "Blockers:"
+      printf '%b\n' "$DEPL_STACK_VALIDATION_MESSAGE"
+    fi
+  fi
+
+  ui_line ""
   ui_line "Suggested next manual steps:"
-  ui_line "  - docker compose up"
-  ui_line "  - caddy reload"
+  ui_line "  - if startable: docker compose up (when ready)"
+  ui_line "  - caddy reload after compose up"
   ui_line "  - tailscale up"
-  ui_line "  - cloudflared login"
+  ui_line "  - cloudflared tunnel login/create/configure"
   ui_line ""
   ui_line "No services were started."
   ui_line "No configs were copied."
@@ -3816,43 +3926,68 @@ apply_guided_suggest_start() {
   compose_file="$deploy_root/docker-compose.yml"
   caddy_file="$deploy_root/Caddyfile"
   homepage_dir="$deploy_root/homepage"
+  deployed_stack_check "$deploy_root" "$compose_file" "$caddy_file" "$homepage_dir"
 
   if ! seed_verbose; then
     guided_step_heading "suggest-start" "$deploy_id"
-    if [ -f "$compose_file" ]; then
+    if [ "$DEPL_STACK_COMPOSE_PRESENT" = "yes" ]; then
       guided_status_line "OK" "compose" "present"
     else
       guided_status_line "WARN" "compose" "missing"
     fi
-    if [ -f "$caddy_file" ]; then
+    if [ "$DEPL_STACK_CADDY_PRESENT" = "yes" ]; then
       guided_status_line "OK" "caddy" "present"
     else
       guided_status_line "WARN" "caddy" "missing"
     fi
-    if [ -d "$homepage_dir" ]; then
+    if [ "$DEPL_STACK_HOME_PRESENT" = "yes" ]; then
       guided_status_line "OK" "homepage" "present"
     else
       guided_status_line "WARN" "homepage" "missing"
     fi
 
-    ui_line ""
-    if [ "$(seed_lang)" = "fr" ]; then
-      ui_line "Avant de démarrer :"
-      ui_line "SEED_KIT_LANG=fr sh seed-kit.sh package apply-guided $package_file --step readiness"
+    if [ "$DEPL_STACK_START_OK" = "yes" ]; then
+      guided_status_line "OK" "startability" "ready"
     else
-      ui_line "Before starting:"
-      ui_line "SEED_KIT_LANG=en sh seed-kit.sh package apply-guided $package_file --step readiness"
+      guided_status_line "WARN" "startability" "blocked"
     fi
-    ui_line ""
-    if [ "$(seed_lang)" = "fr" ]; then
-      ui_line "Commandes manuelles suggérées :"
+
+    if [ "$DEPL_STACK_START_OK" = "yes" ]; then
+      ui_line ""
+      if [ "$(seed_lang)" = "fr" ]; then
+        ui_line "Avant de démarrer :"
+        ui_line "SEED_KIT_LANG=fr sh seed-kit.sh package apply-guided $package_file --step readiness"
+      else
+        ui_line "Before starting:"
+        ui_line "SEED_KIT_LANG=en sh seed-kit.sh package apply-guided $package_file --step readiness"
+      fi
+      ui_line ""
+      if [ "$(seed_lang)" = "fr" ]; then
+        ui_line "Commandes manuelles suggérées :"
+      else
+        ui_line "Suggested manual commands:"
+      fi
+      ui_line "cd ~/seed-kit-deploy/$deploy_id"
+      ui_line "docker compose up -d"
+      ui_line "docker compose ps"
+      ui_line "curl http://127.0.0.1:8080"
     else
-      ui_line "Suggested manual commands:"
+      ui_line ""
+      ui_line "Start blocked:"
+      if [ -n "$DEPL_STACK_VALIDATION_MESSAGE" ]; then
+        printf '%b\n' "$DEPL_STACK_VALIDATION_MESSAGE"
+      else
+        if [ "$(seed_lang)" = "fr" ]; then
+          ui_line "  - Vérifications en attente"
+        else
+          ui_line "  - Preconditions not yet validated"
+        fi
+      fi
+      ui_line ""
+      ui_line "Run first:"
+      ui_line "  sh seed-kit.sh package apply-guided $package_file --step validate-deployed"
     fi
-    ui_line "cd ~/seed-kit-deploy/$deploy_id"
-    ui_line "docker compose up -d"
-    ui_line "docker compose ps"
-    ui_line "curl http://127.0.0.1:8080"
+
     ui_line ""
     if [ "$(seed_lang)" = "fr" ]; then
       ui_line "Identités manuelles :"
@@ -3894,15 +4029,19 @@ apply_guided_suggest_start() {
   fi
 
   ui_line ""
-  ui_line "Review first:"
-  ui_line "  sh seed-kit.sh package apply-guided $package_file --step validate-deployed"
-
-  ui_line ""
-  ui_line "Manual commands:"
-  ui_line "  cd ~/seed-kit-deploy/$deploy_id"
-  ui_line "  docker compose up -d"
-  ui_line "  docker compose ps"
-  ui_line "  curl http://127.0.0.1:8080"
+  if [ "$DEPL_STACK_START_OK" = "yes" ]; then
+    ui_line "Manual commands:"
+    ui_line "  cd ~/seed-kit-deploy/$deploy_id"
+    ui_line "  docker compose up -d"
+    ui_line "  docker compose ps"
+    ui_line "  curl http://127.0.0.1:8080"
+  else
+    ui_line "Start is blocked; validate-deployed should be clean before manual start."
+    if [ -n "$DEPL_STACK_VALIDATION_MESSAGE" ]; then
+      ui_line "Blocking details:"
+      printf '%b\n' "$DEPL_STACK_VALIDATION_MESSAGE"
+    fi
+  fi
 
   ui_line ""
   ui_line "Identity/manual steps:"
@@ -3918,6 +4057,7 @@ apply_guided_suggest_start() {
   ui_line ""
   ui_line "Seed-Kit did not start services."
   ui_line "No compose up/pull, service start, Caddy reload/restart, tailscale up, cloudflared login, secrets, DNS/cutover, reboot, or network restart was attempted."
+  return 0
 }
 
 readiness_bool() {
@@ -4103,6 +4243,7 @@ apply_guided_readiness() {
   compose_file="$deploy_root/docker-compose.yml"
   caddy_file="$deploy_root/Caddyfile"
   homepage_dir="$deploy_root/homepage"
+  deployed_stack_check "$deploy_root" "$compose_file" "$caddy_file" "$homepage_dir"
 
   if seed_verbose; then
     ui_section "$(seed_msg readiness)"
@@ -4194,49 +4335,30 @@ apply_guided_readiness() {
     fi
   fi
 
-  services_deployed=no
-  services_validated=no
-  if [ -f "$compose_file" ] && [ -f "$caddy_file" ] && [ -d "$homepage_dir" ]; then
-    services_deployed=yes
-  fi
-  compose_ok=no
-  caddy_ok=no
-  if [ -f "$compose_file" ]; then
-    if docker compose version >/dev/null 2>&1; then
-      if docker compose -f "$compose_file" config >/dev/null 2>&1; then
-        compose_ok=yes
-      fi
-    else
-      compose_ok=unknown
-    fi
-  fi
-  if [ -f "$caddy_file" ]; then
-    if command -v caddy >/dev/null 2>&1; then
-      if caddy validate --config "$caddy_file" >/dev/null 2>&1; then
-        caddy_ok=yes
-      fi
-    else
-      caddy_ok=unknown
-    fi
-  fi
-  if [ "$services_deployed" = "yes" ]; then
-    case "$compose_ok:$caddy_ok" in
-      yes:yes|yes:unknown|unknown:yes|unknown:unknown)
-        services_validated=yes
-        ;;
-    esac
-  fi
+  services_deployed="$DEPL_STACK_DEPLOYED_CONFIGURABLE"
+  services_validated="$DEPL_STACK_VALIDATED"
+  services_startable="$DEPL_STACK_START_OK"
   services_state=ok
-  if seed_verbose; then
-    services_summary=$(seed_msg deployed_validated)
+  if [ "$services_deployed" = "yes" ] && [ "$services_validated" = "yes" ] && [ "$services_startable" = "yes" ]; then
+    if [ "$(seed_lang)" = "fr" ]; then
+      services_summary="déployés, validés, démarrables"
+    else
+      services_summary="deployed, validated, startable"
+    fi
   else
-    services_summary=$(seed_msg ready_plural)
-  fi
-  if [ "$services_validated" != "yes" ]; then
     services_state=warn
     if [ "$services_deployed" = "yes" ]; then
-      if seed_verbose; then
-        services_summary=$(seed_msg deployed_validation_needed)
+      services_summary=$(seed_msg deployed_validation_needed)
+      if [ "$services_validated" = "yes" ]; then
+        if [ "$services_startable" = "yes" ]; then
+          services_summary=$(seed_msg deployed_validated)
+        else
+          if [ "$(seed_lang)" = "fr" ]; then
+            services_summary="déployés, validés, démarrage bloqué"
+          else
+            services_summary="deployed, validated, start blocked"
+          fi
+        fi
       else
         services_summary=$(seed_msg to_configure)
       fi
@@ -4269,8 +4391,16 @@ apply_guided_readiness() {
     ui_line "$next_index. cloudflared tunnel login/create/configure"
     next_index=$((next_index + 1))
   fi
-  if [ "$services_validated" != "yes" ]; then
-    ui_line "$next_index. sh seed-kit.sh package apply-guided <package> --step deploy-configs"
+  if [ "$services_startable" = "no" ] || [ "$services_validated" != "yes" ]; then
+    if [ "$services_deployed" = "yes" ]; then
+      ui_line "$next_index. sh seed-kit.sh package apply-guided <package> --step validate-deployed"
+    else
+      ui_line "$next_index. sh seed-kit.sh package apply-guided <package> --step deploy-configs"
+    fi
+    next_index=$((next_index + 1))
+  fi
+  if [ "$services_deployed" = "yes" ] && [ "$services_startable" = "yes" ] && [ "$cloudflared_configured_status" != "yes" ] && [ "$tailscale_connected" != "yes" ]; then
+    ui_line "$next_index. sh seed-kit.sh package apply-guided <package> --step suggest-start"
   fi
   if [ "$next_index" -eq 1 ]; then
     ui_line "$(seed_msg none)"
@@ -4314,9 +4444,15 @@ apply_guided_readiness() {
   ui_line "services:"
   printf "$(seed_msg details_deploy_root)\\n" "~/seed-kit-deploy/$deploy_id"
   printf "$(seed_msg details_deployed)\\n" "$services_deployed"
-  ui_line "  docker compose config: $compose_ok"
-  ui_line "  caddy validate: $caddy_ok"
+  ui_line "  docker compose config: $DEPL_STACK_COMPOSE_VALID"
+  ui_line "  caddy validate: $DEPL_STACK_CADDY_VALID"
+  printf '  startable: %s\n' "$services_startable"
   printf "$(seed_msg details_validated)\\n" "$services_validated"
+  if [ "$services_startable" != "yes" ] && [ -n "$DEPL_STACK_VALIDATION_MESSAGE" ]; then
+    ui_line ""
+    ui_line "  blocking checks:"
+    printf '%b\n' "$DEPL_STACK_VALIDATION_MESSAGE" | sed 's/^/    /'
+  fi
 }
 
 apply_guided_mode_label() {

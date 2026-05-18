@@ -129,4 +129,48 @@ else
   pass "archive skipped"
 fi
 
+tmp_legacy="$tmp_root/source-legacy"
+mkdir -p "$tmp_legacy/compose" "$tmp_legacy/config/caddy" "$tmp_legacy/config/homepage" "$tmp_legacy/output"
+printf '%s\n' "services:\n  rpi-edge:\n    image: nginx\n    volumes:\n      - ../config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro\n      - ../config/homepage:/app/config:ro\n    ports:\n      - \"\${TAILSCALE_IP:-100.110.92.41}:8080:80\"" > "$tmp_legacy/compose/docker-compose.yml"
+printf '%s\n' ":80" > "$tmp_legacy/config/caddy/Caddyfile"
+printf '%s\n' "title: rpi-edge" > "$tmp_legacy/config/homepage/settings.yaml"
+
+legacy_output="$tmp_root/legacy-output"
+mkdir -p "$legacy_output"
+sh "$service_package" create --service rpi-edge-vps --dry-run --output "$legacy_output" --source "$tmp_legacy" >/dev/null
+legacy_compose="$legacy_output/rpi-edge-service/services/docker-compose.yml"
+  grep -q './Caddyfile' "$legacy_compose" || fail "compose did not rewrite Caddyfile mount path"
+  grep -q './homepage' "$legacy_compose" || fail "compose did not rewrite homepage volume path"
+  if grep -q '\.\./config/' "$legacy_compose" || grep -q '100\.110\.92\.41' "$legacy_compose"; then
+    fail "compose still contains legacy source paths or fixed Tailscale IP"
+  fi
+  pass "compose transform normalized legacy references"
+
+tmp_readiness="$tmp_root/ready"
+mkdir -p "$tmp_readiness/home/seed-kit-deploy/rpi-edge/homepage"
+mkdir -p "$tmp_readiness/home/seed-kit-deploy/rpi-edge-copy/homepage"
+cp "$legacy_compose" "$tmp_readiness/home/seed-kit-deploy/rpi-edge/docker-compose.yml"
+cp "$tmp_legacy/config/caddy/Caddyfile" "$tmp_readiness/home/seed-kit-deploy/rpi-edge/Caddyfile"
+cp "$tmp_legacy/config/homepage/settings.yaml" "$tmp_readiness/home/seed-kit-deploy/rpi-edge/homepage/settings.yaml"
+cat > "$tmp_readiness/home/seed-kit-deploy/rpi-edge/docker-compose.yml" <<'EOF'
+services:
+  web:
+    image: nginx
+    volumes:
+      - ../config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../config/homepage:/app/config:ro
+    ports:
+      - "${TAILSCALE_IP:-100.110.92.41}:8080:80"
+EOF
+
+out_validate="$(HOME="$tmp_readiness/home" sh seed-kit.sh package apply-guided "$legacy_output/rpi-edge-service.tar.gz" --step validate-deployed 2>&1)"
+printf '%s\n' "$out_validate" | grep -q 'Validation result: start prerequisites are not satisfied.' || fail "validate-deployed did not flag legacy package deploy"
+printf '%s\n' "$out_validate" | grep -q 'legacy source paths' || fail "validate-deployed did not report legacy source paths"
+printf '%s\n' "$out_validate" | grep -q 'Blockers:' || fail "validate-deployed did not list blockers"
+
+out_start="$(HOME="$tmp_readiness/home" sh seed-kit.sh package apply-guided "$legacy_output/rpi-edge-service.tar.gz" --step suggest-start 2>&1)"
+printf '%s\n' "$out_start" | grep -q 'Start blocked:' || fail "suggest-start did not block on invalid compose layout"
+printf '%s\n' "$out_start" | grep -q 'Run first:' || fail "suggest-start did not point to validate-deployed"
+pass "validate-deployed detects legacy path/ip and blocks suggest-start"
+
 echo "service-package smoke OK"
