@@ -28,6 +28,10 @@ AP_ONLY_NM_STATE = Path("/tmp/wifi-kit-ap-only-nm-state")
 RECONNECT_PREVIOUS_LOG = Path("/tmp/wifi-kit-reconnect-previous.log")
 CONNECT_RECOVERY_LOG = Path("/tmp/wifi-kit-connect-recovery.log")
 CONNECT_RECOVERY_TIMEOUT_SECONDS = 180
+START_AP_MODE_LOG = Path("/tmp/wifi-kit-start-ap-mode.log")
+RETURN_DEFAULT_NETWORK_LOG = Path("/tmp/wifi-kit-return-default-network.log")
+DEFAULT_NETWORK_CONNECTION = "netplan-wlan0-GL-MT6000-d53"
+AP_MODE_MAX_SECONDS = 300
 
 CAPTIVE_PATHS = {
     "/generate_204",
@@ -41,6 +45,8 @@ CAPTIVE_PATHS = {
 ACTION_PATHS = {
     "/reconnect-previous": "reconnect-previous",
     "/start-recovery": "start-recovery",
+    "/start-ap-mode": "start-ap-mode",
+    "/return-default-network": "return-default-network",
     "/exit-recovery": "exit-recovery",
     "/reboot-recovery": "reboot-recovery",
     "/set-recovery-password": "set-recovery-password",
@@ -135,6 +141,151 @@ def append_reconnect_previous_log(
             handle.write(" ".join(fields) + "\n")
     except OSError:
         pass
+
+
+def append_action_log(path: Path, *, action: str, status: str, **fields: object) -> None:
+    timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    parts = [
+        f"timestamp={json.dumps(timestamp)}",
+        f"action={action}",
+        f"status={json.dumps(status)}",
+    ]
+    for key, value in fields.items():
+        parts.append(f"{key}={json.dumps(str(value))}")
+    try:
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(" ".join(parts) + "\n")
+    except OSError:
+        pass
+
+
+def bool_payload(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def start_ap_mode(payload: dict) -> tuple[dict, int]:
+    dry_run = bool_payload(payload.get("dry_run"))
+    action = "start-ap-mode"
+    if dry_run:
+        append_action_log(START_AP_MODE_LOG, action=action, status="planned", max_seconds=AP_MODE_MAX_SECONDS)
+        return {
+            "status": "planned",
+            "action": action,
+            "ap_started": False,
+            "dry_run": True,
+            "ssid": f"Wifi-Kit-{socket.gethostname() or 'node'}",
+            "timeout_seconds": AP_MODE_MAX_SECONDS,
+            "log": str(START_AP_MODE_LOG),
+            "warning": "Real start can interrupt normal Wi-Fi access while AP mode starts.",
+        }, 200
+
+    command = [
+        "sh",
+        str(AP_SETUP_TEST_SH),
+        "apply-ap-recovery-manual-test",
+        "--dangerous-real-apply",
+        "--confirm",
+        "WIFI-KIT AP RECOVERY MANUAL TEST",
+        "--max-seconds",
+        str(AP_MODE_MAX_SECONDS),
+    ]
+    if os.geteuid() != 0:
+        sudo_bin = find_tool("sudo")
+        if not sudo_bin:
+            append_action_log(START_AP_MODE_LOG, action=action, status="failure", error="root-required")
+            return {
+                "status": "failure",
+                "action": action,
+                "error": "root-required",
+                "ap_started": False,
+                "log": str(START_AP_MODE_LOG),
+            }, 500
+        command = [sudo_bin, "-n", *command]
+    try:
+        subprocess.Popen(
+            command,
+            cwd=str(SCRIPT_DIR.parent),
+            start_new_session=True,
+            stdin=subprocess.DEVNULL,
+            stdout=open(START_AP_MODE_LOG, "a", encoding="utf-8"),
+            stderr=subprocess.STDOUT,
+        )
+    except OSError as exc:
+        append_action_log(START_AP_MODE_LOG, action=action, status="failure", error=f"start-failed: {exc}")
+        return {
+            "status": "failure",
+            "action": action,
+            "error": f"start-failed: {exc}",
+            "ap_started": False,
+            "log": str(START_AP_MODE_LOG),
+        }, 500
+
+    append_action_log(START_AP_MODE_LOG, action=action, status="started", max_seconds=AP_MODE_MAX_SECONDS)
+    return {
+        "status": "started",
+        "action": action,
+        "ap_started": True,
+        "ssid": f"Wifi-Kit-{socket.gethostname() or 'node'}",
+        "timeout_seconds": AP_MODE_MAX_SECONDS,
+        "expected_behavior": "normal-network-may-drop-ap-captive-ui-starts-on-port-80",
+        "secret_policy": "AP test password is supplied by fixed runtime config and not logged by this endpoint",
+        "log": str(START_AP_MODE_LOG),
+    }, 202
+
+
+def return_default_network(payload: dict) -> tuple[dict, int]:
+    dry_run = bool_payload(payload.get("dry_run"))
+    action = "return-default-network"
+    connection = DEFAULT_NETWORK_CONNECTION
+    if dry_run:
+        append_action_log(RETURN_DEFAULT_NETWORK_LOG, action=action, status="planned", connection=connection)
+        return {
+            "status": "planned",
+            "action": action,
+            "default_connection": connection,
+            "return_started": False,
+            "dry_run": True,
+            "log": str(RETURN_DEFAULT_NETWORK_LOG),
+            "warning": "Real return can interrupt network access for a few seconds.",
+        }, 200
+
+    nmcli_bin = find_tool("nmcli")
+    if not nmcli_bin:
+        append_action_log(RETURN_DEFAULT_NETWORK_LOG, action=action, status="failure", connection=connection, error="nmcli-missing")
+        return {"status": "failure", "action": action, "error": "nmcli-missing", "return_started": False}, 500
+
+    command = [nmcli_bin, "connection", "up", connection]
+    if os.geteuid() != 0:
+        sudo_bin = find_tool("sudo")
+        if not sudo_bin:
+            append_action_log(RETURN_DEFAULT_NETWORK_LOG, action=action, status="failure", connection=connection, error="root-required")
+            return {"status": "failure", "action": action, "error": "root-required", "return_started": False}, 500
+        command = [sudo_bin, "-n", *command]
+
+    try:
+        subprocess.Popen(
+            command,
+            cwd=str(SCRIPT_DIR.parent),
+            start_new_session=True,
+            stdin=subprocess.DEVNULL,
+            stdout=open(RETURN_DEFAULT_NETWORK_LOG, "a", encoding="utf-8"),
+            stderr=subprocess.STDOUT,
+        )
+    except OSError as exc:
+        append_action_log(RETURN_DEFAULT_NETWORK_LOG, action=action, status="failure", connection=connection, error=f"start-failed: {exc}")
+        return {"status": "failure", "action": action, "error": f"start-failed: {exc}", "return_started": False}, 500
+
+    append_action_log(RETURN_DEFAULT_NETWORK_LOG, action=action, status="started", connection=connection)
+    return {
+        "status": "started",
+        "action": action,
+        "default_connection": connection,
+        "return_started": True,
+        "expected_behavior": "NetworkManager reconnects the whitelisted default connection.",
+        "log": str(RETURN_DEFAULT_NETWORK_LOG),
+    }, 202
 
 
 def start_reconnect_previous() -> dict:
@@ -669,6 +820,16 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
             self.send_json(payload, status=status)
             return
 
+        if parsed.path == "/start-ap-mode":
+            payload, status = start_ap_mode(parse_post_payload(self))
+            self.send_json(payload, status=status)
+            return
+
+        if parsed.path == "/return-default-network":
+            payload, status = return_default_network(parse_post_payload(self))
+            self.send_json(payload, status=status)
+            return
+
         if parsed.path == "/reconnect-previous":
             if not self.recovery.get("active"):
                 previous_connection = read_ap_only_state_value("active_connection") or "unknown"
@@ -814,7 +975,7 @@ def main() -> None:
         "action_endpoints": sorted(ACTION_PATHS.keys()),
     }
     print(f"wifi-kit read-only HTTP on http://{args.host}:{args.port}")
-    print("GET read-only; POST /reconnect-previous only when recovery is active")
+    print("GET read-only; POST actions: /reconnect-previous, /start-ap-mode, /return-default-network")
     server.serve_forever()
 
 

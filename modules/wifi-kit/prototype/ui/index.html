@@ -1035,7 +1035,7 @@
         </div>
         <div class="mode-line">
           <strong id="mode-summary">Wifi-Kit observe le reseau sans mutation.</strong>
-          <p class="section-copy" id="mode-detail">Le mode recovery demarre seulement sur demande explicite ou quand aucun Wi-Fi utilisable n'est disponible.</p>
+          <p class="section-copy" id="mode-detail">Le mode AP demarre seulement sur demande explicite ou quand aucun Wi-Fi utilisable n'est disponible.</p>
         </div>
         <div class="node-grid" aria-label="Etat detaille du node">
           <div class="metric"><span>Hostname</span><strong id="node-hostname">...</strong></div>
@@ -1055,12 +1055,12 @@
       <section class="panel recovery-panel" id="recovery-panel" aria-labelledby="recovery-title">
         <div class="section-head">
           <div>
-            <h2 id="recovery-title">Recovery</h2>
+            <h2 id="recovery-title">Mode AP</h2>
             <p class="section-copy" id="recovery-copy">AP temporaire avec DHCP, DNS local et UI captive sur le node.</p>
           </div>
           <span class="chip" id="recovery-chip">Plan-only</span>
         </div>
-        <div class="recovery-grid" aria-label="Etat du recovery">
+        <div class="recovery-grid" aria-label="Etat du mode AP">
           <div class="metric"><span>SSID</span><strong id="recovery-ssid">...</strong></div>
           <div class="metric"><span>Mot de passe AP</span><strong id="recovery-ap-password">12345678</strong></div>
           <div class="metric"><span>IP locale</span><strong id="recovery-ip">192.168.50.1</strong></div>
@@ -1074,22 +1074,28 @@
       <section class="panel network-actions-panel" aria-labelledby="network-actions-title">
         <div class="section-head">
           <div>
-            <h2 id="network-actions-title">Action de r&eacute;cup&eacute;ration</h2>
-            <p class="section-copy">Les actions reelles et les plans de simulation sont separes.</p>
+            <h2 id="network-actions-title">Actions de test</h2>
+            <p class="section-copy">Ces actions peuvent couper l'acc&egrave;s r&eacute;seau pendant quelques secondes.</p>
           </div>
           <span class="chip">SAFE</span>
         </div>
         <div class="recovery-actions">
           <div class="action-card">
             <strong>Wi-Fi par d&eacute;faut</strong>
-            <p>Arr&ecirc;te le mode recovery et reconnecte le Wi-Fi pr&eacute;c&eacute;dent.</p>
+            <p>Arr&ecirc;te le mode AP et reconnecte le Wi-Fi pr&eacute;c&eacute;dent.</p>
             <button class="button" type="button" data-network-action="reconnect-previous">Wi-Fi par d&eacute;faut</button>
             <button class="button secondary" type="button" data-network-plan="reconnect-previous">Afficher le plan</button>
           </div>
           <div class="action-card">
-            <strong>Demarrer le mode recovery</strong>
-            <p>Prevoit AP, DHCP, DNS captive et UI locale; lancement reel seulement via script garde.</p>
-            <button class="button secondary" type="button" data-network-action="start-recovery">Afficher le plan</button>
+            <strong>Activer le mode AP</strong>
+            <p>D&eacute;marre l'AP Wifi-Kit avec DHCP, DNS captive et UI locale sur le port 80.</p>
+            <button class="button" type="button" data-network-action="start-ap-mode">Activer le mode AP</button>
+            <button class="button secondary" type="button" data-network-plan="start-ap-mode">Afficher le plan</button>
+          </div>
+          <div class="action-card">
+            <strong>Retour au r&eacute;seau initial</strong>
+            <p>Reconnecte la connexion de test autoris&eacute;e: netplan-wlan0-GL-MT6000-d53.</p>
+            <button class="button secondary" type="button" data-network-action="return-default-network">Retour au r&eacute;seau initial</button>
           </div>
         </div>
         <div id="network-action-result" class="callout recovery-result" hidden></div>
@@ -1473,10 +1479,10 @@
     function renderRecovery() {
       const recovery = recoveryState();
       const active = Boolean(recovery.active);
-      document.getElementById('recovery-chip').textContent = active ? 'Recovery actif' : 'Plan-only';
+      document.getElementById('recovery-chip').textContent = active ? 'Mode AP actif' : 'Mode AP inactif';
       document.getElementById('recovery-copy').textContent = active
-        ? 'Connecte-toi au Wi-Fi recovery puis ouvre cette page locale.'
-        : 'Ce panneau prepare le flow AP recovery; les actions HTTP restent en plan-only.';
+        ? 'Connecte-toi au Wi-Fi Wifi-Kit puis ouvre cette page locale.'
+        : 'Ce panneau prepare le mode AP temporaire; les actions reelles demandent une confirmation cote serveur.';
       document.getElementById('recovery-ssid').textContent = recovery.ssid || 'Wifi-Kit-node';
       document.getElementById('recovery-ip').textContent = recovery.ip || '192.168.50.1';
       document.getElementById('recovery-dhcp').textContent = serviceLabel(recovery.dhcp);
@@ -1487,12 +1493,12 @@
     function renderNodeOverview() {
       const system = systemState();
       const normal = system.mode !== 'recovery';
-      setText('mode-chip', normal ? 'Mode normal' : 'Mode recovery');
+      setText('mode-chip', normal ? 'Mode normal' : 'Mode AP');
       setText('mode-summary', normal
         ? 'Le node reste client du Wi-Fi habituel.'
-        : 'Le node sert le Wi-Fi recovery local.');
+        : 'Le node sert le Wi-Fi Wifi-Kit local.');
       setText('mode-detail', normal
-        ? 'AP recovery inactif. Wifi-Kit observe, prepare et affiche les plans sans mutation HTTP.'
+        ? 'Mode AP inactif. Wifi-Kit observe, prepare et affiche les plans sans mutation HTTP.'
         : 'AP, DHCP, DNS captive et UI locale sont temporaires et doivent revenir a NetworkManager au cleanup.');
       setText('node-hostname', system.hostname || 'inconnu');
       setText('node-ip', system.ip || value(data.diagnose, 'current_ip'));
@@ -1563,8 +1569,9 @@
 
     function networkActionPlan(action) {
       const plans = {
-        'reconnect-previous': "Retour au Wi-Fi precedent: l'AP recovery, DHCP, DNS et cette UI vont s'arreter, puis wlan0 revient a NetworkManager. Le portail peut disparaitre pendant le retour.",
-        'start-recovery': "Plan: snapshot NetworkManager, passer wlan0 en AP-only, lancer hostapd avec le mot de passe AP recovery de test 12345678, dnsmasq DHCP/DNS captive et l'UI locale sur 192.168.50.1:80. Lancement reel uniquement par script confirme."
+        'reconnect-previous': "Wi-Fi par defaut: le mode AP, DHCP, DNS et cette UI vont s'arreter, puis wlan0 revient a NetworkManager. Le portail peut disparaitre pendant le retour.",
+        'start-ap-mode': "Activer le mode AP: snapshot NetworkManager, passer wlan0 en AP-only, lancer hostapd avec le mot de passe AP de test 12345678, dnsmasq DHCP/DNS captive et l'UI locale sur 192.168.50.1:80. Timeout prototype: 300 s.",
+        'return-default-network': "Retour au reseau initial: demander a NetworkManager de reconnecter uniquement la connexion autorisee netplan-wlan0-GL-MT6000-d53. L'acces reseau peut couper quelques secondes."
       };
       return plans[action] || `Action ${action}: plan-only.`;
     }
@@ -1572,21 +1579,24 @@
     async function triggerNetworkAction(action) {
       const button = document.querySelector(`[data-network-action="${action}"]`);
       const originalText = button ? button.textContent : '';
-      if (action !== 'reconnect-previous') {
-        showNetworkActionResult(networkActionPlan(action));
-      }
       if (window.location.protocol === 'file:') return;
       try {
+        if (button) button.disabled = true;
         if (action === 'reconnect-previous') {
-          if (button) {
-            button.disabled = true;
-            button.textContent = 'Retour au Wi-Fi normal...';
-          }
-          showNetworkActionResult("Retour au Wi-Fi normal... le portail recovery va dispara\u00eetre.");
+          if (button) button.textContent = 'Retour au Wi-Fi normal...';
+          showNetworkActionResult("Retour au Wi-Fi normal... le portail Mode AP va dispara\u00eetre.");
+        } else if (action === 'start-ap-mode') {
+          if (button) button.textContent = 'Activation du mode AP...';
+          showNetworkActionResult("Activation du mode AP... l'acces reseau normal peut couper pendant le basculement.");
+        } else if (action === 'return-default-network') {
+          if (button) button.textContent = 'Retour au reseau initial...';
+          showNetworkActionResult("Retour au reseau initial... l'acces reseau peut couper quelques secondes.");
+        } else {
+          showNetworkActionResult(networkActionPlan(action));
         }
         const response = await fetch(`/${action}`, {
           cache: 'no-store',
-          method: action === 'reconnect-previous' ? 'POST' : 'GET'
+          method: 'POST'
         });
         const payload = await response.json();
         if (action === 'reconnect-previous') {
@@ -1595,14 +1605,30 @@
             : `Retour non lance: ${payload.error || payload.status}.`);
           return;
         }
+        if (action === 'start-ap-mode') {
+          showNetworkActionResult(payload.ap_started
+            ? `Mode AP en cours de demarrage: ${payload.ssid || 'Wifi-Kit-node'}. Cette page normale peut devenir inaccessible.`
+            : `Mode AP non lance: ${payload.error || payload.status}.`);
+          return;
+        }
+        if (action === 'return-default-network') {
+          showNetworkActionResult(payload.return_started
+            ? `Retour au reseau initial lance: ${payload.default_connection || 'connexion autorisee'}.`
+            : `Retour au reseau initial non lance: ${payload.error || payload.status}.`);
+          return;
+        }
         if (!response.ok) return;
         showNetworkActionResult(`${networkActionPlan(action)} Serveur: ${payload.mutation || payload.status}.`);
       } catch (error) {
         if (action === 'reconnect-previous') {
-          showNetworkActionResult(`Connexion au portail perdue pendant le retour Wi-Fi. C'est attendu si le node quitte le mode recovery. Detail: ${error.message}`);
+          showNetworkActionResult(`Connexion au portail perdue pendant le retour Wi-Fi. C'est attendu si le node quitte le mode AP. Detail: ${error.message}`);
+        } else if (action === 'start-ap-mode') {
+          showNetworkActionResult(`Connexion perdue pendant l'activation du mode AP. C'est possible si le node bascule son Wi-Fi. Detail: ${error.message}`);
+        } else {
+          showNetworkActionResult(`Action ${action} indisponible: ${error.message}`);
         }
       } finally {
-        if (action !== 'reconnect-previous' && button) {
+        if (button) {
           button.disabled = false;
           button.textContent = originalText;
         }
