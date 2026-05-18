@@ -34,6 +34,7 @@
     * { box-sizing: border-box; }
 
     body {
+      overflow-x: hidden;
       min-height: 100vh;
       margin: 0;
       background:
@@ -48,7 +49,7 @@
     button, input { font: inherit; }
 
     .shell {
-      width: min(680px, calc(100% - 22px));
+      width: min(760px, calc(100vw - 16px));
       margin: 12px auto 22px;
       border: 1px solid rgba(213, 229, 255, 0.11);
       border-radius: 30px;
@@ -137,7 +138,7 @@
 
     h1 {
       margin: 0;
-      font-size: clamp(2.45rem, 14vw, 4rem);
+      font-size: clamp(1.74rem, 11.2vw, 3rem);
       line-height: 0.9;
       letter-spacing: 0;
     }
@@ -213,7 +214,7 @@
 
     .overview-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.2rem), 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 9px;
       align-items: stretch;
     }
@@ -469,9 +470,72 @@
 
     .network-main {
       display: grid;
-      grid-template-columns: 62px minmax(0, 1fr) auto auto;
+      grid-template-columns: auto minmax(0, 1fr) auto;
       gap: 10px;
       align-items: center;
+    }
+
+    .network-left {
+      display: grid;
+      gap: 5px;
+      justify-items: center;
+      text-align: center;
+      min-width: 58px;
+    }
+
+    .network-center {
+      min-width: 0;
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    .network-right {
+      display: grid;
+      justify-items: end;
+      gap: 3px;
+      min-width: 78px;
+    }
+
+    .network-ssid {
+      margin: 0;
+      font-size: 1rem;
+      line-height: 1.14;
+      display: inline-flex;
+      gap: 7px;
+      align-items: center;
+    }
+
+    .network-meta {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 0.76rem;
+      margin: 0;
+      min-width: 0;
+    }
+
+    .network-current {
+      display: inline-grid;
+      place-items: center;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: rgba(83, 220, 98, 0.2);
+      color: #a8ffbe;
+      font-size: 0.7rem;
+      font-weight: 950;
+    }
+
+
+    .network-quality {
+      margin-top: 0;
+      font-size: 0.66rem;
+      color: var(--muted);
+      font-weight: 900;
+      white-space: nowrap;
     }
 
     .network-orb {
@@ -488,16 +552,6 @@
     .network-orb.mid { background: linear-gradient(145deg, #ffbc42, #d88613); }
     .network-orb.low { background: linear-gradient(145deg, #2c9af1, #205fba); }
     .network-orb.bad { background: linear-gradient(145deg, #e3443e, #922523); }
-
-    .network-text { min-width: 0; }
-
-    .network-sub {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      align-items: center;
-      margin-top: 6px;
-    }
 
     .badge {
       min-height: 23px;
@@ -609,35 +663,6 @@
       box-shadow: 0 0 0 4px rgba(68, 212, 230, 0.12);
     }
 
-    .option-row {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
-      gap: 10px;
-      align-items: start;
-      border: 1px solid rgba(221, 234, 255, 0.12);
-      border-radius: 17px;
-      background: rgba(255, 255, 255, 0.05);
-      padding: 11px;
-      color: var(--ink);
-      font-size: 0.9rem;
-      font-weight: 900;
-    }
-
-    .option-row input {
-      width: 20px;
-      height: 20px;
-      margin: 1px 0 0;
-      accent-color: var(--green);
-    }
-
-    .option-row span {
-      display: block;
-      color: var(--muted);
-      font-size: 0.78rem;
-      font-weight: 600;
-      margin-top: 3px;
-    }
-
     .prepare-plan {
       display: grid;
       gap: 8px;
@@ -691,7 +716,7 @@
 
     .recovery-actions {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: minmax(0, 1fr);
       gap: 9px;
     }
 
@@ -880,6 +905,10 @@
         width: 64px;
         height: 64px;
       }
+
+      .network-quality {
+        font-size: 0.78rem;
+      }
     }
   </style>
 </head>
@@ -960,9 +989,8 @@
             <h1>Wifi-Kit</h1>
           </div>
         </div>
-        <span class="chip">Read-only</span>
       </div>
-      <p class="lead">Se connecter &agrave; un Wi-Fi.</p>
+      <p class="lead">Connecter un Wi-Fi.</p>
     </header>
 
     <section class="overview" aria-label="Etat Wi-Fi courant">
@@ -974,9 +1002,9 @@
     </section>
 
     <nav class="section-tabs" aria-label="Navigation Wifi-Kit">
-      <button class="tab-button active" type="button" data-page-target="networks" aria-current="page"><svg class="icon-svg" aria-hidden="true"><use href="#icon-wifi"></use></svg>R&eacute;seaux</button>
-      <button class="tab-button" type="button" data-page-target="node"><svg class="icon-svg" aria-hidden="true"><use href="#icon-server"></use></svg>&Eacute;tat du node</button>
-      <button class="tab-button" type="button" data-page-target="recovery"><svg class="icon-svg" aria-hidden="true"><use href="#icon-shield"></use></svg>Recovery</button>
+      <button class="tab-button active" type="button" data-page-target="networks" aria-current="page"><svg class="icon-svg" aria-hidden="true"><use href="#icon-wifi"></use></svg>Wifi</button>
+      <button class="tab-button" type="button" data-page-target="node"><svg class="icon-svg" aria-hidden="true"><use href="#icon-server"></use></svg>Node</button>
+      <button class="tab-button" type="button" data-page-target="recovery"><svg class="icon-svg" aria-hidden="true"><use href="#icon-shield"></use></svg>R&eacute;cup.</button>
       <button class="tab-button" type="button" data-page-target="diagnostic"><svg class="icon-svg" aria-hidden="true"><use href="#icon-activity"></use></svg>Diag.</button>
       <button class="tab-button" type="button" data-page-target="config"><svg class="icon-svg" aria-hidden="true"><use href="#icon-gear"></use></svg>Config.</button>
     </nav>
@@ -1046,12 +1074,12 @@
       <section class="panel network-actions-panel" aria-labelledby="network-actions-title">
         <div class="section-head">
           <div>
-            <h2 id="network-actions-title">Actions recovery</h2>
+            <h2 id="network-actions-title">Action de r&eacute;cup&eacute;ration</h2>
             <p class="section-copy">Les actions reelles et les plans de simulation sont separes.</p>
           </div>
           <span class="chip">SAFE</span>
         </div>
-        <div class="action-grid">
+        <div class="recovery-actions">
           <div class="action-card">
             <strong>Wi-Fi par d&eacute;faut</strong>
             <p>Arr&ecirc;te le mode recovery et reconnecte le Wi-Fi pr&eacute;c&eacute;dent.</p>
@@ -1234,7 +1262,7 @@
     "last_recovery_event": "normal-client-mode"
   },
   "scan": {
-    "backend": "wpa_cli",
+    "backend": "networkmanager",
     "interface": "unknown",
     "timestamp": "demo",
     "status": "unavailable",
@@ -1249,6 +1277,13 @@
 
     function value(source, key) {
       return String(source?.[key] ?? 'inconnu');
+    }
+
+    function formatIpSummary(rawIp) {
+      const value = String(rawIp || '').trim();
+      if (!value || value === 'inconnu' || value === 'unknown') return value || 'inconnu';
+      if (/\s*\/\s*/.test(value)) return value.replace(/\s*\/\s*/, ' / ');
+      return `${value} /24`;
     }
 
     function metric(label, text) {
@@ -1298,13 +1333,14 @@
         ? (recovery.ssid || system.recovery_ssid || 'Wifi-Kit-node')
         : (system.wifi || value(data.diagnose, 'current_ssid_state'));
       document.getElementById('status-interface').textContent = iface;
-      document.getElementById('status-ip').textContent = ip;
+      document.getElementById('status-ip').textContent = formatIpSummary(ip);
       document.getElementById('status-ssid').textContent = ssid;
     }
 
     function describeScanBackend(scan) {
       const backend = scan.backend || 'unknown';
-      if (backend === 'wpa_cli') return 'Scan Wi-Fi lu en mode diagnostic';
+      if (backend === 'networkmanager') return 'Scan Wi-Fi via NetworkManager';
+      if (backend === 'wpa_cli') return 'Scan Wi-Fi via wpa_cli';
       if (backend === 'iw') return 'Scan Wi-Fi fallback en mode diagnostic';
       return `Source de scan: ${backend}`;
     }
@@ -1365,7 +1401,7 @@
     function describeScanReason(scan) {
       const reason = scan.reason || scan.status || 'unknown';
       if (reason === 'scan-readonly-failed') return 'Le Raspberry Pi ne peut pas lire les resultats Wi-Fi pour le moment. La connexion actuelle reste preservee.';
-      if (reason === 'scan-tools-missing') return "Le scan Wi-Fi n'est pas disponible car wpa_cli et iw sont absents ou introuvables.";
+      if (reason === 'scan-tools-missing') return "Le scan Wi-Fi n'est pas disponible car nmcli et iw sont absents ou introuvables.";
       if (reason === 'iw-scan-failed') return 'Le fallback iw ne peut pas scanner les reseaux pour le moment tout en gardant la connexion Wi-Fi actuelle.';
       if (reason === 'iw-missing') return "Le scan Wi-Fi n'est pas disponible car l'outil iw est absent.";
       if (reason === 'no-wifi-interface') return "Aucune interface Wi-Fi n'a ete detectee.";
@@ -1731,45 +1767,61 @@
           ? network.channel
           : (network.chan || 'inconnu');
         const main = document.createElement('div');
+        const left = document.createElement('div');
+        const center = document.createElement('div');
+        const right = document.createElement('div');
         const orb = document.createElement('span');
-        const text = document.createElement('div');
         const title = document.createElement('h3');
-        const meta = document.createElement('div');
+        const meta = document.createElement('p');
+        const qualityLabel = document.createElement('span');
         const signal = document.createElement('div');
         const signalLabel = document.createElement('div');
+        const current = document.createElement('span');
         const dot = document.createElement('span');
         const ssid = displaySsid(network);
 
         main.className = 'network-main';
+        left.className = 'network-left';
+        center.className = 'network-center';
+        right.className = 'network-right';
         orb.className = `network-orb ${quality.tone}`;
         orb.appendChild(makeIcon('wifi'));
-        text.className = 'network-text';
+        qualityLabel.className = 'network-quality';
+        qualityLabel.textContent = quality.label;
+        qualityLabel.style.setProperty('--signal-color', quality.color);
         title.textContent = ssid;
-        meta.className = 'network-sub';
+        meta.className = 'network-meta';
+        if (network.security) {
+          const security = document.createElement('span');
+          security.textContent = network.security;
+          meta.appendChild(security);
+        } else {
+          const security = document.createElement('span');
+          security.textContent = 'Sécurité inconnue';
+          meta.appendChild(security);
+        }
+        const channel = document.createElement('span');
+        channel.textContent = `Canal ${channelLabel}`;
+        meta.appendChild(channel);
         signal.className = 'signal-cluster';
         signalLabel.className = 'signal-quality';
         signalLabel.textContent = quality.dbm;
         signalLabel.style.setProperty('--signal-color', quality.color);
+        current.className = 'network-current';
+        if (network.current === 'yes') {
+          current.textContent = '✓';
+          current.title = 'Wi-Fi actuel';
+        } else {
+          current.textContent = '';
+        }
         dot.className = 'choice-dot';
         dot.appendChild(makeIcon('chevron'));
 
-        [
-          [network.current === 'yes' ? 'Wi-Fi actuel' : '', 'quality'],
-          [network.security || 'securite inconnue', ''],
-          [`Canal ${channelLabel}`, ''],
-          [quality.label, 'quality']
-        ].forEach(([label, className]) => {
-          if (!label) return;
-          const badge = document.createElement('span');
-          badge.className = `badge ${className}`.trim();
-          badge.textContent = label;
-          if (className) badge.style.setProperty('--quality-color', quality.color);
-          meta.appendChild(badge);
-        });
-
-        text.append(title, meta);
+        center.append(title, meta);
         signal.append(signalBars(quality), signalLabel);
-        main.append(orb, text, signal, dot);
+        left.append(orb, qualityLabel);
+        right.append(current, signal, dot);
+        main.append(left, center, right);
         row.append(main);
 
         if (selectedNetwork === network) {
