@@ -63,6 +63,17 @@ seed_lang() {
   esac
 }
 
+seed_verbose() {
+  case "${SEED_KIT_VERBOSE:-0}" in
+    1|yes|true|on)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 seed_msg() {
   key=$1
 
@@ -79,12 +90,17 @@ seed_msg() {
       progress) printf '%s\n' "Progression" ;;
       readiness) printf '%s\n' "État de préparation" ;;
       next_actions) printf '%s\n' "Actions suivantes" ;;
+      todo) printf '%s\n' "À faire" ;;
       nothing_changed) printf '%s\n' "Aucun changement effectué" ;;
       details) printf '%s\n' "Détails" ;;
       proposed_future_actions) printf '%s\n' "Actions futures proposées" ;;
       ready) printf '%s\n' "prêt" ;;
       installed_not_ready) printf '%s\n' "installé, pas prêt" ;;
       not_installed) printf '%s\n' "non installé" ;;
+      not_ready) printf '%s\n' "pas prêt" ;;
+      to_connect) printf '%s\n' "à connecter" ;;
+      to_configure) printf '%s\n' "à configurer" ;;
+      ready_plural) printf '%s\n' "prêts" ;;
       connected) printf '%s\n' "connecté" ;;
       installed_not_connected) printf '%s\n' "installé, non connecté" ;;
       configured) printf '%s\n' "configuré" ;;
@@ -136,12 +152,17 @@ seed_msg() {
     progress) printf '%s\n' "Progress" ;;
     readiness) printf '%s\n' "Readiness" ;;
     next_actions) printf '%s\n' "Next actions" ;;
+    todo) printf '%s\n' "To do" ;;
     nothing_changed) printf '%s\n' "Nothing was changed" ;;
     details) printf '%s\n' "Details" ;;
     proposed_future_actions) printf '%s\n' "Proposed future actions" ;;
     ready) printf '%s\n' "ready" ;;
     installed_not_ready) printf '%s\n' "installed, not ready" ;;
     not_installed) printf '%s\n' "not installed" ;;
+    not_ready) printf '%s\n' "not ready" ;;
+    to_connect) printf '%s\n' "connect" ;;
+    to_configure) printf '%s\n' "configure" ;;
+    ready_plural) printf '%s\n' "ready" ;;
     connected) printf '%s\n' "connected" ;;
     installed_not_connected) printf '%s\n' "installed, not connected" ;;
     configured) printf '%s\n' "configured" ;;
@@ -3447,6 +3468,15 @@ readiness_line() {
   state=$2
   summary=$3
 
+  if ! seed_verbose; then
+    if [ "$state" = "ok" ]; then
+      printf '%s%-6s%s %-12s %s\n' "$COLOR_GOOD" "OK" "$COLOR_RESET" "$name" "$summary"
+    else
+      printf '%s%-6s%s %-12s %s\n' "$COLOR_WARN" "WARN" "$COLOR_RESET" "$name" "$summary"
+    fi
+    return 0
+  fi
+
   if [ "$state" = "ok" ]; then
     printf '%s[OK]%s %-12s %s\n' "$COLOR_GOOD" "$COLOR_RESET" "$name" "$summary"
   else
@@ -3487,7 +3517,16 @@ apply_guided_readiness() {
   caddy_file="$deploy_root/Caddyfile"
   homepage_dir="$deploy_root/homepage"
 
-  ui_section "$(seed_msg readiness)"
+  if seed_verbose; then
+    ui_section "$(seed_msg readiness)"
+  else
+    if [ "$(seed_lang)" = "fr" ]; then
+      ui_line "Seed-Kit > readiness — $deploy_id"
+    else
+      ui_line "Seed-Kit > readiness - $deploy_id"
+    fi
+    ui_line ""
+  fi
 
   docker_installed=no
   docker_service_active=no
@@ -3510,7 +3549,11 @@ apply_guided_readiness() {
   if [ "$docker_ready" != "yes" ]; then
     docker_state=warn
     if [ "$docker_installed" = "yes" ]; then
-      docker_summary=$(seed_msg installed_not_ready)
+      if seed_verbose; then
+        docker_summary=$(seed_msg installed_not_ready)
+      else
+        docker_summary=$(seed_msg not_ready)
+      fi
     else
       docker_summary=$(seed_msg not_installed)
     fi
@@ -3529,7 +3572,11 @@ apply_guided_readiness() {
   if [ "$tailscale_connected" != "yes" ]; then
     tailscale_state=warn
     if [ "$tailscale_installed" = "yes" ]; then
-      tailscale_summary=$(seed_msg installed_not_connected)
+      if seed_verbose; then
+        tailscale_summary=$(seed_msg installed_not_connected)
+      else
+        tailscale_summary=$(seed_msg to_connect)
+      fi
     else
       tailscale_summary=$(seed_msg not_installed)
     fi
@@ -3550,7 +3597,11 @@ apply_guided_readiness() {
   if [ "$cloudflared_configured_status" != "yes" ]; then
     cloudflared_state=warn
     if [ "$cloudflared_installed" = "yes" ]; then
-      cloudflared_summary=$(seed_msg installed_not_configured)
+      if seed_verbose; then
+        cloudflared_summary=$(seed_msg installed_not_configured)
+      else
+        cloudflared_summary=$(seed_msg to_configure)
+      fi
     else
       cloudflared_summary=$(seed_msg not_installed)
     fi
@@ -3589,11 +3640,19 @@ apply_guided_readiness() {
     esac
   fi
   services_state=ok
-  services_summary=$(seed_msg deployed_validated)
+  if seed_verbose; then
+    services_summary=$(seed_msg deployed_validated)
+  else
+    services_summary=$(seed_msg ready_plural)
+  fi
   if [ "$services_validated" != "yes" ]; then
     services_state=warn
     if [ "$services_deployed" = "yes" ]; then
-      services_summary=$(seed_msg deployed_validation_needed)
+      if seed_verbose; then
+        services_summary=$(seed_msg deployed_validation_needed)
+      else
+        services_summary=$(seed_msg to_configure)
+      fi
     else
       services_summary=$(seed_msg not_deployed)
     fi
@@ -3604,7 +3663,12 @@ apply_guided_readiness() {
   readiness_line "cloudflared" "$cloudflared_state" "$cloudflared_summary"
   readiness_line "services" "$services_state" "$services_summary"
 
-  ui_section "$(seed_msg next_actions)"
+  ui_line ""
+  if seed_verbose; then
+    ui_section "$(seed_msg next_actions)"
+  else
+    ui_line "$(seed_msg todo)"
+  fi
   next_index=1
   if [ "$docker_ready" != "yes" ]; then
     ui_line "$next_index. sh seed-kit.sh package apply-guided <package> --step install-modules"
@@ -3625,8 +3689,19 @@ apply_guided_readiness() {
     ui_line "$(seed_msg none)"
   fi
 
-  ui_section "$(seed_msg nothing_changed)"
-  ui_line "$(seed_msg no_change_summary)"
+  ui_line ""
+  if seed_verbose; then
+    ui_section "$(seed_msg nothing_changed)"
+  else
+    ui_line "$(seed_msg nothing_changed)."
+  fi
+  if seed_verbose; then
+    ui_line "$(seed_msg no_change_summary)"
+  fi
+
+  if ! seed_verbose; then
+    return 0
+  fi
 
   ui_line ""
   ui_section "$(seed_msg details)"
@@ -3716,16 +3791,24 @@ apply_guided_package() {
     package_entries=$(tar -tzf "$package_file" 2>/dev/null || true)
   fi
   read_package_metadata "$package_file" "$package_entries"
-  apply_guided_print_header "$guided_step" "$package_file" "$PACKAGE_METADATA_PACKAGE_ID" "$PACKAGE_METADATA_PROFILE_ID"
+  guided_compact_readiness=0
+  if [ "$guided_step" = "readiness" ] && ! seed_verbose; then
+    guided_compact_readiness=1
+  fi
 
-  ui_section "$(seed_msg progress)"
+  if [ "$guided_compact_readiness" -eq 0 ]; then
+    apply_guided_print_header "$guided_step" "$package_file" "$PACKAGE_METADATA_PACKAGE_ID" "$PACKAGE_METADATA_PROFILE_ID"
+    ui_section "$(seed_msg progress)"
+  fi
   PACKAGE_OUTPUT_COMPACT=1
   if ! verify_package_archive "$package_file"; then
     PACKAGE_OUTPUT_COMPACT=0
     ui_line "Apply guided: stopped because verification failed"
     return 2
   fi
-  ui_report_ok "verify"
+  if [ "$guided_compact_readiness" -eq 0 ]; then
+    ui_report_ok "verify"
+  fi
 
   stage_output=$(stage_package_archive "$package_file") || {
     PACKAGE_OUTPUT_COMPACT=0
@@ -3739,8 +3822,10 @@ apply_guided_package() {
     ui_line "Apply guided: unable to find stage directory"
     return 2
   fi
-  ui_report_ok "stage"
-  ui_line "Stage dir: $stage_dir"
+  if [ "$guided_compact_readiness" -eq 0 ]; then
+    ui_report_ok "stage"
+    ui_line "Stage dir: $stage_dir"
+  fi
   package_root=$(find_stage_package_root "$stage_dir")
   descriptor_content=""
   if [ -n "$package_root" ] && [ -r "$package_root/seed-kit-package.sh" ]; then
@@ -3761,9 +3846,11 @@ apply_guided_package() {
     return 2
   }
   PACKAGE_OUTPUT_COMPACT=0
-  ui_report_ok "inspect"
-  printf '%s\n' "$inspect_output" | sed 's/^/  /'
-  ui_report_active "$guided_step"
+  if [ "$guided_compact_readiness" -eq 0 ]; then
+    ui_report_ok "inspect"
+    printf '%s\n' "$inspect_output" | sed 's/^/  /'
+    ui_report_active "$guided_step"
+  fi
 
   if [ "$guided_step" = "preview" ]; then
     ui_section "$(seed_msg proposed_future_actions)"
@@ -3842,6 +3929,15 @@ apply_guided_package() {
       return 2
     fi
     apply_guided_readiness "$package_root"
+    readiness_rc=$?
+    if [ "$guided_compact_readiness" -eq 1 ]; then
+      case "$stage_dir" in
+        /tmp/seed-kit-package-stage.*)
+          rm -rf "$stage_dir"
+          ;;
+      esac
+    fi
+    return "$readiness_rc"
   fi
 }
 
@@ -4412,6 +4508,11 @@ case "${1:-}" in
               ;;
             --step=*)
               guided_step="${1#--step=}"
+              shift
+              ;;
+            --verbose)
+              SEED_KIT_VERBOSE=1
+              export SEED_KIT_VERBOSE
               shift
               ;;
             *)
