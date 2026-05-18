@@ -396,16 +396,7 @@ prepare_root_log_file() {
 }
 
 prepare_dnsmasq_recovery_log() {
-  rm -f "$temporary_dnsmasq_log"
-  : >"$temporary_dnsmasq_log" || fail "could not create $temporary_dnsmasq_log"
-
-  if id nobody >/dev/null 2>&1; then
-    chown nobody:root "$temporary_dnsmasq_log" 2>/dev/null ||
-      chown nobody "$temporary_dnsmasq_log" 2>/dev/null || true
-    chmod 664 "$temporary_dnsmasq_log" 2>/dev/null || true
-  else
-    chmod 666 "$temporary_dnsmasq_log" 2>/dev/null || true
-  fi
+  prepare_root_log_file "$temporary_dnsmasq_log" 644
 }
 
 prepare_recovery_runtime_files() {
@@ -579,7 +570,7 @@ cmd_plan_ap_recovery() {
   kv "05.write_hostapd" "create $(shell_quote "$temporary_hostapd_conf") mode 600 with WIFI_KIT_AP_PSK runtime passphrase; test value $ap_recovery_test_psk"
   kv "06.start_hostapd" "sudo hostapd -d $(shell_quote "$temporary_hostapd_conf") > $(shell_quote "$temporary_hostapd_log") 2>&1"
   kv "07.write_dnsmasq" "create $(shell_quote "$temporary_dnsmasq_conf")"
-  kv "08.start_dnsmasq" "sudo dnsmasq --no-daemon --conf-file=$(shell_quote "$temporary_dnsmasq_conf") --log-facility=$(shell_quote "$temporary_dnsmasq_log")"
+  kv "08.start_dnsmasq" "sudo dnsmasq --no-daemon --conf-file=$(shell_quote "$temporary_dnsmasq_conf") > $(shell_quote "$temporary_dnsmasq_log") 2>&1"
   kv "09.start_ui" "sudo python3 modules/wifi-kit/prototype/ui/serve-readonly.py --host $ap_recovery_ip --port $ui_port --recovery-mode --recovery-ssid $ssid"
   kv "10.captive_portal" "basic endpoints redirect or serve local recovery UI"
   kv "11.stop" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
@@ -730,7 +721,7 @@ cmd_apply_ap_recovery_manual_test() {
   printf '%s\n' "$hostapd_pid" >"$temporary_hostapd_pid"
   kv "hostapd_pid" "$hostapd_pid"
 
-  "$dnsmasq_bin" --no-daemon --conf-file="$temporary_dnsmasq_conf" --log-facility="$temporary_dnsmasq_log" &
+  "$dnsmasq_bin" --no-daemon --conf-file="$temporary_dnsmasq_conf" >"$temporary_dnsmasq_log" 2>&1 &
   dnsmasq_pid=$!
   printf '%s\n' "$dnsmasq_pid" >"$temporary_dnsmasq_pid"
   kv "dnsmasq_pid" "$dnsmasq_pid"
