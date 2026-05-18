@@ -49,15 +49,15 @@
     button, input { font: inherit; }
 
     .shell {
-      width: min(760px, calc(100vw - 16px));
-      margin: 12px auto 22px;
+      width: min(760px, calc(100vw - 10px));
+      margin: 8px auto 12px;
       border: 1px solid rgba(213, 229, 255, 0.11);
       border-radius: 30px;
       background:
         linear-gradient(180deg, rgba(10, 22, 35, 0.74), rgba(5, 12, 20, 0.56)),
         radial-gradient(circle at 12% 0%, rgba(45, 149, 255, 0.12), transparent 18rem);
       box-shadow: 0 28px 70px rgba(0, 0, 0, 0.35);
-      padding: 17px 13px 16px;
+      padding: 14px 10px 12px;
     }
 
     .app {
@@ -138,7 +138,7 @@
 
     h1 {
       margin: 0;
-      font-size: clamp(1.74rem, 11.2vw, 3rem);
+      font-size: clamp(1.2rem, 8.2vw, 2.2rem);
       line-height: 0.9;
       letter-spacing: 0;
     }
@@ -215,7 +215,7 @@
     .overview-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 9px;
+      gap: 6px;
       align-items: stretch;
     }
 
@@ -333,12 +333,12 @@
       display: block;
       overflow-wrap: anywhere;
       color: var(--ink);
-      font-size: 0.96rem;
+      font-size: 0.88rem;
       line-height: 1.16;
     }
 
     .status-mini strong {
-      font-size: 0.82rem;
+      font-size: 0.76rem;
     }
 
     .safe-mini strong { font-size: 0.78rem; }
@@ -357,7 +357,7 @@
     .prep-summary {
       margin: 0;
       color: var(--muted);
-      font-size: 0.9rem;
+      font-size: 0.84rem;
     }
 
     .scan-status { margin-top: 4px; color: #cbd7e8; }
@@ -432,20 +432,20 @@
 
     .network-list {
       display: grid;
-      gap: 8px;
+      gap: 6px;
       width: 100%;
     }
 
     .network {
       display: grid;
-      gap: 8px;
+      gap: 6px;
       width: 100%;
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 18px;
       background:
         radial-gradient(circle at 0% 50%, rgba(45, 149, 255, 0.12), transparent 12rem),
         linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(11, 24, 38, 0.7));
-      padding: 10px;
+      padding: 9px;
       text-align: left;
       transition: border-color 190ms ease, background 190ms ease, transform 190ms ease, box-shadow 190ms ease;
     }
@@ -477,7 +477,7 @@
 
     .network-left {
       display: grid;
-      gap: 5px;
+      gap: 3px;
       justify-items: center;
       text-align: center;
       min-width: 58px;
@@ -486,20 +486,20 @@
     .network-center {
       min-width: 0;
       display: grid;
-      gap: 5px;
+      gap: 3px;
       min-width: 0;
     }
 
     .network-right {
       display: grid;
       justify-items: end;
-      gap: 3px;
-      min-width: 78px;
+      gap: 2px;
+      min-width: 70px;
     }
 
     .network-ssid {
       margin: 0;
-      font-size: 1rem;
+      font-size: 0.95rem;
       line-height: 1.14;
       display: inline-flex;
       gap: 7px;
@@ -510,9 +510,9 @@
       display: inline-flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 6px;
+      gap: 4px;
       color: var(--muted);
-      font-size: 0.76rem;
+      font-size: 0.72rem;
       margin: 0;
       min-width: 0;
     }
@@ -532,19 +532,19 @@
 
     .network-quality {
       margin-top: 0;
-      font-size: 0.66rem;
+      font-size: 0.63rem;
       color: var(--muted);
       font-weight: 900;
       white-space: nowrap;
     }
 
     .network-orb {
-      width: 54px;
-      height: 54px;
+      width: 46px;
+      height: 46px;
       background:
         radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.34), transparent 32%),
         linear-gradient(145deg, var(--blue), #0e65d8);
-      box-shadow: 0 18px 34px rgba(45, 149, 255, 0.2);
+      box-shadow: 0 12px 24px rgba(45, 149, 255, 0.18);
       font-size: 0.9rem;
     }
 
@@ -585,7 +585,7 @@
 
     .signal-cluster {
       display: grid;
-      gap: 5px;
+      gap: 3px;
       justify-items: end;
       min-width: 55px;
     }
@@ -594,7 +594,7 @@
       display: inline-flex;
       align-items: end;
       gap: 2px;
-      min-height: 20px;
+      min-height: 18px;
     }
 
     .signal-bars span {
@@ -1104,7 +1104,7 @@
             <h2 id="diag-title">Diagnostic</h2>
             <p class="section-copy">Lecture seule: dernier etat connu, guard recovery, ports utiles et JSON brut.</p>
           </div>
-          <span class="chip">Read-only</span>
+          <span class="chip">SAFE</span>
         </div>
         <div class="node-grid">
           <div class="metric"><span>Dernier evenement</span><strong id="diag-last-event">...</strong></div>
@@ -1157,7 +1157,7 @@
             <h2 id="config-title">Configuration</h2>
             <p class="section-copy">Param&egrave;tres affich&eacute;s seulement ; persistance future hors repo.</p>
           </div>
-          <span class="chip">Read-only</span>
+          <span class="chip">SAFE</span>
         </div>
         <div class="config-grid">
           <div class="metric"><span>Port normal UI</span><strong id="config-normal-port">...</strong></div>
@@ -1274,6 +1274,7 @@
   <script>
     let data = JSON.parse(document.getElementById('wifi-kit-data').textContent);
     let selectedNetwork = null;
+    let selectedNetworkKey = null;
 
     function value(source, key) {
       return String(source?.[key] ?? 'inconnu');
@@ -1345,8 +1346,58 @@
       return `Source de scan: ${backend}`;
     }
 
-    function describeScanStatus(scan) {
-      const networks = Array.isArray(scan.networks) ? scan.networks.length : 0;
+    function rawScanNetworks(scan) {
+      if (Array.isArray(scan?.networks)) return scan.networks;
+      if (Array.isArray(scan?.results)) return scan.results;
+      if (Array.isArray(scan?.items)) return scan.items;
+      return [];
+    }
+
+    function networkSignalValue(network) {
+      const value = signalDbm(network?.signal ?? network?.SIGNAL ?? network?.strength ?? '');
+      return value === null ? -999 : value;
+    }
+
+    function normalizeScanNetwork(network) {
+      const ssid = network?.ssid ?? network?.SSID ?? network?.name ?? '';
+      const security = network?.security ?? network?.SECURITY ?? network?.auth ?? '';
+      const channel = network?.channel ?? network?.chan ?? network?.CHAN ?? '';
+      const currentRaw = String(network?.current ?? network?.active ?? network?.['IN-USE'] ?? 'no').trim();
+      const current = ['yes', 'true', '1', '*'].includes(currentRaw.toLowerCase()) ? 'yes' : 'no';
+      return {
+        ...network,
+        ssid,
+        signal: network?.signal ?? network?.SIGNAL ?? '',
+        security,
+        channel: channel || 'inconnu',
+        chan: network?.chan ?? channel ?? 'inconnu',
+        current,
+        ssid_hidden: Boolean(network?.ssid_hidden || !ssid),
+      };
+    }
+
+    function displayedScanNetworks(scan) {
+      const byName = new Map();
+      rawScanNetworks(scan).map(normalizeScanNetwork).forEach((network, index) => {
+        const ssid = displaySsid(network);
+        if (!ssid) return;
+        const key = `${ssid}\u0000${network.security || ''}`;
+        const existing = byName.get(key);
+        if (!existing || networkSignalValue(network) > networkSignalValue(existing.network)) {
+          byName.set(key, { network, index });
+        }
+      });
+      return Array.from(byName.values())
+        .sort((left, right) => left.index - right.index)
+        .map((item) => item.network);
+    }
+
+    function scanNetworkKey(network) {
+      return `${displaySsid(network)}\u0000${network.security || ''}`;
+    }
+
+    function describeScanStatus(scan, displayedNetworks) {
+      const networks = displayedNetworks.length;
       const label = networks === 1 ? '1 réseau trouvé' : `${networks} réseaux trouvés`;
       if (scan.refresh_attempted) {
         const status = scan.refresh_status || 'unknown';
@@ -1357,8 +1408,8 @@
       return `${label} en lecture passive`;
     }
 
-    function singleScanHint(scan) {
-      const networks = Array.isArray(scan.networks) ? scan.networks.length : 0;
+    function singleScanHint(displayedNetworks) {
+      const networks = displayedNetworks.length;
       if (networks !== 1) return '';
       return 'Si des réseaux manquent, rapprochez le node ou relancez le scan.';
     }
@@ -1371,6 +1422,12 @@
     function signalQuality(signal) {
       const dbm = signalDbm(signal);
       if (dbm === null) return { label: 'Inconnu', level: 0, dbm: 'dBm inconnu', tone: 'low', color: 'var(--blue)' };
+      if (String(signal || '').includes('%') || dbm >= 0) {
+        if (dbm >= 75) return { label: 'Excellent', level: 4, dbm: `${dbm}%`, tone: 'good', color: 'var(--green)' };
+        if (dbm >= 60) return { label: 'Bon', level: 3, dbm: `${dbm}%`, tone: 'low', color: 'var(--blue)' };
+        if (dbm >= 40) return { label: 'Moyen', level: 2, dbm: `${dbm}%`, tone: 'mid', color: 'var(--orange)' };
+        return { label: 'Faible', level: 1, dbm: `${dbm}%`, tone: 'bad', color: 'var(--red)' };
+      }
       if (dbm >= -50) return { label: 'Excellent', level: 4, dbm: `${dbm} dBm`, tone: 'good', color: 'var(--green)' };
       if (dbm >= -60) return { label: 'Tres bon', level: 4, dbm: `${dbm} dBm`, tone: 'good', color: 'var(--green)' };
       if (dbm >= -67) return { label: 'Bon', level: 3, dbm: `${dbm} dBm`, tone: 'low', color: 'var(--blue)' };
@@ -1569,6 +1626,7 @@
 
     function selectNetwork(network) {
       selectedNetwork = network;
+      selectedNetworkKey = scanNetworkKey(network);
       renderNetworks();
     }
 
@@ -1729,9 +1787,9 @@
       const target = document.getElementById('network-list');
       const message = document.getElementById('scan-message');
       const scan = data.scan || {};
-      const networks = Array.isArray(scan.networks) ? scan.networks : [];
+      const networks = displayedScanNetworks(scan);
       document.getElementById('scan-source').textContent = describeScanBackend(scan);
-      document.getElementById('scan-status').textContent = describeScanStatus(scan);
+      document.getElementById('scan-status').textContent = describeScanStatus(scan, networks);
       target.innerHTML = '';
 
       if (networks.length === 0) {
@@ -1749,7 +1807,7 @@
         return;
       }
 
-      const hint = singleScanHint(scan);
+      const hint = singleScanHint(networks);
       if (hint) {
         message.hidden = false;
         message.textContent = hint;
@@ -1760,7 +1818,8 @@
       networks.forEach((network) => {
         const row = document.createElement('div');
         row.className = 'network selectable';
-        row.setAttribute('aria-expanded', selectedNetwork === network ? 'true' : 'false');
+        const isSelected = selectedNetworkKey === scanNetworkKey(network);
+        row.setAttribute('aria-expanded', isSelected ? 'true' : 'false');
 
         const quality = signalQuality(network.signal);
         const channelLabel = network.channel && network.channel !== 'inconnu'
@@ -1824,7 +1883,7 @@
         main.append(left, center, right);
         row.append(main);
 
-        if (selectedNetwork === network) {
+        if (isSelected) {
           row.classList.add('selected');
           row.appendChild(buildPrepPanel(network));
         }
@@ -1876,6 +1935,7 @@
         const response = await fetch('/wifi/scan?refresh=1', { cache: 'no-store' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         selectedNetwork = null;
+        selectedNetworkKey = null;
         data.scan = await response.json();
         renderAll();
       } catch (error) {
