@@ -1705,6 +1705,7 @@ seed_kit_usage() {
   echo "  --modules        list available modules"
   echo "  modules list     list module scripts available in modules/"
   echo "  modules deps <module>  show read-only module dependency declaration"
+  echo "  package create --service <name> [--copy-home]  create a SAFE dry-run package"
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
   echo "  package inspect-stage <dir>  inspect staged package without applying it"
@@ -2868,6 +2869,189 @@ stage_package_archive() {
   ui_line "  find $stage_dir -maxdepth 3 -type f"
   ui_line "Cleanup:"
   ui_line "  rm -rf $stage_dir"
+}
+
+package_create_timestamp() {
+  date -u '+%Y%m%d-%H%M%S'
+}
+
+package_create_confirm_overwrite() {
+  target=$1
+
+  ui_warning "target already exists: $target"
+  ui_prompt "Overwrite copied package? [y/N]:"
+  IFS= read -r answer || return 1
+  case "$answer" in
+    y|Y)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+package_create_show_descriptor() {
+  archive=$1
+
+  entries=$(tar -tzf "$archive" 2>/dev/null || true)
+  descriptor_entry=$(find_package_entry "$entries" "seed-kit-package.sh" || true)
+  if [ -z "$descriptor_entry" ]; then
+    ui_line "seed-kit-package.sh: missing/unknown"
+    return 0
+  fi
+
+  ui_section "seed-kit-package.sh"
+  tar -xOf "$archive" "$descriptor_entry" 2>/dev/null || ui_line "unable to read descriptor"
+}
+
+package_create_print_safe_boundary() {
+  if [ "$(seed_lang)" = "fr" ]; then
+    ui_line "Aucun restore, secret, compose up/pull, changement runtime, DNS/cutover, reboot ou restart réseau."
+  else
+    ui_line "No restore, secrets, compose up/pull, runtime change, DNS/cutover, reboot, or network restart."
+  fi
+}
+
+package_create_wrapper() {
+  service=""
+  copy_home=0
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --service)
+        if [ -z "${2:-}" ]; then
+          echo "missing value for --service" >&2
+          return 2
+        fi
+        service=$2
+        shift 2
+        ;;
+      --service=*)
+        service=${1#--service=}
+        shift
+        ;;
+      --copy-home)
+        copy_home=1
+        shift
+        ;;
+      *)
+        echo "unknown option for package create: $1" >&2
+        return 2
+        ;;
+    esac
+  done
+
+  if [ -z "$service" ]; then
+    echo "usage: sh seed-kit.sh package create --service <name> [--copy-home]" >&2
+    return 2
+  fi
+
+  case "$service" in
+    ""|"."|".."|/*|*/*|*[!A-Za-z0-9._-]*)
+      echo "unsafe service name: $service" >&2
+      return 2
+      ;;
+  esac
+
+  if [ ! -x "$ROOT_DIR/tools/service-package.sh" ] && [ ! -f "$ROOT_DIR/tools/service-package.sh" ]; then
+    echo "missing tool: $ROOT_DIR/tools/service-package.sh" >&2
+    return 2
+  fi
+
+  output_root="/tmp/seed-kit-packages"
+  timestamp=$(package_create_timestamp)
+  output_dir="$output_root/$service-$timestamp"
+  output_try=1
+
+  if ! mkdir -p "$output_root"; then
+    echo "unable to create package output root: $output_root" >&2
+    return 2
+  fi
+  while [ -e "$output_dir" ]; do
+    output_try=$((output_try + 1))
+    output_dir="$output_root/$service-$timestamp-$output_try"
+  done
+  if ! mkdir -p "$output_dir"; then
+    echo "unable to create package output: $output_dir" >&2
+    return 2
+  fi
+
+  if [ "$(seed_lang)" = "fr" ]; then
+    ui_header "Seed-Kit > package create" "SAFE dry-run"
+    ui_kv "Service" "$service"
+    ui_kv "Sortie" "$output_dir"
+  else
+    ui_header "Seed-Kit > package create" "SAFE dry-run"
+    ui_kv "Service" "$service"
+    ui_kv "Output" "$output_dir"
+  fi
+
+  if ! create_output=$(sh "$ROOT_DIR/tools/service-package.sh" create --service "$service" --dry-run --output "$output_dir" 2>&1); then
+    printf '%s\n' "$create_output"
+    case "$output_dir" in
+      /tmp/seed-kit-packages/"$service"-*)
+        rm -rf "$output_dir"
+        ;;
+    esac
+    return 2
+  fi
+
+  archive=$(printf '%s\n' "$create_output" | sed -n 's/^archive: //p' | sed -n '1p')
+  if [ -z "$archive" ] || [ ! -f "$archive" ]; then
+    printf '%s\n' "$create_output"
+    echo "package archive not found after create" >&2
+    case "$output_dir" in
+      /tmp/seed-kit-packages/"$service"-*)
+        rm -rf "$output_dir"
+        ;;
+    esac
+    return 2
+  fi
+
+  ui_section "Package"
+  ui_line "$archive"
+  if command -v sha256sum >/dev/null 2>&1; then
+    set -- $(sha256sum "$archive")
+    archive_sha=$1
+    ui_line "SHA256: $archive_sha"
+  else
+    archive_sha=""
+    ui_line "SHA256: unavailable"
+  fi
+
+  package_create_show_descriptor "$archive"
+
+  if [ "$copy_home" -eq 1 ]; then
+    if [ -z "${HOME:-}" ]; then
+      echo "HOME is not set; cannot copy package home" >&2
+      return 2
+    fi
+    home_target="$HOME/${archive##*/}"
+    if [ -e "$home_target" ]; then
+      if ! package_create_confirm_overwrite "$home_target"; then
+        ui_line "copy-home skipped"
+      else
+        cp "$archive" "$home_target"
+      fi
+    else
+      cp "$archive" "$home_target"
+    fi
+
+    if [ -f "$home_target" ]; then
+      ui_section "Copied package"
+      ui_line "$home_target"
+      if command -v sha256sum >/dev/null 2>&1; then
+        set -- $(sha256sum "$home_target")
+        ui_line "SHA256: $1"
+      else
+        ui_line "SHA256: unavailable"
+      fi
+    fi
+  fi
+
+  ui_section "SAFE boundary"
+  package_create_print_safe_boundary
 }
 
 package_stage_safe_dir() {
@@ -4903,6 +5087,10 @@ case "${1:-}" in
   package)
     shift
     case "${1:-}" in
+      create)
+        shift
+        package_create_wrapper "$@"
+        ;;
       verify)
         shift
         if [ -z "${1:-}" ]; then
@@ -4964,6 +5152,7 @@ case "${1:-}" in
         apply_guided_package "$package_file" "$guided_step"
         ;;
       *)
+        echo "usage: sh seed-kit.sh package create --service <name> [--copy-home]" >&2
         echo "usage: sh seed-kit.sh package verify <file>" >&2
         echo "       sh seed-kit.sh package stage <file>" >&2
         echo "       sh seed-kit.sh package inspect-stage <dir>" >&2
