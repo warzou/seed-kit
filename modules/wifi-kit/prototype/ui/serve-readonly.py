@@ -86,6 +86,17 @@ def run_text_command(args: list[str], timeout: float = 2.0) -> str:
     return result.stdout.strip()
 
 
+def find_tool(name: str) -> str:
+    found = shutil.which(name)
+    if found:
+        return found
+    for prefix in ("/usr/sbin", "/sbin", "/usr/bin", "/bin"):
+        candidate = Path(prefix) / name
+        if candidate.exists() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return ""
+
+
 def read_ap_only_state_value(key: str) -> str:
     try:
         for line in AP_ONLY_NM_STATE.read_text(encoding="utf-8").splitlines():
@@ -199,19 +210,10 @@ def scan(refresh: bool = False) -> dict:
     return run_json_command(args)
 
 
-def networkmanager_scan(refresh: bool = True) -> dict:
-    if refresh:
-        subprocess.run(
-            ["nmcli", "-t", "device", "wifi", "rescan"],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        time.sleep(1.0)
-
+def nmcli_wifi_list(nmcli_bin: str) -> tuple[list[dict], str]:
     result = subprocess.run(
         [
-            "nmcli",
+            nmcli_bin,
             "-t",
             "--escape",
             "no",
@@ -228,13 +230,7 @@ def networkmanager_scan(refresh: bool = True) -> dict:
         text=True,
     )
     if result.returncode != 0:
-        return {
-            "status": "unavailable",
-            "backend": "networkmanager",
-            "reason": "nmcli-scan-failed",
-            "stderr": result.stderr.strip(),
-            "networks": [],
-        }
+        return [], result.stderr.strip()
 
     networks = []
     seen = set()
@@ -263,10 +259,68 @@ def networkmanager_scan(refresh: bool = True) -> dict:
                 "ssid_hidden": False,
             }
         )
+    return networks, ""
+
+
+def wpa_cli_refresh_scan(iface: str = "wlan0") -> tuple[bool, str]:
+    wpa_cli_bin = find_tool("wpa_cli")
+    if not wpa_cli_bin:
+        return False, "wpa_cli-not-found"
+    try:
+        result = subprocess.run(
+            [wpa_cli_bin, "-i", iface, "scan"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, f"wpa_cli-scan-failed: {exc}"
+    if result.returncode != 0:
+        return False, (result.stderr or result.stdout).strip() or "wpa_cli-scan-failed"
+    return True, "ok"
+
+
+def networkmanager_scan(refresh: bool = True) -> dict:
+    nmcli_bin = find_tool("nmcli") or "nmcli"
+    refresh_backend = "networkmanager"
+    refresh_note = ""
+    if refresh:
+        subprocess.run(
+            [nmcli_bin, "-t", "device", "wifi", "rescan"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        time.sleep(2.0)
+
+    networks, error = nmcli_wifi_list(nmcli_bin)
+    if refresh and len(networks) <= 1:
+        ok, refresh_note = wpa_cli_refresh_scan("wlan0")
+        if ok:
+            refresh_backend = "networkmanager+wpa_cli"
+            time.sleep(5.0)
+            wpa_networks, wpa_error = nmcli_wifi_list(nmcli_bin)
+            if wpa_networks:
+                networks = wpa_networks
+                error = ""
+            elif wpa_error:
+                error = wpa_error
+
+    if error:
+        return {
+            "status": "unavailable",
+            "backend": "networkmanager",
+            "reason": "nmcli-scan-failed",
+            "stderr": error,
+            "networks": [],
+        }
 
     return {
         "status": "ok",
         "backend": "networkmanager",
+        "refresh_backend": refresh_backend,
+        "refresh_note": refresh_note,
         "interface": "wlan0",
         "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "refresh_attempted": refresh,
