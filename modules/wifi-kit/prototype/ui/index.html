@@ -1154,7 +1154,6 @@
     "persistence": "none"
   },
   "connect_options": {
-    "keep_ap_active_default": true,
     "apply_endpoint": "not-implemented",
     "ap_services_started": false
   },
@@ -1517,16 +1516,6 @@
       password.placeholder = 'Mot de passe';
       passwordLabel.appendChild(password);
 
-      const keepApOption = document.createElement('label');
-      keepApOption.className = 'option-row';
-      const keepAp = document.createElement('input');
-      keepAp.type = 'checkbox';
-      keepAp.checked = data.connect_options?.keep_ap_active_default !== false;
-      keepAp.dataset.option = 'keep-ap-active';
-      const keepApText = document.createElement('div');
-      keepApText.innerHTML = 'Garder le point d&rsquo;acces SeedKit actif apres connexion <span>Option de plan uniquement: aucun AP n&rsquo;est lance dans ce prototype.</span>';
-      keepApOption.append(keepAp, keepApText);
-
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'button';
@@ -1547,22 +1536,20 @@
 
       planButton.addEventListener('click', (event) => {
         event.stopPropagation();
-        renderInlinePlan(network, plan, keepAp.checked);
+        renderInlinePlan(network, plan);
       });
       button.addEventListener('click', (event) => {
         event.stopPropagation();
-        triggerWifiConnect(network, password, keepAp.checked, plan, button);
+        triggerWifiConnect(network, password, plan, button);
       });
       password.addEventListener('click', (event) => event.stopPropagation());
       password.addEventListener('keydown', (event) => event.stopPropagation());
-      keepApOption.addEventListener('click', (event) => event.stopPropagation());
-      keepApOption.addEventListener('keydown', (event) => event.stopPropagation());
 
-      prep.append(passwordLabel, keepApOption, button, planButton, summary, plan);
+      prep.append(passwordLabel, button, planButton, summary, plan);
       return prep;
     }
 
-    function renderInlinePlan(network, plan, keepApActive) {
+    function renderInlinePlan(network, plan) {
       plan.replaceChildren();
       const title = document.createElement('strong');
       title.textContent = 'Plan simule';
@@ -1572,7 +1559,7 @@
         ['shield', 'safe', 'Votre systeme reste intact'],
         ['lock', 'lock', 'Aucun secret transmis'],
         ['wifi', 'mute', `Reseau cible prepare: ${displaySsid(network)}`],
-        ['server', keepApActive ? 'safe' : 'gear', keepApActive ? 'Point d acces SeedKit demande actif apres validation' : 'Point d acces SeedKit pourra etre arrete apres validation'],
+        ['server', 'gear', 'Le mode normal redevient la cible après connexion reelle.'],
         ['gear', 'gear', 'Rollback et validation SSH avant tout vrai essai']
       ].forEach(([icon, tone, text]) => {
         const li = document.createElement('li');
@@ -1618,14 +1605,14 @@
       plan.hidden = false;
     }
 
-    async function triggerWifiConnect(network, passwordField, keepApActive, plan, button) {
+    async function triggerWifiConnect(network, passwordField, plan, button) {
       const ssid = displaySsid(network);
       if (!ssid || ssid === 'Reseau masque') {
         renderConnectResponse({ status: 'failure', error: 'ssid-hidden-or-missing' }, plan);
         return;
       }
       if (window.location.protocol === 'file:') {
-        renderInlinePlan(network, plan, keepApActive);
+        renderInlinePlan(network, plan);
         return;
       }
       const originalText = button.textContent;
@@ -1639,7 +1626,6 @@
           body: JSON.stringify({
             ssid,
             password: passwordField.value,
-            keep_ap_active: keepApActive
           })
         });
         const payload = await response.json();

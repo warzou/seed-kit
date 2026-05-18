@@ -9,6 +9,7 @@ import os
 import shutil
 import socket
 import subprocess
+import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -199,7 +200,15 @@ def scan(refresh: bool = False) -> dict:
 
 
 def networkmanager_scan(refresh: bool = True) -> dict:
-    rescan = "yes" if refresh else "no"
+    if refresh:
+        subprocess.run(
+            ["nmcli", "-t", "device", "wifi", "rescan"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        time.sleep(1.0)
+
     result = subprocess.run(
         [
             "nmcli",
@@ -207,12 +216,12 @@ def networkmanager_scan(refresh: bool = True) -> dict:
             "--escape",
             "no",
             "-f",
-            "IN-USE,SSID,SIGNAL,SECURITY",
+            "IN-USE,SSID,SIGNAL,SECURITY,CHAN",
             "device",
             "wifi",
             "list",
             "--rescan",
-            rescan,
+            "no",
         ],
         check=False,
         capture_output=True,
@@ -230,10 +239,10 @@ def networkmanager_scan(refresh: bool = True) -> dict:
     networks = []
     seen = set()
     for line in result.stdout.splitlines():
-        in_use, ssid, signal, security = (line.split(":", 3) + ["", "", "", ""])[:4]
+        in_use, ssid, signal, security, channel = (line.split(":", 4) + ["", "", "", "", ""])[:5]
         if not ssid:
             continue
-        key = (ssid, security)
+        key = (ssid, security, channel)
         if key in seen:
             continue
         seen.add(key)
@@ -243,6 +252,7 @@ def networkmanager_scan(refresh: bool = True) -> dict:
                 "ssid": ssid,
                 "signal": f"{signal}%",
                 "security": security or "open",
+                "channel": channel or "inconnu",
                 "current": "yes" if current else "no",
                 "ssid_hidden": False,
             }
@@ -450,7 +460,6 @@ def ui_data(recovery: dict | None = None) -> dict:
             "data": snapshot,
         },
         "connect_options": {
-            "keep_ap_active_default": True,
             "apply_endpoint": "not-implemented",
             "ap_services_started": bool(recovery and recovery.get("active")),
         },
