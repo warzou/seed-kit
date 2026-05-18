@@ -1721,6 +1721,7 @@ seed_kit_usage() {
   echo "  self-update --plan   inspect origin/main update status without changing files"
   echo "  self-update --apply  update current branch with git pull --ff-only"
   echo "  --detect         show OS detection details"
+  echo "  --menu           open the interactive menu"
   echo "  --uninstall-runtime [--yes|-y]  remove local Seed-Kit runtime directories (lib/modules/backends)"
 }
 
@@ -5163,6 +5164,9 @@ case "${1:-}" in
     ;;
   --ui-demo)
     show_ui_demo
+    ;;
+  --menu)
+    show_menu
     ;;
   --uninstall-runtime)
     shift

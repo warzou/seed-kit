@@ -42,6 +42,8 @@ echo
 run_test "seed-kit syntax" "cd '$repo_dir' && sh -n seed-kit.sh"
 run_test "install-seed-kit syntax" "cd '$repo_dir' && sh -n install-seed-kit.sh"
 run_test "seed-kit fresh-node help" "cd '$repo_dir' && sh seed-kit.sh --help | grep -q 'Fresh-node bootstrap'"
+run_test "seed-kit menu help" "cd '$repo_dir' && sh seed-kit.sh --help | grep -q -- '--menu'"
+run_test "install-seed-kit dry-run next steps" "cd '$repo_dir' && tmp=\$(mktemp -d -t seed-kit-install-smoke.XXXXXX) && out=\$(sh install-seed-kit.sh --dry-run --target \"\$tmp/seed-kit\") && rm -rf \"\$tmp\" && printf '%s\n' \"\$out\" | grep -q 'Seed-Kit ready' && printf '%s\n' \"\$out\" | grep -q 'Next steps:' && printf '%s\n' \"\$out\" | grep -q 'sh seed-kit.sh --menu' && ! printf '%s\n' \"\$out\" | grep -q 'Launching runtime'"
 run_test "seed-kit self-update help" "cd '$repo_dir' && sh seed-kit.sh --help | grep -q 'self-update --plan'"
 run_test "seed-kit self-update usage" "cd '$repo_dir' && out=\$(sh seed-kit.sh self-update 2>&1) && exit 1 || printf '%s\n' \"\$out\" | grep -q 'usage: sh seed-kit.sh self-update --plan'"
 run_test "seed-kit modules list" "cd '$repo_dir' && sh seed-kit.sh modules list | grep -q 'Available modules'"

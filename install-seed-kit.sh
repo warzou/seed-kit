@@ -26,7 +26,7 @@ What it does:
   - installs only minimal prerequisites when missing
   - clones Seed-Kit to ~/seed-kit when absent
   - updates an existing clean checkout with git pull --ff-only
-  - runs ~/seed-kit/seed-kit.sh
+  - prints next Seed-Kit CLI steps
 
 Scope:
   - Debian / Raspberry Pi OS with apt-get
@@ -125,25 +125,28 @@ clone_or_update() {
   run git clone "$REPO_URL" "$TARGET_DIR"
 }
 
-run_seed_kit() {
+show_next_steps() {
   script="$TARGET_DIR/seed-kit.sh"
 
   log
   log "----------------------------------------"
   log "Seed-Kit ready"
   log "Location: $TARGET_DIR"
-  log "Launching runtime..."
   log "----------------------------------------"
-  log "[run] sh $script"
-  if [ "$DRY_RUN" = "yes" ]; then
-    return 0
-  fi
-
-  if [ ! -f "$script" ]; then
-    die "Seed-Kit entrypoint not found: $script"
-  fi
-
-  sh "$script"
+  log
+  log "Next steps:"
+  log "  cd $TARGET_DIR"
+  log
+  log "Package readiness:"
+  log "  SEED_KIT_LANG=fr sh seed-kit.sh package apply-guided ~/rpi-edge-service.tar.gz --step readiness"
+  log
+  log "Create package:"
+  log "  sh seed-kit.sh package create --service rpi-edge-vps --copy-home"
+  log
+  log "Open interactive menu:"
+  log "  sh seed-kit.sh --menu"
+  log
+  log "No runtime command was launched automatically."
 }
 
 while [ "$#" -gt 0 ]; do
@@ -173,9 +176,9 @@ done
 
 log "Seed-Kit installer"
 log "Target: $TARGET_DIR"
-log "Scope: install minimal prerequisites, clone/update repo, run seed-kit.sh"
+log "Scope: install minimal prerequisites, clone/update repo, print next steps"
 log
 
 install_prerequisites
 clone_or_update
-run_seed_kit
+show_next_steps
