@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import socket
 import subprocess
 from datetime import datetime, timezone
@@ -197,6 +198,140 @@ def scan(refresh: bool = False) -> dict:
     return run_json_command(args)
 
 
+def networkmanager_scan(refresh: bool = True) -> dict:
+    rescan = "yes" if refresh else "no"
+    result = subprocess.run(
+        [
+            "nmcli",
+            "-t",
+            "--escape",
+            "no",
+            "-f",
+            "IN-USE,SSID,SIGNAL,SECURITY",
+            "device",
+            "wifi",
+            "list",
+            "--rescan",
+            rescan,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return {
+            "status": "unavailable",
+            "backend": "networkmanager",
+            "reason": "nmcli-scan-failed",
+            "stderr": result.stderr.strip(),
+            "networks": [],
+        }
+
+    networks = []
+    seen = set()
+    for line in result.stdout.splitlines():
+        in_use, ssid, signal, security = (line.split(":", 3) + ["", "", "", ""])[:4]
+        if not ssid:
+            continue
+        key = (ssid, security)
+        if key in seen:
+            continue
+        seen.add(key)
+        current = in_use.strip() == "*"
+        networks.append(
+            {
+                "ssid": ssid,
+                "signal": f"{signal}%",
+                "security": security or "open",
+                "current": "yes" if current else "no",
+                "ssid_hidden": False,
+            }
+        )
+
+    return {
+        "status": "ok",
+        "backend": "networkmanager",
+        "interface": "wlan0",
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "refresh_attempted": refresh,
+        "refresh_status": "ok" if refresh else "not-requested",
+        "networks": networks,
+    }
+
+
+def wifi_scan(refresh: bool = True) -> dict:
+    if networkmanager_owns_wlan0() or shutil.which("nmcli"):
+        nm_scan = networkmanager_scan(refresh=refresh)
+        if nm_scan.get("status") == "ok":
+            return nm_scan
+    fallback = scan(refresh=refresh)
+    current_ssid = wlan_ssid()
+    for network in fallback.get("networks", []):
+        network["current"] = "yes" if network.get("ssid") == current_ssid else "no"
+    return fallback
+
+
+def parse_post_payload(handler: BaseHTTPRequestHandler) -> dict:
+    try:
+        length = int(handler.headers.get("Content-Length", "0"))
+    except ValueError:
+        length = 0
+    if length <= 0:
+        return {}
+    if length > 8192:
+        return {"_error": "payload-too-large"}
+    raw = handler.rfile.read(length).decode("utf-8", errors="replace")
+    content_type = handler.headers.get("Content-Type", "")
+    if "application/json" in content_type:
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            return {"_error": "invalid-json"}
+        return payload if isinstance(payload, dict) else {"_error": "invalid-json"}
+    values = parse_qs(raw, keep_blank_values=True)
+    return {key: value[-1] if value else "" for key, value in values.items()}
+
+
+def wifi_connect_plan(payload: dict, recovery_active: bool) -> tuple[dict, int]:
+    if payload.get("_error"):
+        return {"status": "failure", "error": payload["_error"], "connect_started": False}, 400
+
+    ssid = str(payload.get("ssid", "")).strip()
+    password = str(payload.get("password", ""))
+    if not ssid:
+        return {"status": "failure", "error": "missing-ssid", "connect_started": False}, 400
+    if len(ssid.encode("utf-8")) > 32:
+        return {"status": "failure", "error": "ssid-too-long", "connect_started": False}, 400
+    if password and len(password) < 8:
+        return {"status": "failure", "error": "password-too-short", "connect_started": False}, 400
+
+    backend = "raspberrypi-networkmanager" if networkmanager_owns_wlan0() else "unknown"
+    return (
+        {
+            "status": "planned",
+            "mutation": "not-implemented",
+            "requested_ssid": ssid,
+            "backend": backend,
+            "password_received": "yes" if password else "no",
+            "secret_policy": "runtime-only; password is not logged or persisted",
+            "connect_started": False,
+            "warning_if_recovery_active": (
+                "Future apply will keep recovery active until NetworkManager validates IP, gateway, and internet."
+                if recovery_active
+                else "Normal mode plan only; no recovery cleanup required in this stub."
+            ),
+            "connect_plan": [
+                "create temporary NetworkManager connection for requested SSID",
+                "attempt connection without modifying the previous profile",
+                "validate IP address, gateway, and internet reachability",
+                "on success: stop recovery services and return to normal UI",
+                "on failure: keep AP recovery active and report the error",
+            ],
+        },
+        200,
+    )
+
+
 def snapshot_preview() -> dict:
     return run_json_command(["state-snapshot", "--simulate", "--json"])
 
@@ -337,7 +472,7 @@ def ui_data(recovery: dict | None = None) -> dict:
             "ui_access_password": "future-not-configured",
         },
         "system": system_info(diagnose, recovery),
-        "scan": scan(),
+        "scan": wifi_scan(refresh=False),
     }
 
 
@@ -384,6 +519,11 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path == "/wifi/connect":
+            payload, status = wifi_connect_plan(parse_post_payload(self), bool(self.recovery.get("active")))
+            self.send_json(payload, status=status)
+            return
+
         if parsed.path == "/reconnect-previous":
             if not self.recovery.get("active"):
                 previous_connection = read_ap_only_state_value("active_connection") or "unknown"
@@ -471,6 +611,10 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
 
         if path == "/api/scan":
             self.send_json(scan(refresh=query.get("refresh") == ["1"]))
+            return
+
+        if path == "/wifi/scan":
+            self.send_json(wifi_scan(refresh=query.get("refresh") != ["0"]))
             return
 
         if path == "/api/scan-refresh":

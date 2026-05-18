@@ -1509,7 +1509,7 @@
 
       const passwordLabel = document.createElement('label');
       passwordLabel.className = 'field-label';
-      passwordLabel.innerHTML = 'Preparation SAFE <span class="field-hint">Mot de passe local uniquement, jamais envoye.</span>';
+      passwordLabel.innerHTML = 'Mot de passe Wi-Fi <span class="field-hint">Runtime-only: non journalise, non persiste.</span>';
       const password = document.createElement('input');
       password.className = 'password-local';
       password.type = 'password';
@@ -1530,26 +1530,35 @@
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'button';
-      button.textContent = 'Preparer en simulation';
+      button.textContent = 'Se connecter';
+
+      const planButton = document.createElement('button');
+      planButton.type = 'button';
+      planButton.className = 'button secondary';
+      planButton.textContent = 'Afficher le plan';
 
       const summary = document.createElement('p');
       summary.className = 'prep-summary';
-      summary.textContent = 'Aucune connexion reelle. Ce plan reste dans le navigateur.';
+      summary.textContent = 'Plan-only: aucune connexion reelle dans cette version.';
 
       const plan = document.createElement('div');
       plan.className = 'prepare-plan';
       plan.hidden = true;
 
-      button.addEventListener('click', (event) => {
+      planButton.addEventListener('click', (event) => {
         event.stopPropagation();
         renderInlinePlan(network, plan, keepAp.checked);
+      });
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        triggerWifiConnect(network, password, keepAp.checked, plan, button);
       });
       password.addEventListener('click', (event) => event.stopPropagation());
       password.addEventListener('keydown', (event) => event.stopPropagation());
       keepApOption.addEventListener('click', (event) => event.stopPropagation());
       keepApOption.addEventListener('keydown', (event) => event.stopPropagation());
 
-      prep.append(passwordLabel, keepApOption, button, summary, plan);
+      prep.append(passwordLabel, keepApOption, button, planButton, summary, plan);
       return prep;
     }
 
@@ -1578,6 +1587,74 @@
       });
       plan.append(title, list);
       plan.hidden = false;
+    }
+
+    function renderConnectResponse(payload, plan) {
+      plan.replaceChildren();
+      const title = document.createElement('strong');
+      title.textContent = payload.status === 'planned'
+        ? `Connexion planifiee: ${payload.requested_ssid || 'SSID inconnu'}`
+        : `Connexion refusee: ${payload.error || payload.status}`;
+      const list = document.createElement('ul');
+      list.className = 'safe-lines';
+      const lines = payload.connect_plan || [
+        payload.warning_if_recovery_active || 'Aucune mutation reseau depuis cette UI dans cette etape.'
+      ];
+      lines.forEach((text) => {
+        const li = document.createElement('li');
+        const badge = document.createElement('span');
+        const check = document.createElement('span');
+        badge.className = 'safe-icon gear';
+        badge.appendChild(makeIcon('gear'));
+        check.className = 'check';
+        check.textContent = 'PLAN';
+        li.append(badge, document.createTextNode(text), check);
+        list.appendChild(li);
+      });
+      const note = document.createElement('p');
+      note.className = 'field-hint';
+      note.textContent = payload.secret_policy || payload.warning_if_recovery_active || 'Plan-only; aucun changement Wi-Fi reel.';
+      plan.append(title, list, note);
+      plan.hidden = false;
+    }
+
+    async function triggerWifiConnect(network, passwordField, keepApActive, plan, button) {
+      const ssid = displaySsid(network);
+      if (!ssid || ssid === 'Reseau masque') {
+        renderConnectResponse({ status: 'failure', error: 'ssid-hidden-or-missing' }, plan);
+        return;
+      }
+      if (window.location.protocol === 'file:') {
+        renderInlinePlan(network, plan, keepApActive);
+        return;
+      }
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Validation...';
+      try {
+        const response = await fetch('/wifi/connect', {
+          cache: 'no-store',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ssid,
+            password: passwordField.value,
+            keep_ap_active: keepApActive
+          })
+        });
+        const payload = await response.json();
+        passwordField.value = '';
+        renderConnectResponse(payload, plan);
+        if (!response.ok) {
+          button.textContent = 'Se connecter';
+          return;
+        }
+      } catch (error) {
+        renderConnectResponse({ status: 'failure', error: error.message }, plan);
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
     }
 
     function renderNodeState() {
@@ -1647,10 +1724,12 @@
         dot.appendChild(makeIcon('chevron'));
 
         [
+          [network.current === 'yes' ? 'Wi-Fi actuel' : '', 'quality'],
           [network.security || 'securite inconnue', ''],
           [`Canal ${network.channel || 'inconnu'}`, ''],
           [quality.label, 'quality']
         ].forEach(([label, className]) => {
+          if (!label) return;
           const badge = document.createElement('span');
           badge.className = `badge ${className}`.trim();
           badge.textContent = label;
@@ -1710,7 +1789,7 @@
       button.disabled = true;
       status.textContent = 'Scan SAFE en cours...';
       try {
-        const response = await fetch('/api/scan?refresh=1', { cache: 'no-store' });
+        const response = await fetch('/wifi/scan?refresh=1', { cache: 'no-store' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         selectedNetwork = null;
         data.scan = await response.json();
