@@ -239,7 +239,12 @@ def networkmanager_scan(refresh: bool = True) -> dict:
     networks = []
     seen = set()
     for line in result.stdout.splitlines():
-        in_use, ssid, signal, security, channel = (line.split(":", 4) + ["", "", "", "", ""])[:5]
+        parts = line.split(":", 4)
+        in_use = parts[0] if len(parts) > 0 else ""
+        ssid = parts[1] if len(parts) > 1 else ""
+        signal = parts[2] if len(parts) > 2 else ""
+        security = parts[3] if len(parts) > 3 else ""
+        channel = parts[4] if len(parts) > 4 else ""
         if not ssid:
             continue
         key = (ssid, security, channel)
@@ -253,6 +258,7 @@ def networkmanager_scan(refresh: bool = True) -> dict:
                 "signal": f"{signal}%",
                 "security": security or "open",
                 "channel": channel or "inconnu",
+                "chan": channel or "inconnu",
                 "current": "yes" if current else "no",
                 "ssid_hidden": False,
             }
@@ -277,6 +283,12 @@ def wifi_scan(refresh: bool = True) -> dict:
     fallback = scan(refresh=refresh)
     current_ssid = wlan_ssid()
     for network in fallback.get("networks", []):
+        channel = str(network.get("channel") or "").strip()
+        if not channel:
+            channel = str(network.get("chan") or "inconnu").strip() or "inconnu"
+            network["channel"] = channel
+            if "chan" not in network:
+                network["chan"] = channel
         network["current"] = "yes" if network.get("ssid") == current_ssid else "no"
     return fallback
 

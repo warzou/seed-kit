@@ -1686,6 +1686,9 @@
         row.setAttribute('aria-expanded', selectedNetwork === network ? 'true' : 'false');
 
         const quality = signalQuality(network.signal);
+        const channelLabel = network.channel && network.channel !== 'inconnu'
+          ? network.channel
+          : (network.chan || 'inconnu');
         const main = document.createElement('div');
         const orb = document.createElement('span');
         const text = document.createElement('div');
@@ -1712,7 +1715,7 @@
         [
           [network.current === 'yes' ? 'Wi-Fi actuel' : '', 'quality'],
           [network.security || 'securite inconnue', ''],
-          [`Canal ${network.channel || 'inconnu'}`, ''],
+          [`Canal ${channelLabel}`, ''],
           [quality.label, 'quality']
         ].forEach(([label, className]) => {
           if (!label) return;
