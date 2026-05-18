@@ -19,12 +19,15 @@ from urllib.parse import parse_qs, urlparse
 SCRIPT_DIR = Path(__file__).resolve().parent
 WIFI_KIT_SH = SCRIPT_DIR.parent / "wifi-kit.sh"
 AP_SETUP_TEST_SH = SCRIPT_DIR.parent / "ap-setup-test.sh"
+CONNECT_RECOVERY_SH = SCRIPT_DIR.parent / "wifi-kit-connect-recovery.sh"
 INDEX_HTML = SCRIPT_DIR / "index.html"
 NORMAL_UI_PORT = 18089
 RECOVERY_UI_PORT = 80
 RECOVERY_AP_TEST_PASSWORD = "12345678"
 AP_ONLY_NM_STATE = Path("/tmp/wifi-kit-ap-only-nm-state")
 RECONNECT_PREVIOUS_LOG = Path("/tmp/wifi-kit-reconnect-previous.log")
+CONNECT_RECOVERY_LOG = Path("/tmp/wifi-kit-connect-recovery.log")
+CONNECT_RECOVERY_TIMEOUT_SECONDS = 180
 
 CAPTIVE_PATHS = {
     "/generate_204",
@@ -368,45 +371,112 @@ def parse_post_payload(handler: BaseHTTPRequestHandler) -> dict:
     return {key: value[-1] if value else "" for key, value in values.items()}
 
 
-def wifi_connect_plan(payload: dict, recovery_active: bool) -> tuple[dict, int]:
+def security_requires_password(security: str) -> bool:
+    normalized = security.strip().lower()
+    return normalized not in {"", "open", "none", "--", "unknown", "inconnu"}
+
+
+def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[dict, int]:
     if payload.get("_error"):
         return {"status": "failure", "error": payload["_error"], "connect_started": False}, 400
 
     ssid = str(payload.get("ssid", "")).strip()
     password = str(payload.get("password", ""))
+    security = str(payload.get("security", "")).strip()
     if not ssid:
         return {"status": "failure", "error": "missing-ssid", "connect_started": False}, 400
     if len(ssid.encode("utf-8")) > 32:
         return {"status": "failure", "error": "ssid-too-long", "connect_started": False}, 400
+    if security_requires_password(security) and not password:
+        return {"status": "failure", "error": "missing-password", "connect_started": False}, 400
     if password and len(password) < 8:
         return {"status": "failure", "error": "password-too-short", "connect_started": False}, 400
 
     backend = "raspberrypi-networkmanager" if networkmanager_owns_wlan0() else "unknown"
-    return (
-        {
-            "status": "planned",
-            "mutation": "not-implemented",
+    if not recovery_active:
+        return (
+            {
+                "status": "planned",
+                "mutation": "not-started",
+                "error": "recovery-required",
+                "requested_ssid": ssid,
+                "backend": backend,
+                "connect_started": False,
+                "secret_policy": "runtime-only; password was not logged or persisted",
+                "warning_if_recovery_active": "Real Wi-Fi connect is enabled only from AP recovery.",
+                "connect_plan": [
+                    "start AP recovery",
+                    "scan and choose a Wi-Fi from the recovery UI",
+                    "attempt NetworkManager connection with rollback guard",
+                    "on success: stop recovery and continue in normal mode",
+                    "on failure: keep or restart AP recovery for another attempt",
+                ],
+            },
+            409,
+        )
+
+    if os.geteuid() != 0:
+        return {
+            "status": "failure",
+            "error": "root-required",
             "requested_ssid": ssid,
             "backend": backend,
-            "password_received": "yes" if password else "no",
-            "secret_policy": "runtime-only; password is not logged or persisted",
             "connect_started": False,
-            "warning_if_recovery_active": (
-                "Future apply will keep recovery active until NetworkManager validates IP, gateway, and internet."
-                if recovery_active
-                else "Normal mode plan only; no recovery cleanup required in this stub."
-            ),
+        }, 500
+
+    try:
+        process = subprocess.Popen(
+            [
+                "sh",
+                str(CONNECT_RECOVERY_SH),
+                "--ssid",
+                ssid,
+                "--security",
+                security,
+                "--timeout-seconds",
+                str(CONNECT_RECOVERY_TIMEOUT_SECONDS),
+            ],
+            cwd=str(SCRIPT_DIR.parent),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            text=True,
+        )
+        assert process.stdin is not None
+        process.stdin.write(password + "\n")
+        process.stdin.close()
+    except (OSError, BrokenPipeError) as exc:
+        return {
+            "status": "failure",
+            "error": f"start-failed: {exc}",
+            "requested_ssid": ssid,
+            "backend": backend,
+            "connect_started": False,
+        }, 500
+
+    return (
+        {
+            "status": "started",
+            "action": "wifi-connect-recovery",
+            "requested_ssid": ssid,
+            "backend": backend,
+            "connect_started": True,
+            "timeout_seconds": CONNECT_RECOVERY_TIMEOUT_SECONDS,
+            "expected_behavior": "success-stops-recovery-failure-keeps-recovery",
+            "secret_policy": "runtime-only; password is passed on stdin and never returned or logged",
+            "log": str(CONNECT_RECOVERY_LOG),
             "connect_plan": [
-                "create temporary NetworkManager connection for requested SSID",
-                "attempt connection without modifying the previous profile",
-                "validate IP address, gateway, and internet reachability",
-                "on success: stop recovery services and return to normal UI",
-                "on failure: keep AP recovery active and report the error",
+                "stop AP recovery only for the STA validation attempt",
+                "create in-memory NetworkManager profile with save no",
+                "connect wlan0 to the requested SSID",
+                "validate SSID, IP address, gateway, and gateway ping",
+                "on success: keep the new Wi-Fi and leave recovery stopped",
+                "on failure: delete temporary profile and restart AP recovery",
             ],
         },
-        200,
+        202,
     )
-
 
 def snapshot_preview() -> dict:
     return run_json_command(["state-snapshot", "--simulate", "--json"])
@@ -595,7 +665,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         if parsed.path == "/wifi/connect":
-            payload, status = wifi_connect_plan(parse_post_payload(self), bool(self.recovery.get("active")))
+            payload, status = start_recovery_wifi_connect(parse_post_payload(self), bool(self.recovery.get("active")))
             self.send_json(payload, status=status)
             return
 

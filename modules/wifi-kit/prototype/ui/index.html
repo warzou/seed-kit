@@ -1647,7 +1647,7 @@
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'button';
-      button.textContent = 'Se connecter';
+      button.textContent = 'Connecter un Wi-Fi';
 
       const planButton = document.createElement('button');
       planButton.type = 'button';
@@ -1656,7 +1656,7 @@
 
       const summary = document.createElement('p');
       summary.className = 'prep-summary';
-      summary.textContent = 'Plan-only: aucune connexion reelle dans cette version.';
+      summary.textContent = 'Action reelle uniquement depuis le mode recovery. En mode normal, Wifi-Kit affiche le plan.';
 
       const plan = document.createElement('div');
       plan.className = 'prepare-plan';
@@ -1707,7 +1707,9 @@
     function renderConnectResponse(payload, plan) {
       plan.replaceChildren();
       const title = document.createElement('strong');
-      title.textContent = payload.status === 'planned'
+      title.textContent = payload.connect_started
+        ? `Connexion en cours: ${payload.requested_ssid || 'SSID inconnu'}`
+        : payload.status === 'planned'
         ? `Connexion planifiee: ${payload.requested_ssid || 'SSID inconnu'}`
         : `Connexion refusee: ${payload.error || payload.status}`;
       const list = document.createElement('ul');
@@ -1728,7 +1730,9 @@
       });
       const note = document.createElement('p');
       note.className = 'field-hint';
-      note.textContent = payload.secret_policy || payload.warning_if_recovery_active || 'Plan-only; aucun changement Wi-Fi reel.';
+      note.textContent = payload.connect_started
+        ? "Tentative de connexion en cours... si la connexion réussit, le portail disparaîtra. En cas d'echec, le mode recovery revient pour une nouvelle tentative."
+        : payload.secret_policy || payload.warning_if_recovery_active || 'Connexion non validée, le mode recovery reste actif.';
       plan.append(title, list, note);
       plan.hidden = false;
     }
@@ -1745,7 +1749,7 @@
       }
       const originalText = button.textContent;
       button.disabled = true;
-      button.textContent = 'Validation...';
+      button.textContent = 'Connexion en cours...';
       try {
         const response = await fetch('/wifi/connect', {
           cache: 'no-store',
@@ -1753,6 +1757,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             ssid,
+            security: network.security || '',
             password: passwordField.value,
           })
         });
@@ -1760,7 +1765,7 @@
         passwordField.value = '';
         renderConnectResponse(payload, plan);
         if (!response.ok) {
-          button.textContent = 'Se connecter';
+          button.textContent = 'Connecter un Wi-Fi';
           return;
         }
       } catch (error) {
