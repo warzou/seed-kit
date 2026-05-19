@@ -87,6 +87,34 @@ user in the final install. Future config files under `/etc/seed-kit/wifi-kit`
 should use strict permissions such as `0600` or `0640`, depending on the final
 owner/group model.
 
+## Sudoers manifest
+
+Wifi-Kit exposes a dedicated sudoers manifest for Seed-Kit core preview flows:
+
+```sh
+sh modules/wifi-kit/contract/sudoers.manifest.sh print
+```
+
+Seed-Kit core should consume this manifest for `configure-sudoers-preview`
+instead of hardcoding Wifi-Kit privileged commands. The manifest is declarative
+only: it does not write sudoers files, call `visudo`, start runtime processes,
+start AP mode, or change networking.
+
+The preview rule shape is:
+
+```text
+seed-kit-wifi ALL=(root) NOPASSWD: /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh start-ap-mode, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh return-default-network
+```
+
+Only these actions are authorized:
+
+- `start-ap-mode`
+- `return-default-network`
+
+Broad sudo shapes remain forbidden, including `sudo sh`, `sudo bash`,
+wildcards, direct `nmcli`, direct `systemctl`, direct `hostapd`, direct
+`dnsmasq`, free arguments, reboot, and `save_config`.
+
 ## Contract summary
 
 - `id`: `wifi-kit`
