@@ -63,6 +63,15 @@ module or system package is ready for use.
 Seed-Kit uses the Ready model to separate installation from configuration,
 validation, and operator-owned identity steps. See `docs/READY-MODEL.md`.
 
+## Wifi-Kit integration
+
+Wifi-Kit is the first module expected to need host networking tools, a normal UI
+service, a recovery/AP mode, and a privileged wrapper.
+
+The core integration contract is documented in `docs/WIFI-KIT-INTEGRATION.md`.
+That document is design-only for now: no sudoers, systemd unit, network change,
+or runtime file install is implied by the dependency declaration.
+
 ## Why not a resolver yet?
 
 Field use is still shaping the real module graph. A resolver would be premature
