@@ -1665,6 +1665,7 @@ show_module_dependencies() {
   module_file="$ROOT_DIR/modules/$module.sh"
   dependency_base="$(printf '%s' "$module" | tr '-' '_')"
   dependency_fn="module_${dependency_base}_dependencies"
+  contract_file="$ROOT_DIR/modules/$module/contract/$module.contract.sh"
 
   case " $MODULES " in
     *" $module "*) ;;
@@ -1679,10 +1680,19 @@ show_module_dependencies() {
     return 2
   fi
 
+  if [ -f "$contract_file" ]; then
+    if sh "$contract_file" print; then
+      return 0
+    fi
+    echo "contract print failed for $module; falling back to module declaration" >&2
+  fi
+
   . "$module_file"
 
   ui_header "module dependencies" "$module"
-  if command -v "$dependency_fn" >/dev/null 2>&1; then
+  if command -v "module_${dependency_base}_contract" >/dev/null 2>&1; then
+    "module_${dependency_base}_contract" "dependencies"
+  elif command -v "$dependency_fn" >/dev/null 2>&1; then
     "$dependency_fn"
   else
     ui_line "no dependency declaration"

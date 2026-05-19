@@ -315,3 +315,15 @@ Future uninstall must be explicit and conservative:
 - port `80` requires root or a controlled privilege boundary
 - sudoers mistakes can create privilege escalation
 - recovery cleanup must avoid breaking the current SSH path
+
+## Core contract consumption (read-only)
+
+For V1, Seed-Kit reads module contract data as a preview input when the contract
+script is present:
+
+- path: `modules/wifi-kit/contract/wifi-kit.contract.sh`
+- command: `sh modules/wifi-kit/contract/wifi-kit.contract.sh print`
+- effect: read-only output only, no mutation
+
+This keeps core behavior generic and avoids hardcoding Wifi-Kit runtime logic in
+Shell engine code. Apply flow remains explicit, step-by-step, and confirm-first.

@@ -128,3 +128,33 @@ Wifi-Kit maps to this contract as:
 This document is a contract and planning model only. It does not install
 packages, write sudoers, install systemd services, change networking, start an
 AP, launch runtime services, or handle secrets.
+
+## Core consumption model (Seed-Kit)
+
+Seed-Kit consumes module contracts in a read-only, POSIX-simple way:
+
+- module contract path: `modules/<module>/contract/<module>.contract.sh`
+- contract command: `sh <contract>.sh print`
+- optional helper function in module script: `module_<name>_contract <mode>` (for
+  example, `module_wifi_kit_contract dependencies`)
+- source-able shell variables are allowed inside the module-owned contract, but
+  V1 core consumption does not source the contract into the main Seed-Kit shell
+
+Current resolution order in Seed-Kit for `modules deps` is:
+
+1. if a contract file exists and `sh <contract>.sh print` succeeds, Seed-Kit prints
+   that output
+2. if the module exposes `module_<name>_contract`, Seed-Kit calls it
+3. fallback to `module_<name>_dependencies`
+
+No contract output is applied automatically. Everything remains V1 read-only and
+preview-oriented.
+
+Each contract remains responsible for module-specific details (required/recommended/
+conditional dependencies, capabilities, wrappers, phases, safety policy). Seed-Kit
+remains the safe engine for plan/read/preview/confirm flow.
+
+If structured parsing is needed later, the preferred shape is a module-provided
+print mode that emits simple sectioned text or `KEY=value` lines from a child
+`sh` process. The core should not parse arbitrary shell code or run contract
+actions directly.
