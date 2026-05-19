@@ -20,6 +20,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 WIFI_KIT_SH = SCRIPT_DIR.parent / "wifi-kit.sh"
 AP_SETUP_TEST_SH = SCRIPT_DIR.parent / "ap-setup-test.sh"
 CONNECT_RECOVERY_SH = SCRIPT_DIR.parent / "wifi-kit-connect-recovery.sh"
+ACTION_WRAPPER_SH = SCRIPT_DIR.parent / "wifi-kit-action-wrapper.sh"
 INDEX_HTML = SCRIPT_DIR / "index.html"
 NORMAL_UI_PORT = 18089
 RECOVERY_UI_PORT = 80
@@ -32,6 +33,7 @@ START_AP_MODE_LOG = Path("/tmp/wifi-kit-start-ap-mode.log")
 RETURN_DEFAULT_NETWORK_LOG = Path("/tmp/wifi-kit-return-default-network.log")
 DEFAULT_NETWORK_CONNECTION = "netplan-wlan0-GL-MT6000-d53"
 AP_MODE_MAX_SECONDS = 300
+PRIVILEGED_ACTIONS_ENV = "WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS"
 
 CAPTIVE_PATHS = {
     "/generate_204",
@@ -165,44 +167,65 @@ def bool_payload(value: object) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def privileged_actions_enabled() -> bool:
+    return os.environ.get(PRIVILEGED_ACTIONS_ENV) == "1"
+
+
+def privileged_action_command(action: str) -> tuple[list[str], str]:
+    if not ACTION_WRAPPER_SH.exists():
+        return [], "wrapper-missing"
+    shell_bin = find_tool("sh") or "/bin/sh"
+    wrapper_command = [shell_bin, str(ACTION_WRAPPER_SH), action]
+    if os.geteuid() == 0:
+        return wrapper_command, ""
+    sudo_bin = find_tool("sudo")
+    if not sudo_bin:
+        return [], "sudo-missing"
+    probe = subprocess.run(
+        [sudo_bin, "-n", "-l", *wrapper_command],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if probe.returncode != 0:
+        return [], "privileged-action-not-authorized"
+    return [sudo_bin, "-n", *wrapper_command], ""
+
+
 def start_ap_mode(payload: dict) -> tuple[dict, int]:
     dry_run = bool_payload(payload.get("dry_run"))
     action = "start-ap-mode"
-    if dry_run:
-        append_action_log(START_AP_MODE_LOG, action=action, status="planned", max_seconds=AP_MODE_MAX_SECONDS)
+    if dry_run or not privileged_actions_enabled():
+        append_action_log(
+            START_AP_MODE_LOG,
+            action=action,
+            status="planned",
+            max_seconds=AP_MODE_MAX_SECONDS,
+            privileged_actions_enabled=privileged_actions_enabled(),
+        )
         return {
             "status": "planned",
             "action": action,
             "ap_started": False,
-            "dry_run": True,
+            "dry_run": dry_run,
+            "privileged_actions_enabled": privileged_actions_enabled(),
             "ssid": f"Wifi-Kit-{socket.gethostname() or 'node'}",
             "timeout_seconds": AP_MODE_MAX_SECONDS,
             "log": str(START_AP_MODE_LOG),
             "warning": "Real start can interrupt normal Wi-Fi access while AP mode starts.",
         }, 200
 
-    command = [
-        "sh",
-        str(AP_SETUP_TEST_SH),
-        "apply-ap-recovery-manual-test",
-        "--dangerous-real-apply",
-        "--confirm",
-        "WIFI-KIT AP RECOVERY MANUAL TEST",
-        "--max-seconds",
-        str(AP_MODE_MAX_SECONDS),
-    ]
-    if os.geteuid() != 0:
-        sudo_bin = find_tool("sudo")
-        if not sudo_bin:
-            append_action_log(START_AP_MODE_LOG, action=action, status="failure", error="root-required")
-            return {
-                "status": "failure",
-                "action": action,
-                "error": "root-required",
-                "ap_started": False,
-                "log": str(START_AP_MODE_LOG),
-            }, 500
-        command = [sudo_bin, "-n", *command]
+    command, error = privileged_action_command(action)
+    if error:
+        append_action_log(START_AP_MODE_LOG, action=action, status="failure", error=error)
+        return {
+            "status": "failure",
+            "action": action,
+            "error": error,
+            "ap_started": False,
+            "log": str(START_AP_MODE_LOG),
+        }, 403 if error == "privileged-action-not-authorized" else 500
+
     try:
         subprocess.Popen(
             command,
@@ -239,30 +262,35 @@ def return_default_network(payload: dict) -> tuple[dict, int]:
     dry_run = bool_payload(payload.get("dry_run"))
     action = "return-default-network"
     connection = DEFAULT_NETWORK_CONNECTION
-    if dry_run:
-        append_action_log(RETURN_DEFAULT_NETWORK_LOG, action=action, status="planned", connection=connection)
+    if dry_run or not privileged_actions_enabled():
+        append_action_log(
+            RETURN_DEFAULT_NETWORK_LOG,
+            action=action,
+            status="planned",
+            connection=connection,
+            privileged_actions_enabled=privileged_actions_enabled(),
+        )
         return {
             "status": "planned",
             "action": action,
             "default_connection": connection,
             "return_started": False,
-            "dry_run": True,
+            "dry_run": dry_run,
+            "privileged_actions_enabled": privileged_actions_enabled(),
             "log": str(RETURN_DEFAULT_NETWORK_LOG),
             "warning": "Real return can interrupt network access for a few seconds.",
         }, 200
 
-    nmcli_bin = find_tool("nmcli")
-    if not nmcli_bin:
-        append_action_log(RETURN_DEFAULT_NETWORK_LOG, action=action, status="failure", connection=connection, error="nmcli-missing")
-        return {"status": "failure", "action": action, "error": "nmcli-missing", "return_started": False}, 500
-
-    command = [nmcli_bin, "connection", "up", connection]
-    if os.geteuid() != 0:
-        sudo_bin = find_tool("sudo")
-        if not sudo_bin:
-            append_action_log(RETURN_DEFAULT_NETWORK_LOG, action=action, status="failure", connection=connection, error="root-required")
-            return {"status": "failure", "action": action, "error": "root-required", "return_started": False}, 500
-        command = [sudo_bin, "-n", *command]
+    command, error = privileged_action_command(action)
+    if error:
+        append_action_log(RETURN_DEFAULT_NETWORK_LOG, action=action, status="failure", connection=connection, error=error)
+        return {
+            "status": "failure",
+            "action": action,
+            "error": error,
+            "return_started": False,
+            "default_connection": connection,
+        }, 403 if error == "privileged-action-not-authorized" else 500
 
     try:
         subprocess.Popen(
