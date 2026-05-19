@@ -115,6 +115,24 @@ wildcard that permits arbitrary parameters.
 The placeholder service user is currently `seed-kit-wifi`. Seed-Kit core may
 validate or refine the final service account before any future apply.
 
+## Runtime Service Preview
+
+Wifi-Kit exposes the normal UI service shape as a read-only contract for
+Seed-Kit core previews:
+
+```sh
+sh modules/wifi-kit/contract/runtime-service.manifest.sh print
+```
+
+Seed-Kit core should consume this manifest for `install-service-preview`. It
+describes the future `seed-kit-wifi-kit-ui.service`, the service user
+placeholder `seed-kit-wifi`, the normal UI command on port `54321`, readiness
+checks, health checks, and explicit non-actions.
+
+The normal UI service must not start AP mode at boot. AP recovery remains an
+explicit privileged action through the wrapper and uses temporary `hostapd`,
+temporary `dnsmasq`, and captive port `80` only while recovery is active.
+
 ## Explicit Non-Goals
 
 - no broad sudo

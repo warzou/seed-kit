@@ -115,6 +115,40 @@ Broad sudo shapes remain forbidden, including `sudo sh`, `sudo bash`,
 wildcards, direct `nmcli`, direct `systemctl`, direct `hostapd`, direct
 `dnsmasq`, free arguments, reboot, and `save_config`.
 
+## Runtime-service manifest
+
+Wifi-Kit exposes a dedicated runtime-service manifest for Seed-Kit core preview
+flows:
+
+```sh
+sh modules/wifi-kit/contract/runtime-service.manifest.sh print
+```
+
+Seed-Kit core should consume this manifest for `install-service-preview`
+instead of hardcoding the Wifi-Kit normal UI service. The manifest describes the
+future service name, service user placeholder, command, ports, runtime/log
+directories, readiness checks, health checks, and non-actions.
+
+The target normal UI service is:
+
+```text
+seed-kit-wifi-kit-ui.service
+```
+
+The target command is:
+
+```text
+python3 /opt/seed-kit/wifi-kit/ui/serve-readonly.py --host 0.0.0.0 --port 54321
+```
+
+Normal runtime is client Wi-Fi mode only: no `hostapd`, no `dnsmasq`, no AP at
+boot. Recovery remains explicit and temporary, using captive port `80` only
+when AP recovery is intentionally started.
+
+The runtime-service manifest is declarative only: it does not write systemd
+units, call `systemctl`, start the UI, start AP mode, change networking, write
+secrets, or reboot.
+
 ## Contract summary
 
 - `id`: `wifi-kit`

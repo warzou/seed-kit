@@ -1,0 +1,144 @@
+#!/bin/sh
+set -eu
+
+# Wifi-Kit runtime service manifest (sourceable shell declaration)
+# Purpose:
+# - describe the future normal UI service for Seed-Kit core previews
+# - keep systemd rendering and apply orchestration outside Wifi-Kit
+# - avoid real service, runtime, network, or privilege mutation from this artifact
+
+WIFI_KIT_RUNTIME_SERVICE_MANIFEST_ID="wifi-kit-runtime-service"
+WIFI_KIT_RUNTIME_SERVICE_MANIFEST_MODULE_ID="wifi-kit"
+WIFI_KIT_RUNTIME_SERVICE_MANIFEST_TYPE="runtime-service"
+WIFI_KIT_RUNTIME_SERVICE_MANIFEST_VERSION="1"
+WIFI_KIT_RUNTIME_SERVICE_APPLY_PHASE_TARGET="install-service-preview"
+
+WIFI_KIT_RUNTIME_SERVICE_NAME="seed-kit-wifi-kit-ui.service"
+WIFI_KIT_RUNTIME_SERVICE_DESCRIPTION="Seed-Kit Wifi-Kit normal UI"
+WIFI_KIT_RUNTIME_SERVICE_UNIT_PATH="/etc/systemd/system/seed-kit-wifi-kit-ui.service"
+WIFI_KIT_RUNTIME_SERVICE_TYPE="simple"
+WIFI_KIT_RUNTIME_SERVICE_USER="seed-kit-wifi"
+WIFI_KIT_RUNTIME_SERVICE_GROUP="seed-kit-wifi"
+WIFI_KIT_RUNTIME_SERVICE_USER_POLICY="dedicated-non-root-preferred"
+WIFI_KIT_RUNTIME_SERVICE_AUTOSTART="yes"
+WIFI_KIT_RUNTIME_SERVICE_RESTART_POLICY="on-failure"
+
+WIFI_KIT_RUNTIME_SERVICE_APP_DIR="/opt/seed-kit/wifi-kit"
+WIFI_KIT_RUNTIME_SERVICE_CONFIG_DIR="/etc/seed-kit/wifi-kit"
+WIFI_KIT_RUNTIME_SERVICE_RUNTIME_DIR="/run/seed-kit/wifi-kit"
+WIFI_KIT_RUNTIME_SERVICE_LOG_DIR="/var/log/seed-kit/wifi-kit"
+WIFI_KIT_RUNTIME_SERVICE_RUNTIME_DIR_OWNER="seed-kit-wifi:seed-kit-wifi"
+WIFI_KIT_RUNTIME_SERVICE_LOG_DIR_OWNER="seed-kit-wifi:seed-kit-wifi"
+WIFI_KIT_RUNTIME_SERVICE_RUNTIME_DIR_MODE="0750"
+WIFI_KIT_RUNTIME_SERVICE_LOG_DIR_MODE="0750"
+WIFI_KIT_RUNTIME_SERVICE_WORKING_DIR="/opt/seed-kit/wifi-kit"
+
+WIFI_KIT_RUNTIME_SERVICE_PORT="54321"
+WIFI_KIT_RUNTIME_SERVICE_HOST="0.0.0.0"
+WIFI_KIT_RUNTIME_SERVICE_COMMAND="python3 /opt/seed-kit/wifi-kit/ui/serve-readonly.py --host 0.0.0.0 --port 54321"
+WIFI_KIT_RUNTIME_SERVICE_STATUS_URL="http://127.0.0.1:54321/status"
+WIFI_KIT_RUNTIME_SERVICE_RECOVERY_CAPTIVE_PORT="80"
+
+WIFI_KIT_RUNTIME_SERVICE_DEPENDENCIES='
+python3
+network-manager
+nmcli
+wpa_cli
+iw
+iproute2
+'
+
+WIFI_KIT_RUNTIME_SERVICE_READINESS_CHECKS='
+python3 present
+serve-readonly.py installed
+index.html installed
+port 54321 free
+NetworkManager running
+wlan0 present
+no active Wifi-Kit recovery leftovers
+wrapper installed if privileged actions enabled
+'
+
+WIFI_KIT_RUNTIME_SERVICE_HEALTH_CHECKS='
+/status responds
+wifi scan works
+UI normal responds on 54321
+no unexpected hostapd/dnsmasq
+'
+
+WIFI_KIT_RUNTIME_SERVICE_NORMAL_RUNTIME_EXPECTATIONS='
+normal-ui-port=54321
+no-hostapd
+no-dnsmasq
+no-active-ap
+client-wifi-normal-mode-only
+'
+
+WIFI_KIT_RUNTIME_SERVICE_RECOVERY_POLICY='
+recovery-captive-port=80
+hostapd-temporary-only
+dnsmasq-temporary-only
+recovery-explicit-only
+no-ap-at-boot
+'
+
+WIFI_KIT_RUNTIME_SERVICE_NON_ACTIONS='
+no-systemd-write
+no-systemctl
+no-runtime-start
+no-ap
+no-network-change
+no-sudoers
+no-secret
+no-reboot
+'
+
+_wifi_kit_runtime_service_print_list() {
+  _name="$1"
+  _list="$2"
+  printf '%s\n' "$_list" | sed '/^$/d' | while IFS= read -r _entry; do
+    [ -n "$_entry" ] && printf '%s=%s\n' "$_name" "$_entry"
+  done
+}
+
+module_wifi_kit_runtime_service_manifest() {
+  printf 'WIFI_KIT_RUNTIME_SERVICE_MANIFEST_ID=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_MANIFEST_ID"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_MANIFEST_MODULE_ID=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_MANIFEST_MODULE_ID"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_MANIFEST_TYPE=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_MANIFEST_TYPE"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_MANIFEST_VERSION=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_MANIFEST_VERSION"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_APPLY_PHASE_TARGET=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_APPLY_PHASE_TARGET"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_NAME=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_NAME"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_DESCRIPTION=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_DESCRIPTION"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_UNIT_PATH=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_UNIT_PATH"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_TYPE=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_TYPE"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_USER=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_USER"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_GROUP=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_GROUP"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_USER_POLICY=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_USER_POLICY"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_AUTOSTART=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_AUTOSTART"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_RESTART_POLICY=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_RESTART_POLICY"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_APP_DIR=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_APP_DIR"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_CONFIG_DIR=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_CONFIG_DIR"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_RUNTIME_DIR=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_RUNTIME_DIR"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_LOG_DIR=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_LOG_DIR"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_RUNTIME_DIR_OWNER=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_RUNTIME_DIR_OWNER"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_LOG_DIR_OWNER=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_LOG_DIR_OWNER"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_RUNTIME_DIR_MODE=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_RUNTIME_DIR_MODE"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_LOG_DIR_MODE=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_LOG_DIR_MODE"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_WORKING_DIR=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_WORKING_DIR"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_PORT=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_PORT"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_HOST=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_HOST"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_COMMAND=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_COMMAND"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_STATUS_URL=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_STATUS_URL"
+  printf 'WIFI_KIT_RUNTIME_SERVICE_RECOVERY_CAPTIVE_PORT=%s\n' "$WIFI_KIT_RUNTIME_SERVICE_RECOVERY_CAPTIVE_PORT"
+  _wifi_kit_runtime_service_print_list WIFI_KIT_RUNTIME_SERVICE_DEPENDENCY "$WIFI_KIT_RUNTIME_SERVICE_DEPENDENCIES"
+  _wifi_kit_runtime_service_print_list WIFI_KIT_RUNTIME_SERVICE_READINESS_CHECK "$WIFI_KIT_RUNTIME_SERVICE_READINESS_CHECKS"
+  _wifi_kit_runtime_service_print_list WIFI_KIT_RUNTIME_SERVICE_HEALTH_CHECK "$WIFI_KIT_RUNTIME_SERVICE_HEALTH_CHECKS"
+  _wifi_kit_runtime_service_print_list WIFI_KIT_RUNTIME_SERVICE_NORMAL_RUNTIME_EXPECTATION "$WIFI_KIT_RUNTIME_SERVICE_NORMAL_RUNTIME_EXPECTATIONS"
+  _wifi_kit_runtime_service_print_list WIFI_KIT_RUNTIME_SERVICE_RECOVERY_POLICY "$WIFI_KIT_RUNTIME_SERVICE_RECOVERY_POLICY"
+  _wifi_kit_runtime_service_print_list WIFI_KIT_RUNTIME_SERVICE_NON_ACTION "$WIFI_KIT_RUNTIME_SERVICE_NON_ACTIONS"
+}
+
+if [ "${1-}" = "print" ]; then
+  module_wifi_kit_runtime_service_manifest
+  exit 0
+fi
