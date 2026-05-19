@@ -14,6 +14,32 @@ module_wifi_kit_plan() {
   echo "- safety: no Wi-Fi secret handling in this flow"
 }
 
+module_wifi_kit_dependencies() {
+  echo "Wifi-Kit dependencies"
+  echo ""
+  echo "System packages:"
+  echo "- network-manager"
+  echo "- wpasupplicant / wpa_cli"
+  echo "- hostapd"
+  echo "- dnsmasq"
+  echo "- python3"
+  echo "- iw"
+  echo "- iproute2"
+  echo "- rfkill (optional)"
+  echo ""
+  echo "Future runtime:"
+  echo "- normal UI port: 54321"
+  echo "- recovery captive portal: 80"
+  echo "- AP mode: explicit only"
+  echo ""
+  echo "Safety:"
+  echo "- no AP at boot"
+  echo "- no sudoers applied"
+  echo "- no network changes"
+  echo "- no services installed"
+  echo "- no secrets"
+}
+
 module_wifi_kit_apply() {
   echo "- SAFE apply simulation (dry-run only)"
   echo "- no real network action: no hostapd, no dnsmasq, no NetworkManager"
