@@ -271,3 +271,42 @@ Persistent / stable
 Preview only: no copy, no mkdir, no chmod.
 No changes were made.
 ```
+
+## Sudoers, service, and recovery previews
+
+Seed-Kit can also render plan-only previews for privileged wrappers, runtime
+services, and recovery modes:
+
+```sh
+sh seed-kit.sh modules configure-sudoers-preview <module>
+sh seed-kit.sh modules install-service-preview <module>
+sh seed-kit.sh modules recovery-preview <module>
+```
+
+These commands consume the same module contract as `modules deps`,
+`validate`, `install-packages-preview`, and `install-files-preview`.
+
+`configure-sudoers-preview` may display:
+
+- declared privileged wrapper paths
+- allowed future wrapper actions
+- future sudoers constraints
+- explicit reminders that no sudoers file is written and no `sudo` is executed
+
+`install-service-preview` may display:
+
+- declared runtime service name and command
+- intended user, port, autostart policy, runtime directory, and log directory
+- explicit reminders that no systemd unit is created and no service is started
+
+`recovery-preview` may display:
+
+- declared recovery/AP/captive portal settings
+- ports, SSID, AP IP, and DHCP range
+- recovery prerequisites and capability blockers
+- forbidden automatic actions and network risks
+- explicit reminders that no AP is started and no network state is changed
+
+All three commands are SAFE previews. They never write sudoers, never call
+`systemctl`, never install packages, never copy files, never create directories,
+never change networking, never start AP mode, and never launch module runtime.

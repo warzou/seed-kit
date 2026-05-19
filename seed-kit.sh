@@ -1771,6 +1771,15 @@ contract_values_for_key() {
   done < "$contract_data"
 }
 
+contract_values_for_keys() {
+  contract_data=$1
+  shift
+
+  for contract_key in "$@"; do
+    contract_values_for_key "$contract_data" "$contract_key"
+  done
+}
+
 contract_first_matching_value() {
   contract_data=$1
   shift
@@ -1785,6 +1794,18 @@ contract_first_matching_value() {
   done
 
   return 0
+}
+
+show_contract_preview_unavailable() {
+  preview_name=$1
+  module=$2
+
+  ui_header "Seed-Kit > $preview_name" "$module"
+  ui_line "Mode: SAFE read-only"
+  ui_line ""
+  ui_line "No structured module contract is available."
+  ui_line ""
+  ui_line "No changes were made."
 }
 
 dependency_check_name() {
@@ -2352,6 +2373,293 @@ EOF
   trap - EXIT HUP INT TERM
 }
 
+show_configure_sudoers_preview() {
+  module=$1
+  contract_tmp=$(mktemp -t seed-kit-module-contract.XXXXXX)
+  trap 'rm -f "$contract_tmp"' EXIT HUP INT TERM
+
+  module_prefix=$(contract_key_prefix "$module")
+
+  if ! module_contract_print "$module" > "$contract_tmp"; then
+    rm -f "$contract_tmp"
+    trap - EXIT HUP INT TERM
+    show_contract_preview_unavailable "configure-sudoers-preview" "$module"
+    return 0
+  fi
+
+  wrapper_path=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_PRIVILEGED_WRAPPER" \
+    "${module_prefix}_PRIVILEGED_WRAPPER_PATH" \
+    "${module_prefix}_WRAPPER_PATH")
+
+  if [ "$(seed_lang)" = "fr" ]; then
+    wrapper_label="Wrappers privilégiés déclarés"
+    actions_label="Actions autorisées futures"
+    sudoers_label="Sudoers futur potentiel"
+    risks_label="Contraintes"
+    none_label="Non déclaré"
+    preview_only="Preview seulement : aucun sudoers écrit, aucun sudo exécuté."
+    no_changes="Aucun changement effectué."
+  else
+    wrapper_label="Declared privileged wrappers"
+    actions_label="Future allowed actions"
+    sudoers_label="Potential future sudoers"
+    risks_label="Constraints"
+    none_label="Not declared"
+    preview_only="Preview only: no sudoers file written, no sudo executed."
+    no_changes="No changes were made."
+  fi
+
+  ui_header "Seed-Kit > configure-sudoers-preview" "$module"
+  ui_line "Mode: SAFE read-only"
+  ui_line ""
+  ui_line "$wrapper_label"
+  ui_line "  ${wrapper_path:-$none_label}"
+
+  ui_line ""
+  ui_line "$actions_label"
+  actions_found=0
+  while IFS= read -r action; do
+    [ -z "$action" ] && continue
+    actions_found=1
+    ui_line "  - $action"
+  done <<EOF
+$(contract_values_for_keys "$contract_tmp" \
+  "${module_prefix}_PRIVILEGED_ACTIONS" \
+  "${module_prefix}_ALLOWED_ACTIONS" \
+  "${module_prefix}_WRAPPER_ALLOWED_ACTIONS")
+EOF
+  [ "$actions_found" -eq 0 ] && ui_line "  $none_label"
+
+  ui_line ""
+  ui_line "$sudoers_label"
+  sudoers_found=0
+  while IFS= read -r requirement; do
+    [ -z "$requirement" ] && continue
+    sudoers_found=1
+    ui_line "  - $requirement"
+  done <<EOF
+$(contract_values_for_keys "$contract_tmp" \
+  "${module_prefix}_SUDOERS_REQUIREMENTS" \
+  "${module_prefix}_SUDOERS")
+EOF
+  [ "$sudoers_found" -eq 0 ] && ui_line "  $none_label"
+
+  ui_line ""
+  ui_line "$risks_label"
+  ui_line "  - no arbitrary shell"
+  ui_line "  - no broad sudo"
+  ui_line "  - no broad systemctl"
+
+  ui_line ""
+  ui_line "$preview_only"
+  ui_line "$no_changes"
+
+  rm -f "$contract_tmp"
+  trap - EXIT HUP INT TERM
+}
+
+show_install_service_preview() {
+  module=$1
+  contract_tmp=$(mktemp -t seed-kit-module-contract.XXXXXX)
+  trap 'rm -f "$contract_tmp"' EXIT HUP INT TERM
+
+  module_prefix=$(contract_key_prefix "$module")
+
+  if ! module_contract_print "$module" > "$contract_tmp"; then
+    rm -f "$contract_tmp"
+    trap - EXIT HUP INT TERM
+    show_contract_preview_unavailable "install-service-preview" "$module"
+    return 0
+  fi
+
+  service_name=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_RUNTIME_SERVICE_NAME" \
+    "${module_prefix}_SERVICE_NAME")
+  service_command=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_RUNTIME_SERVICE_COMMAND" \
+    "${module_prefix}_SERVICE_COMMAND")
+  service_user=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_RUNTIME_SERVICE_USER" \
+    "${module_prefix}_SERVICE_USER")
+  autostart=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_RUNTIME_SERVICE_AUTOSTART" \
+    "${module_prefix}_SERVICE_AUTOSTART")
+  normal_port=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_RUNTIME_UI_NORMAL_PORT" \
+    "${module_prefix}_NORMAL_UI_PORT")
+  run_dir=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_RUNTIME_DIR" \
+    "${module_prefix}_TARGET_PATH_RUNTIME_DIR")
+  log_dir=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_LOG_DIR" \
+    "${module_prefix}_TARGET_PATH_LOG_DIR")
+
+  if [ "$(seed_lang)" = "fr" ]; then
+    service_label="Service runtime déclaré"
+    unit_label="Unit systemd potentielle"
+    dirs_label="Dépendances runtime"
+    not_done_label="Ne fera pas"
+    none_label="Non déclaré"
+    preview_only="Preview seulement : aucun systemctl, aucun service créé, aucun runtime lancé."
+    no_changes="Aucun changement effectué."
+  else
+    service_label="Declared runtime service"
+    unit_label="Potential systemd unit"
+    dirs_label="Runtime dependencies"
+    not_done_label="Will NOT"
+    none_label="Not declared"
+    preview_only="Preview only: no systemctl, no service created, no runtime started."
+    no_changes="No changes were made."
+  fi
+
+  ui_header "Seed-Kit > install-service-preview" "$module"
+  ui_line "Mode: SAFE read-only"
+  ui_line ""
+  ui_line "$service_label"
+  ui_line "  name: ${service_name:-$none_label}"
+  ui_line "  command: ${service_command:-$none_label}"
+  ui_line "  user: ${service_user:-$none_label}"
+  ui_line "  port: ${normal_port:-$none_label}"
+  ui_line "  autostart: ${autostart:-$none_label}"
+
+  ui_line ""
+  ui_line "$unit_label"
+  if [ -n "$service_name" ]; then
+    ui_line "  $service_name"
+  else
+    ui_line "  $none_label"
+  fi
+
+  ui_line ""
+  ui_line "$dirs_label"
+  ui_line "  runtime dir: ${run_dir:-$none_label}"
+  ui_line "  log dir: ${log_dir:-$none_label}"
+
+  ui_line ""
+  ui_line "$not_done_label"
+  ui_line "  - systemctl"
+  ui_line "  - service enable/start"
+  ui_line "  - runtime launch"
+
+  ui_line ""
+  ui_line "$preview_only"
+  ui_line "$no_changes"
+
+  rm -f "$contract_tmp"
+  trap - EXIT HUP INT TERM
+}
+
+show_recovery_preview() {
+  module=$1
+  contract_tmp=$(mktemp -t seed-kit-module-contract.XXXXXX)
+  trap 'rm -f "$contract_tmp"' EXIT HUP INT TERM
+
+  module_prefix=$(contract_key_prefix "$module")
+  cap_prefix=$(contract_capabilities_prefix "$module")
+
+  if ! module_contract_print "$module" > "$contract_tmp"; then
+    rm -f "$contract_tmp"
+    trap - EXIT HUP INT TERM
+    show_contract_preview_unavailable "recovery-preview" "$module"
+    return 0
+  fi
+
+  recovery_port=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_RUNTIME_UI_RECOVERY_PORT" \
+    "${module_prefix}_RECOVERY_UI_PORT")
+  recovery_ssid=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_RECOVERY_AP_SSID" \
+    "${module_prefix}_AP_SSID")
+  recovery_ip=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_RECOVERY_AP_IP" \
+    "${module_prefix}_AP_IP")
+  recovery_dhcp=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_RECOVERY_DHCP_RANGE" \
+    "${module_prefix}_DHCP_RANGE")
+
+  if [ "$(seed_lang)" = "fr" ]; then
+    recovery_label="Recovery déclarée"
+    prereq_label="Prérequis"
+    forbidden_label="Actions interdites automatiquement"
+    risks_label="Risques réseau"
+    none_label="Non déclaré"
+    missing_label="manquant"
+    preview_only="Preview seulement : aucun AP, aucun hostapd/dnsmasq, aucun changement réseau."
+    no_changes="Aucun changement effectué."
+  else
+    recovery_label="Declared recovery"
+    prereq_label="Prerequisites"
+    forbidden_label="Forbidden automatic actions"
+    risks_label="Network risks"
+    none_label="Not declared"
+    missing_label="missing"
+    preview_only="Preview only: no AP, no hostapd/dnsmasq, no network change."
+    no_changes="No changes were made."
+  fi
+
+  ui_header "Seed-Kit > recovery-preview" "$module"
+  ui_line "Mode: SAFE read-only"
+  ui_line ""
+  ui_line "$recovery_label"
+  ui_line "  SSID: ${recovery_ssid:-$none_label}"
+  ui_line "  AP IP: ${recovery_ip:-$none_label}"
+  ui_line "  DHCP: ${recovery_dhcp:-$none_label}"
+  ui_line "  captive port: ${recovery_port:-$none_label}"
+
+  ui_line ""
+  ui_line "$prereq_label"
+  for dependency in hostapd dnsmasq sudoers-wrapper; do
+    if dependency_present "$dependency"; then
+      print_dependency_validation "OK" "$dependency"
+    else
+      print_dependency_validation "WARN" "$dependency" "$missing_label"
+    fi
+  done
+
+  ui_line ""
+  ui_line "Capabilities"
+  recovery_caps_found=0
+  while IFS= read -r capability; do
+    case "$capability" in
+      ap-recovery|captive-portal|wifi-connect-recovery|recovery-cleanup)
+        recovery_caps_found=1
+        validate_capability "$capability"
+        ;;
+    esac
+  done <<EOF
+$(contract_values_for_keys "$contract_tmp" \
+  "${cap_prefix}")
+EOF
+  [ "$recovery_caps_found" -eq 0 ] && ui_line "INFO   $none_label"
+
+  ui_line ""
+  ui_line "$forbidden_label"
+  forbidden_found=0
+  while IFS= read -r forbidden_action; do
+    [ -z "$forbidden_action" ] && continue
+    forbidden_found=1
+    ui_line "  - $forbidden_action"
+  done <<EOF
+$(contract_values_for_keys "$contract_tmp" \
+  "${module_prefix}_FORBIDDEN_ACTIONS")
+EOF
+  [ "$forbidden_found" -eq 0 ] && ui_line "  $none_label"
+
+  ui_line ""
+  ui_line "$risks_label"
+  ui_line "  - captive portal port 80"
+  ui_line "  - temporary DHCP/DNS"
+  ui_line "  - explicit operator action required"
+
+  ui_line ""
+  ui_line "$preview_only"
+  ui_line "$no_changes"
+
+  rm -f "$contract_tmp"
+  trap - EXIT HUP INT TERM
+}
+
 validate_module_contract() {
   module=$1
   contract_tmp=$(mktemp -t seed-kit-module-contract.XXXXXX)
@@ -2460,6 +2768,9 @@ seed_kit_usage() {
   echo "  modules validate <module>  validate read-only module contract prerequisites"
   echo "  modules install-packages-preview <module>  preview package dependencies that could be installed for a module"
   echo "  modules install-files-preview <module>  preview files and target paths from module contract"
+  echo "  modules configure-sudoers-preview <module>  preview privileged wrapper and sudoers contract"
+  echo "  modules install-service-preview <module>  preview runtime service contract"
+  echo "  modules recovery-preview <module>  preview recovery/AP safety contract"
   echo "  package create --service <name> [--copy-home]  create a SAFE dry-run package"
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
@@ -6009,12 +6320,39 @@ case "${1:-}" in
         fi
         show_install_files_preview "$1"
         ;;
+      configure-sudoers-preview)
+        shift
+        if [ -z "${1:-}" ]; then
+          echo "usage: sh seed-kit.sh modules configure-sudoers-preview <module>" >&2
+          exit 2
+        fi
+        show_configure_sudoers_preview "$1"
+        ;;
+      install-service-preview)
+        shift
+        if [ -z "${1:-}" ]; then
+          echo "usage: sh seed-kit.sh modules install-service-preview <module>" >&2
+          exit 2
+        fi
+        show_install_service_preview "$1"
+        ;;
+      recovery-preview)
+        shift
+        if [ -z "${1:-}" ]; then
+          echo "usage: sh seed-kit.sh modules recovery-preview <module>" >&2
+          exit 2
+        fi
+        show_recovery_preview "$1"
+        ;;
       *)
         echo "usage: sh seed-kit.sh modules list" >&2
         echo "       sh seed-kit.sh modules deps <module>" >&2
         echo "       sh seed-kit.sh modules validate <module>" >&2
         echo "       sh seed-kit.sh modules install-packages-preview <module>" >&2
         echo "       sh seed-kit.sh modules install-files-preview <module>" >&2
+        echo "       sh seed-kit.sh modules configure-sudoers-preview <module>" >&2
+        echo "       sh seed-kit.sh modules install-service-preview <module>" >&2
+        echo "       sh seed-kit.sh modules recovery-preview <module>" >&2
         exit 2
         ;;
     esac
