@@ -22,18 +22,44 @@ Seed-Kit core should eventually provide:
 Seed-Kit core must not turn Wifi-Kit into hidden orchestration. Every network
 changing action must stay explicit, inspectable, and operator confirmed.
 
+Wifi-Kit is also the first reference instance of the generic module contract in
+`docs/MODULE-CONTRACT.md`. Seed-Kit core consumes that contract through
+read-only module functions and should avoid hardcoding Wifi-Kit runtime logic in
+the core engine.
+
+## Module metadata
+
+```text
+id: wifi-kit
+type: network-ui
+platform: raspberrypi/debian
+backend: networkmanager
+mode: normal-ui + ap-recovery
+```
+
 ## System dependencies
 
 Wifi-Kit depends on host-level tools rather than Docker:
 
+Required:
+
 - `python3`
 - `NetworkManager` / `nmcli`
 - `wpa_cli`
-- `hostapd`
-- `dnsmasq`
 - `iw`
 - `iproute2`
+
+Recommended:
+
 - `rfkill` recommended
+
+Conditional:
+
+- Wi-Fi scan: `NetworkManager`, `nmcli`, `wpa_cli`, `iw`
+- normal UI: `python3`, installed UI files, free port `54321`
+- recovery AP: `hostapd`, `dnsmasq`, privileged wrapper, strict sudoers rule
+- default network return: NetworkManager plus wrapper action
+- boot cleanup guard: recovery guard and module-scoped runtime state
 
 The dependency declaration should remain shell-readable and read-only. Seed-Kit
 core may display or validate it later, but should not implement a dependency
@@ -51,16 +77,33 @@ requires: sudo
 package: python3
 package: network-manager
 package: wpasupplicant
-package: hostapd
-package: dnsmasq
 package: iw
 package: iproute2
-package: rfkill
+recommended-package: rfkill
+conditional-package: hostapd for ap-recovery
+conditional-package: dnsmasq for ap-recovery
 provides: wifi-kit ui
+provides: wifi scan
 provides: wifi recovery ap
 manual: configure recovery SSID/password outside Git
 manual: validate sudoers before enabling privileged actions
 ```
+
+## Capabilities
+
+Wifi-Kit capabilities are planned as:
+
+- normal UI
+- Wi-Fi scan
+- return to default network
+- AP recovery
+- recovery guard
+- readiness checks
+- health checks
+- uninstall preview
+
+Capabilities do not imply automatic execution. Network-changing capabilities
+require explicit operator action and phase-specific confirmation.
 
 ## File layout
 
@@ -172,6 +215,14 @@ Rules:
 - no Wi-Fi PSK copied into Seed-Kit package metadata or logs
 - NetworkManager/wpa_supplicant remain the source of truth for Wi-Fi secrets
 
+## Secrets policy
+
+- recovery AP password is stored outside Git
+- Wi-Fi passwords are runtime-only
+- secrets are never logged
+- secrets are never returned by API responses
+- config files containing secrets require strict permissions
+
 ## Future Seed-Kit flow
 
 The future safe flow should be staged:
@@ -196,6 +247,7 @@ steps are individually designed and confirmed.
 
 The first Seed-Kit integration should expose previews before any real apply:
 
+- `validate`: read-only platform and dependency checks
 - `install-packages`: package list and persistence boundaries only
 - `install-files`: source files and target paths only
 - `configure-sudoers-preview`: exact wrapper-only sudoers rule preview
@@ -206,6 +258,19 @@ The first Seed-Kit integration should expose previews before any real apply:
 
 These previews are design contracts. They must not run apt, write sudoers,
 install systemd units, change networking, start AP mode, or store secrets.
+
+Future apply phases, only after separate validation, would be:
+
+- plan
+- validate
+- stage files
+- install files
+- install normal UI service
+- install wrapper
+- install sudoers strict rule
+- enable boot cleanup guard
+- start UI
+- health check
 
 ## Health checks
 
