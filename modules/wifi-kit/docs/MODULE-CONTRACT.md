@@ -149,6 +149,28 @@ The runtime-service manifest is declarative only: it does not write systemd
 units, call `systemctl`, start the UI, start AP mode, change networking, write
 secrets, or reboot.
 
+## Recovery manifest
+
+Wifi-Kit exposes a dedicated recovery manifest for Seed-Kit core preview flows:
+
+```sh
+sh modules/wifi-kit/contract/recovery.manifest.sh print
+```
+
+Seed-Kit core should consume this manifest for `recovery-preview` instead of
+hardcoding AP/captive recovery details. The manifest describes the explicit
+AP/captive recovery mode, SSID template, AP IP, DHCP range, captive UI port,
+normal UI port, privileged actions, temporary files, readiness checks, health
+checks, rollback expectations, forbidden actions, and secrets policy.
+
+Recovery is explicit and temporary only. Normal boot must not start AP mode,
+`hostapd`, or `dnsmasq`. AP+STA permanent mode remains outside the V1 product
+path.
+
+The recovery manifest is declarative only: it does not start AP mode, start
+`hostapd`, start `dnsmasq`, modify networking, write sudoers, create systemd
+units, write secrets, or reboot.
+
 ## Contract summary
 
 - `id`: `wifi-kit`

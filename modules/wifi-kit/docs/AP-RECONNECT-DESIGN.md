@@ -234,7 +234,8 @@ normal_ui_port: 18089
 
 Normal mode and recovery mode intentionally use different UI ports:
 
-- normal mode: the read-only Wifi-Kit UI listens on port `18089`;
+- normal mode: the prototype test UI may listen on port `18089`, while the
+  Seed-Kit-installed target service listens on port `54321`;
 - recovery/captive mode: the temporary captive UI listens on port `80` so
   phones can open it as a local captive portal.
 
@@ -389,6 +390,18 @@ Cleanup mode:
 The guard must not use aggressive `systemctl` operations. It must not stop a
 global `dnsmasq.service`, kill unrelated dnsmasq or hostapd processes, reboot,
 restart networking, call `save_config`, or touch non-Wifi-Kit files.
+
+Wifi-Kit also exposes the recovery behavior as a read-only contract for
+Seed-Kit core previews:
+
+```sh
+sh modules/wifi-kit/contract/recovery.manifest.sh print
+```
+
+The manifest is for `recovery-preview`. It declares the explicit AP/captive
+recovery mode, temporary hostapd/dnsmasq/UI expectations, rollback behavior,
+forbidden actions, and secrets policy. It does not start AP mode, mutate the
+network, write sudoers, create systemd units, or launch runtime processes.
 
 Future boot integration:
 

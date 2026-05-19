@@ -14,20 +14,37 @@ WIFI_KIT_RECOVERY_MANIFEST_VERSION="1"
 WIFI_KIT_RECOVERY_APPLY_PHASE_TARGET="recovery-preview"
 
 WIFI_KIT_RECOVERY_MODE="explicit-ap-captive"
-WIFI_KIT_RECOVERY_WRAPPER_ACTION="start-ap-mode"
-WIFI_KIT_RECOVERY_RETURN_ACTION="return-default-network"
 WIFI_KIT_RECOVERY_WRAPPER_PATH="/opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh"
 WIFI_KIT_RECOVERY_GUARD_PATH="/opt/seed-kit/wifi-kit/wifi-kit-recovery-guard.sh"
 WIFI_KIT_RECOVERY_AP_HELPER_PATH="/opt/seed-kit/wifi-kit/ap-setup-test.sh"
+WIFI_KIT_RECOVERY_CONNECT_HELPER_PATH="/opt/seed-kit/wifi-kit/wifi-kit-connect-recovery.sh"
 
 WIFI_KIT_RECOVERY_IFACE="wlan0"
-WIFI_KIT_RECOVERY_AP_IFACE="wlan0_ap"
 WIFI_KIT_RECOVERY_AP_SSID_TEMPLATE="Wifi-Kit-<hostname>"
 WIFI_KIT_RECOVERY_AP_IP="192.168.50.1/24"
 WIFI_KIT_RECOVERY_DHCP_RANGE="192.168.50.20-192.168.50.80"
 WIFI_KIT_RECOVERY_DHCP_LEASE="1h"
 WIFI_KIT_RECOVERY_CAPTIVE_PORT="80"
+WIFI_KIT_RECOVERY_NORMAL_UI_PORT="54321"
 WIFI_KIT_RECOVERY_DEFAULT_TIMEOUT_SECONDS="300"
+WIFI_KIT_RECOVERY_CONNECT_TIMEOUT_SECONDS="180"
+
+WIFI_KIT_RECOVERY_ACTIONS='
+start-ap-mode
+return-default-network
+reconnect-previous
+wifi-connect-recovery
+'
+
+WIFI_KIT_RECOVERY_PRIVILEGED_ACTIONS='
+start-ap-mode
+return-default-network
+wifi-connect-recovery
+'
+
+WIFI_KIT_RECOVERY_UNPRIVILEGED_UI_ACTIONS='
+reconnect-previous
+'
 
 WIFI_KIT_RECOVERY_TEMPORARY_FILES='
 /tmp/wifi-kit-hostapd-test.conf
@@ -54,22 +71,46 @@ iproute2
 sudoers-wrapper
 '
 
+WIFI_KIT_RECOVERY_RUNTIME_EXPECTATIONS='
+hostapd temporary only
+dnsmasq temporary only
+captive UI temporary only
+no AP at normal boot
+no permanent AP+STA mode
+normal UI remains on port 54321
+recovery captive UI uses port 80
+'
+
 WIFI_KIT_RECOVERY_READINESS_CHECKS='
 wrapper installed
-sudoers rule installed
+sudoers rule installed for privileged actions
 hostapd present
 dnsmasq present
 recovery guard installed
 normal network state readable
 no active Wifi-Kit recovery leftovers
+AP recovery password available outside Git
 '
 
 WIFI_KIT_RECOVERY_HEALTH_CHECKS='
 captive portal responds on 192.168.50.1:80
 hostapd pid belongs to Wifi-Kit config
 dnsmasq pid belongs to Wifi-Kit config
+temporary UI pid belongs to Wifi-Kit recovery
 guard status clean after return
 NetworkManager owns wlan0 after cleanup
+'
+
+WIFI_KIT_RECOVERY_ROLLBACK_EXPECTATIONS='
+stop temporary captive UI
+stop temporary dnsmasq
+stop temporary hostapd
+remove temporary configs containing secrets
+keep logs and redacted configs for diagnosis
+remove 192.168.50.1/24 from wlan0
+return wlan0 to NetworkManager
+reconnect previous or selected validated Wi-Fi best effort
+keep or restart recovery if new Wi-Fi validation fails
 '
 
 WIFI_KIT_RECOVERY_FUTURE_ACTIONS='
@@ -84,12 +125,23 @@ run return-default-network after explicit confirmation
 WIFI_KIT_RECOVERY_FORBIDDEN='
 no-ap-at-boot
 no-ap-without-explicit-action
+no-dnsmasq-service
+no-system-hostapd-service
 no-permanent-ap-plus-sta-assumption
 no-save-config
 no-delete-user-wifi-profiles
 no-arbitrary-shell
 no-reboot
 no-secret-log
+'
+
+WIFI_KIT_RECOVERY_SECRETS_POLICY='
+AP recovery password outside Git
+Wi-Fi passwords runtime-only
+never log passwords
+never return passwords through API
+temporary secret configs removed on cleanup
+redacted configs may remain for diagnosis
 '
 
 WIFI_KIT_RECOVERY_NON_ACTIONS='
@@ -126,25 +178,31 @@ module_wifi_kit_recovery_manifest() {
   printf 'WIFI_KIT_RECOVERY_MANIFEST_VERSION=%s\n' "$WIFI_KIT_RECOVERY_MANIFEST_VERSION"
   printf 'WIFI_KIT_RECOVERY_APPLY_PHASE_TARGET=%s\n' "$WIFI_KIT_RECOVERY_APPLY_PHASE_TARGET"
   printf 'WIFI_KIT_RECOVERY_MODE=%s\n' "$WIFI_KIT_RECOVERY_MODE"
-  printf 'WIFI_KIT_RECOVERY_WRAPPER_ACTION=%s\n' "$WIFI_KIT_RECOVERY_WRAPPER_ACTION"
-  printf 'WIFI_KIT_RECOVERY_RETURN_ACTION=%s\n' "$WIFI_KIT_RECOVERY_RETURN_ACTION"
   printf 'WIFI_KIT_RECOVERY_WRAPPER_PATH=%s\n' "$WIFI_KIT_RECOVERY_WRAPPER_PATH"
   printf 'WIFI_KIT_RECOVERY_GUARD_PATH=%s\n' "$WIFI_KIT_RECOVERY_GUARD_PATH"
   printf 'WIFI_KIT_RECOVERY_AP_HELPER_PATH=%s\n' "$WIFI_KIT_RECOVERY_AP_HELPER_PATH"
+  printf 'WIFI_KIT_RECOVERY_CONNECT_HELPER_PATH=%s\n' "$WIFI_KIT_RECOVERY_CONNECT_HELPER_PATH"
   printf 'WIFI_KIT_RECOVERY_IFACE=%s\n' "$WIFI_KIT_RECOVERY_IFACE"
-  printf 'WIFI_KIT_RECOVERY_AP_IFACE=%s\n' "$WIFI_KIT_RECOVERY_AP_IFACE"
   printf 'WIFI_KIT_RECOVERY_AP_SSID_TEMPLATE=%s\n' "$WIFI_KIT_RECOVERY_AP_SSID_TEMPLATE"
   printf 'WIFI_KIT_RECOVERY_AP_IP=%s\n' "$WIFI_KIT_RECOVERY_AP_IP"
   printf 'WIFI_KIT_RECOVERY_DHCP_RANGE=%s\n' "$WIFI_KIT_RECOVERY_DHCP_RANGE"
   printf 'WIFI_KIT_RECOVERY_DHCP_LEASE=%s\n' "$WIFI_KIT_RECOVERY_DHCP_LEASE"
   printf 'WIFI_KIT_RECOVERY_CAPTIVE_PORT=%s\n' "$WIFI_KIT_RECOVERY_CAPTIVE_PORT"
+  printf 'WIFI_KIT_RECOVERY_NORMAL_UI_PORT=%s\n' "$WIFI_KIT_RECOVERY_NORMAL_UI_PORT"
   printf 'WIFI_KIT_RECOVERY_DEFAULT_TIMEOUT_SECONDS=%s\n' "$WIFI_KIT_RECOVERY_DEFAULT_TIMEOUT_SECONDS"
+  printf 'WIFI_KIT_RECOVERY_CONNECT_TIMEOUT_SECONDS=%s\n' "$WIFI_KIT_RECOVERY_CONNECT_TIMEOUT_SECONDS"
+  _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_ACTION "$WIFI_KIT_RECOVERY_ACTIONS"
+  _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_PRIVILEGED_ACTION "$WIFI_KIT_RECOVERY_PRIVILEGED_ACTIONS"
+  _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_UNPRIVILEGED_UI_ACTION "$WIFI_KIT_RECOVERY_UNPRIVILEGED_UI_ACTIONS"
   _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_TEMPORARY_FILE "$WIFI_KIT_RECOVERY_TEMPORARY_FILES"
   _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_REQUIRED_DEPENDENCY "$WIFI_KIT_RECOVERY_REQUIRED_DEPENDENCIES"
+  _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_RUNTIME_EXPECTATION "$WIFI_KIT_RECOVERY_RUNTIME_EXPECTATIONS"
   _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_READINESS_CHECK "$WIFI_KIT_RECOVERY_READINESS_CHECKS"
   _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_HEALTH_CHECK "$WIFI_KIT_RECOVERY_HEALTH_CHECKS"
+  _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_ROLLBACK_EXPECTATION "$WIFI_KIT_RECOVERY_ROLLBACK_EXPECTATIONS"
   _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_FUTURE_ACTION "$WIFI_KIT_RECOVERY_FUTURE_ACTIONS"
   _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_FORBIDDEN "$WIFI_KIT_RECOVERY_FORBIDDEN"
+  _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_SECRETS_POLICY "$WIFI_KIT_RECOVERY_SECRETS_POLICY"
   _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_NON_ACTION "$WIFI_KIT_RECOVERY_NON_ACTIONS"
   _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_RISK "$WIFI_KIT_RECOVERY_RISKS"
 }
@@ -153,4 +211,3 @@ if [ "${1-}" = "print" ]; then
   module_wifi_kit_recovery_manifest
   exit 0
 fi
-

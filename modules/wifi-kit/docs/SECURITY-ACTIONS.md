@@ -133,6 +133,23 @@ The normal UI service must not start AP mode at boot. AP recovery remains an
 explicit privileged action through the wrapper and uses temporary `hostapd`,
 temporary `dnsmasq`, and captive port `80` only while recovery is active.
 
+## Recovery Preview
+
+Wifi-Kit exposes the AP/captive recovery shape as a read-only contract for
+Seed-Kit core previews:
+
+```sh
+sh modules/wifi-kit/contract/recovery.manifest.sh print
+```
+
+Seed-Kit core should consume this manifest for `recovery-preview`. It describes
+the explicit recovery mode, allowed recovery actions, temporary AP/DHCP/captive
+runtime, readiness checks, health checks, rollback expectations, forbidden
+actions, and secrets policy.
+
+The preview must not start AP mode, start `hostapd`, start `dnsmasq`, modify
+networking, write sudoers, create services, write secrets, or reboot.
+
 ## Explicit Non-Goals
 
 - no broad sudo
