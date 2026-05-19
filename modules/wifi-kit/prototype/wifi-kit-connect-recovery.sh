@@ -97,6 +97,66 @@ gateway() {
   "$nmcli_bin" -g IP4.GATEWAY device show "$iface" 2>/dev/null | sed -n '1p'
 }
 
+device_state() {
+  "$nmcli_bin" -t --escape no -f DEVICE,STATE device status 2>/dev/null |
+    awk -F: -v iface="$iface" '$1 == iface { print $2; exit }'
+}
+
+device_general_state() {
+  "$nmcli_bin" -g GENERAL.STATE device show "$iface" 2>/dev/null | sed -n '1p'
+}
+
+active_connection() {
+  "$nmcli_bin" -t --escape no -f DEVICE,CONNECTION device status 2>/dev/null |
+    awk -F: -v iface="$iface" '$1 == iface { print $2; exit }'
+}
+
+state_is_stable_connected() {
+  state=$1
+  general=$2
+
+  case "$(printf '%s %s' "$state" "$general" | tr '[:upper:]' '[:lower:]')" in
+    *connecting*|*configuring*|*prepare*|*auth*|*unavailable*|*disconnect*) return 1 ;;
+  esac
+
+  [ "$state" = "connected" ] && return 0
+  case "$general" in
+    100\ *|connected) return 0 ;;
+  esac
+
+  return 1
+}
+
+validation_reason() {
+  ssid_now=$1
+  ip_now=$2
+  gateway_now=$3
+  state_now=$4
+  general_state_now=$5
+
+  if ! state_is_stable_connected "$state_now" "$general_state_now"; then
+    printf 'networkmanager-not-stable'
+    return 0
+  fi
+  if [ "$ssid_now" != "$target_ssid" ]; then
+    printf 'target-ssid-not-active'
+    return 0
+  fi
+  if [ -z "$ip_now" ]; then
+    printf 'ipv4-missing'
+    return 0
+  fi
+  if [ -z "$gateway_now" ]; then
+    printf 'gateway-missing'
+    return 0
+  fi
+  if ! ping -c 1 -W 2 "$gateway_now" >/dev/null 2>&1; then
+    printf 'gateway-ping-failed'
+    return 0
+  fi
+  printf 'validated'
+}
+
 cleanup_failed_attempt() {
   "$nmcli_bin" connection delete "$temporary_connection" >/dev/null 2>&1 || true
 }
@@ -189,6 +249,7 @@ unset target_password
 log "step=$(quote "connect-temporary-profile") status=$(quote "starting")"
 if ! "$nmcli_bin" --wait 45 connection up "$temporary_connection" ifname "$iface" >>"$connect_log" 2>&1; then
   log "step=$(quote "connect-temporary-profile") status=$(quote "failed")"
+  log "status=$(quote "failure") reason=$(quote "nmcli-connection-up-failed") nm_state=$(quote "$(device_state || true)") nm_general_state=$(quote "$(device_general_state || true)")"
   cleanup_failed_attempt
   restart_recovery_best_effort
   exit 1
@@ -196,26 +257,48 @@ fi
 
 elapsed=0
 validated="no"
+last_reason="validation-not-started"
+last_ssid=""
+last_ip=""
+last_gateway=""
+last_state=""
+last_general_state=""
+last_active_connection=""
 while [ "$elapsed" -lt "$timeout_seconds" ]; do
-  ssid_now="$(active_ssid || true)"
-  ip_now="$(ip_address || true)"
-  gateway_now="$(gateway || true)"
-  if [ "$ssid_now" = "$target_ssid" ] && [ -n "$ip_now" ] && [ -n "$gateway_now" ]; then
-    if ping -c 1 -W 2 "$gateway_now" >/dev/null 2>&1; then
-      validated="yes"
-      break
-    fi
+  last_ssid="$(active_ssid || true)"
+  last_ip="$(ip_address || true)"
+  last_gateway="$(gateway || true)"
+  last_state="$(device_state || true)"
+  last_general_state="$(device_general_state || true)"
+  last_active_connection="$(active_connection || true)"
+  last_reason="$(validation_reason "$last_ssid" "$last_ip" "$last_gateway" "$last_state" "$last_general_state")"
+  if [ "$last_reason" = "validated" ]; then
+    validated="yes"
+    break
+  fi
+
+  case "$elapsed" in
+    0|15|30|60|90|120|150)
+      log "step=$(quote "validate") status=$(quote "waiting") reason=$(quote "$last_reason") nm_state=$(quote "$last_state") nm_general_state=$(quote "$last_general_state") active_connection=$(quote "$last_active_connection") active_ssid=$(quote "$last_ssid") ip=$(quote "$last_ip") gateway=$(quote "$last_gateway") elapsed_seconds=$(quote "$elapsed")"
+      ;;
+  esac
+
+  if [ "$last_reason" = "target-ssid-not-active" ] &&
+    [ "$elapsed" -ge 30 ] &&
+    [ "$last_state" = "connected" ]; then
+    log "step=$(quote "validate") status=$(quote "failed-fast") reason=$(quote "$last_reason") active_ssid=$(quote "$last_ssid")"
+    break
   fi
   sleep 3
   elapsed=$((elapsed + 3))
 done
 
 if [ "$validated" = "yes" ]; then
-  log "status=$(quote "success") connected_ssid=$(quote "$target_ssid") ip=$(quote "$ip_now") gateway=$(quote "$gateway_now") elapsed_seconds=$(quote "$elapsed") recovery=$(quote "stopped")"
+  log "status=$(quote "success") connected_ssid=$(quote "$target_ssid") ip=$(quote "$last_ip") gateway=$(quote "$last_gateway") nm_state=$(quote "$last_state") nm_general_state=$(quote "$last_general_state") active_connection=$(quote "$last_active_connection") elapsed_seconds=$(quote "$elapsed") recovery=$(quote "stopped")"
   exit 0
 fi
 
-log "status=$(quote "failure") reason=$(quote "validation-timeout") elapsed_seconds=$(quote "$elapsed") recovery=$(quote "restart-attempted")"
+log "status=$(quote "failure") reason=$(quote "$last_reason") active_ssid=$(quote "$last_ssid") ip=$(quote "$last_ip") gateway=$(quote "$last_gateway") nm_state=$(quote "$last_state") nm_general_state=$(quote "$last_general_state") active_connection=$(quote "$last_active_connection") elapsed_seconds=$(quote "$elapsed") recovery=$(quote "restart-attempted")"
 cleanup_failed_attempt
 restart_recovery_best_effort
 exit 1
