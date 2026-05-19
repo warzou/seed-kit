@@ -1740,6 +1740,53 @@ contract_value_matches() {
   return 1
 }
 
+contract_value_for_key() {
+  contract_data=$1
+  contract_key=$2
+  found=0
+
+  while IFS= read -r contract_line; do
+    case "$contract_line" in
+      "$contract_key="*)
+        printf '%s\n' "${contract_line#*=}"
+        found=1
+        ;;
+    esac
+  done < "$contract_data"
+
+  [ "$found" -eq 1 ] && return 0
+  return 1
+}
+
+contract_values_for_key() {
+  contract_data=$1
+  contract_key=$2
+
+  while IFS= read -r contract_line; do
+    case "$contract_line" in
+      "$contract_key="*)
+        printf '%s\n' "${contract_line#*=}"
+        ;;
+    esac
+  done < "$contract_data"
+}
+
+contract_first_matching_value() {
+  contract_data=$1
+  shift
+
+  value=
+  for contract_key in "$@"; do
+    value=$(contract_value_for_key "$contract_data" "$contract_key" | sed -n '1p')
+    if [ -n "$value" ]; then
+      printf '%s\n' "$value"
+      return 0
+    fi
+  done
+
+  return 0
+}
+
 dependency_check_name() {
   case "$1" in
     network-manager|NetworkManager)
@@ -1982,7 +2029,6 @@ show_install_packages_preview() {
   dep_prefix=$(contract_dependencies_prefix "$module")
   cap_prefix=$(contract_capabilities_prefix "$module")
   module_prefix=$(contract_key_prefix "$module")
-  module_prefix=$(contract_key_prefix "$module")
 
   case " $MODULES " in
     *" $module "*) ;;
@@ -2146,6 +2192,166 @@ show_install_packages_preview() {
   trap - EXIT HUP INT TERM
 }
 
+show_install_files_preview() {
+  module=$1
+  contract_tmp=$(mktemp -t seed-kit-module-contract.XXXXXX)
+  trap 'rm -f "$contract_tmp"' EXIT HUP INT TERM
+
+  module_prefix=$(contract_key_prefix "$module")
+  module_dir="$ROOT_DIR/modules/$module"
+
+  if ! module_contract_print "$module" > "$contract_tmp"; then
+    rm -f "$contract_tmp"
+    trap - EXIT HUP INT TERM
+    ui_header "Seed-Kit > install-files-preview" "$module"
+    ui_line "Mode: SAFE read-only"
+    ui_line ""
+    ui_line "No structured module contract is available."
+    ui_line "Fallback: check module-specific text declarations."
+    ui_line ""
+    ui_line "No changes were made."
+    return 0
+  fi
+
+  file_list_key=
+  for contract_key in \
+    "${module_prefix}_FILES"
+  do
+    if contract_value_for_key "$contract_tmp" "$contract_key" >/dev/null; then
+      file_list_key=$contract_key
+      break
+    fi
+  done
+
+  app_dir=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_APP_DIR" \
+    "${module_prefix}_TARGET_PATH_APP_DIR")
+  config_dir=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_CONFIG_DIR" \
+    "${module_prefix}_TARGET_PATH_CONFIG_DIR")
+  log_dir=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_LOG_DIR" \
+    "${module_prefix}_TARGET_PATH_LOG_DIR")
+  run_dir=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_RUNTIME_DIR" \
+    "${module_prefix}_TARGET_PATH_RUNTIME_DIR")
+
+  if [ "$(seed_lang)" = "fr" ]; then
+    files_label="Fichiers attendus"
+    exists_label="présent"
+    missing_label="manquant"
+    none_label="Non déclaré"
+    no_changes="Aucun changement effectué."
+    preview_only="Preview seulement : aucune copie, aucun mkdir, aucun chmod."
+    target_opt_label="Chemins cibles"
+    persistence_label="Ce qui persiste / reste"
+    runtime_label="Ce qui est runtime"
+  else
+    files_label="Expected files"
+    exists_label="present"
+    missing_label="missing"
+    none_label="Not declared"
+    no_changes="No changes were made."
+    preview_only="Preview only: no copy, no mkdir, no chmod."
+    target_opt_label="Target paths"
+    persistence_label="Persistent / stable"
+    runtime_label="Runtime-only"
+  fi
+
+  ui_header "Seed-Kit > install-files-preview" "$module"
+  ui_line "Mode: SAFE read-only"
+  ui_line ""
+  ui_line "$files_label"
+  ui_line "  Source paths: modules/$module"
+
+  file_count=0
+  if [ -n "$file_list_key" ]; then
+    while IFS= read -r file_path; do
+      [ -z "$file_path" ] && continue
+      file_count=$((file_count + 1))
+      source_file="$module_dir/$file_path"
+      staged_file_target=$(
+        case "$file_path" in
+          *config*|configs/*|prototype/*/config/*|prototype/config/*)
+            if [ -n "$config_dir" ]; then
+              printf '%s' "$config_dir"
+            else
+              printf '%s' "$app_dir"
+            fi
+            ;;
+          *log*|logs/*|prototype/*/log/*|prototype/logs/*)
+            if [ -n "$log_dir" ]; then
+              printf '%s' "$log_dir"
+            else
+              printf '%s' "$app_dir"
+            fi
+            ;;
+          *run*|runtime/*|prototype/*/run/*|run/*)
+            if [ -n "$run_dir" ]; then
+              printf '%s' "$run_dir"
+            else
+              printf '%s' "$app_dir"
+            fi
+            ;;
+          *)
+            printf '%s' "$app_dir"
+            ;;
+        esac
+      )
+
+      staged_file_class="persistent"
+      if printf '%s' "$staged_file_target" | grep -q '^/run/'; then
+        staged_file_class="$runtime_label"
+      elif [ -z "$staged_file_target" ]; then
+        staged_file_target=$none_label
+        staged_file_class="unknown"
+      fi
+
+      if [ -e "$source_file" ]; then
+        ui_line "  $file_path"
+        ui_line "    source: $source_file ($exists_label)"
+        ui_line "    target: $staged_file_target"
+        ui_line "    state: $staged_file_class / $exists_label"
+      else
+        ui_line "  $file_path"
+        ui_line "    source: $source_file ($missing_label)"
+        ui_line "    target: $staged_file_target"
+        ui_line "    state: $staged_file_class ($missing_label)"
+      fi
+    done <<EOF
+$(contract_values_for_key "$contract_tmp" "$file_list_key")
+EOF
+  fi
+
+  if [ "$file_count" -eq 0 ]; then
+    ui_line "  $none_label"
+  fi
+
+  ui_line ""
+  ui_line "$target_opt_label"
+  ui_line "  /opt: ${app_dir:-$none_label}"
+  ui_line "  /etc: ${config_dir:-$none_label}"
+  ui_line "  /var/log: ${log_dir:-$none_label}"
+  ui_line "  /run: ${run_dir:-$none_label}"
+
+  ui_line ""
+  ui_line "$persistence_label"
+  ui_line "  persistent: /opt, /etc, /var/log targets"
+  if [ -n "$run_dir" ]; then
+    ui_line "  runtime-only: /run target"
+  fi
+  if [ -z "$app_dir" ] && [ -z "$config_dir" ] && [ -z "$log_dir" ] && [ -z "$run_dir" ]; then
+    ui_line "  $none_label"
+  fi
+
+  ui_line ""
+  ui_line "$preview_only"
+  ui_line "$no_changes"
+
+  rm -f "$contract_tmp"
+  trap - EXIT HUP INT TERM
+}
+
 validate_module_contract() {
   module=$1
   contract_tmp=$(mktemp -t seed-kit-module-contract.XXXXXX)
@@ -2253,6 +2459,7 @@ seed_kit_usage() {
   echo "  modules deps <module>  show read-only module dependency declaration"
   echo "  modules validate <module>  validate read-only module contract prerequisites"
   echo "  modules install-packages-preview <module>  preview package dependencies that could be installed for a module"
+  echo "  modules install-files-preview <module>  preview files and target paths from module contract"
   echo "  package create --service <name> [--copy-home]  create a SAFE dry-run package"
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
@@ -5794,11 +6001,20 @@ case "${1:-}" in
         fi
         show_install_packages_preview "$1"
         ;;
+      install-files-preview)
+        shift
+        if [ -z "${1:-}" ]; then
+          echo "usage: sh seed-kit.sh modules install-files-preview <module>" >&2
+          exit 2
+        fi
+        show_install_files_preview "$1"
+        ;;
       *)
         echo "usage: sh seed-kit.sh modules list" >&2
         echo "       sh seed-kit.sh modules deps <module>" >&2
         echo "       sh seed-kit.sh modules validate <module>" >&2
         echo "       sh seed-kit.sh modules install-packages-preview <module>" >&2
+        echo "       sh seed-kit.sh modules install-files-preview <module>" >&2
         exit 2
         ;;
     esac

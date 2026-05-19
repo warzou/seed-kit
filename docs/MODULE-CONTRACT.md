@@ -229,3 +229,45 @@ WARN   ap-recovery         requires: sudoers-wrapper
 
 If a module has no structured contract yet, Seed-Kit falls back to the existing
 dependency text and explains that structured validation is unavailable.
+
+## Install-files preview
+
+`sh seed-kit.sh modules install-files-preview <module>` is a read-only
+plan-only preview for the files a module declares in contract metadata.
+
+This command reads the same contract source as `modules deps`, `validate`, and
+`install-packages-preview`, without side effects. It is only for inspection:
+
+- which contract file entries are expected
+- where they would be copied in planned `/opt`, `/etc`, `/var/log`, and `/run`
+- what source files exist in `modules/<module>/...` in the current repository copy
+- what would be persistent versus runtime-only targets
+
+The command never creates directories, never writes files, and never changes
+network state.
+
+Example V1 output shape:
+
+```text
+Seed-Kit > install-files-preview - wifi-kit
+Mode: SAFE read-only
+
+Expected files
+  prototype/ui/serve-readonly.py
+    source: /.../modules/wifi-kit/prototype/ui/serve-readonly.py (present)
+    target: /opt/seed-kit/wifi-kit
+    state: persistent / present
+
+Target paths
+  /opt: /opt/seed-kit/wifi-kit
+  /etc: /etc/seed-kit/wifi-kit
+  /var/log: /var/log/seed-kit/wifi-kit
+  /run: /run/seed-kit/wifi-kit
+
+Persistent / stable
+  persistent: /opt, /etc, /var/log targets
+  runtime-only: /run target
+
+Preview only: no copy, no mkdir, no chmod.
+No changes were made.
+```
