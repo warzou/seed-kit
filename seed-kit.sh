@@ -3593,7 +3593,6 @@ deployed_stack_check() {
 
   if [ -f "$compose_file" ]; then
     DEPL_STACK_COMPOSE_PRESENT="yes"
-
     if grep -q '\.\./config/' "$compose_file" 2>/dev/null; then
       DEPL_STACK_VOLUME_OK="no"
       deployed_stack_add_msg "legacy source paths (../config) detected in compose"
@@ -3621,7 +3620,12 @@ deployed_stack_check() {
         DEPL_STACK_COMPOSE_VALID="no"
         deployed_stack_add_msg "docker compose config failed"
       fi
+    else
+      DEPL_STACK_COMPOSE_VALID="no"
+      deployed_stack_add_msg "docker compose unavailable"
     fi
+  else
+    deployed_stack_add_msg "missing docker-compose.yml at deploy root"
   fi
 
   if [ -f "$caddy_file" ]; then
@@ -3634,22 +3638,34 @@ deployed_stack_check() {
         deployed_stack_add_msg "caddy validate failed"
       fi
     fi
+  else
+    deployed_stack_add_msg "missing Caddyfile at deploy root"
   fi
 
   if [ -d "$homepage_dir" ]; then
     DEPL_STACK_HOME_PRESENT="yes"
+  else
+    deployed_stack_add_msg "missing homepage directory at deploy root"
   fi
 
   if [ "$DEPL_STACK_COMPOSE_PRESENT" = "yes" ] && [ "$DEPL_STACK_CADDY_PRESENT" = "yes" ] && [ "$DEPL_STACK_HOME_PRESENT" = "yes" ]; then
     DEPL_STACK_DEPLOYED_CONFIGURABLE="yes"
   fi
 
-  if [ "$DEPL_STACK_COMPOSE_VALID" = "yes" ] && [ "$DEPL_STACK_CADDY_VALID" = "yes" ]; then
+  if [ "$DEPL_STACK_COMPOSE_VALID" = "yes" ] && \
+     [ "$DEPL_STACK_VOLUME_OK" = "yes" ] && \
+     [ "$DEPL_STACK_BIND_OK" = "yes" ] && \
+     [ "$DEPL_STACK_DETECTED" = "yes" ] && \
+     [ "$DEPL_STACK_CADDY_VALID" != "no" ]; then
     DEPL_STACK_VALIDATED="yes"
   fi
 
-  if [ "$DEPL_STACK_COMPOSE_PRESENT" = "yes" ] && [ "$DEPL_STACK_DEPLOYED_CONFIGURABLE" = "yes" ] && [ "$DEPL_STACK_VOLUME_OK" = "yes" ] && [ "$DEPL_STACK_BIND_OK" = "yes" ] && [ "$DEPL_STACK_COMPOSE_VALID" = "yes" ] && [ "$DEPL_STACK_CADDY_VALID" = "yes" ]; then
-    DEPL_STACK_START_OK="yes"
+  if [ "$DEPL_STACK_COMPOSE_PRESENT" = "yes" ] && [ "$DEPL_STACK_DEPLOYED_CONFIGURABLE" = "yes" ] && [ "$DEPL_STACK_VOLUME_OK" = "yes" ] && [ "$DEPL_STACK_BIND_OK" = "yes" ] && [ "$DEPL_STACK_COMPOSE_VALID" = "yes" ]; then
+    if [ "$DEPL_STACK_CADDY_PRESENT" = "yes" ] && [ "$DEPL_STACK_CADDY_VALID" = "no" ]; then
+      DEPL_STACK_START_OK="no"
+    else
+      DEPL_STACK_START_OK="yes"
+    fi
   else
     DEPL_STACK_START_OK="no"
   fi
@@ -3886,7 +3902,7 @@ apply_guided_validate_deployed() {
 
   ui_line ""
   if [ "$DEPL_STACK_START_OK" = "yes" ]; then
-    ui_line "Validation result: start prerequisites are likely satisfied."
+    ui_line "Validation result: start prerequisites are satisfied."
   else
     ui_line "Validation result: start prerequisites are not satisfied."
     if [ -n "$DEPL_STACK_VALIDATION_MESSAGE" ]; then
@@ -3978,9 +3994,9 @@ apply_guided_suggest_start() {
         printf '%b\n' "$DEPL_STACK_VALIDATION_MESSAGE"
       else
         if [ "$(seed_lang)" = "fr" ]; then
-          ui_line "  - Vérifications en attente"
+          ui_line "  - Validation incomplete"
         else
-          ui_line "  - Preconditions not yet validated"
+          ui_line "  - Validation incomplete"
         fi
       fi
       ui_line ""
