@@ -55,6 +55,38 @@ sh modules/wifi-kit/contract/wifi-kit.contract.sh print
 
 This prints a stable `KEY=VALUE` stream consumable by scripts.
 
+## Install-files manifest
+
+Wifi-Kit also exposes a dedicated install-files manifest for Seed-Kit core
+preview flows:
+
+```sh
+sh modules/wifi-kit/contract/install-files.manifest.sh print
+```
+
+The manifest is simple shell, sourceable, and read-only. It describes the
+directories, source files, target paths, ownership, modes, and safety policy
+needed by a future `install-files-preview` implementation.
+
+Seed-Kit core should consume this manifest instead of hardcoding Wifi-Kit file
+paths. The manifest is declarative only: it does not copy files, change
+permissions, change ownership, install sudoers, install systemd units, start
+runtime processes, start AP mode, or change networking.
+
+The current file entries are:
+
+- `prototype/ui/serve-readonly.py` -> `/opt/seed-kit/wifi-kit/ui/serve-readonly.py`, `root:root`, `0644`
+- `prototype/ui/index.html` -> `/opt/seed-kit/wifi-kit/ui/index.html`, `root:root`, `0644`
+- `prototype/ap-setup-test.sh` -> `/opt/seed-kit/wifi-kit/ap-setup-test.sh`, `root:root`, `0755`
+- `prototype/wifi-kit-connect-recovery.sh` -> `/opt/seed-kit/wifi-kit/wifi-kit-connect-recovery.sh`, `root:root`, `0755`
+- `prototype/wifi-kit-recovery-guard.sh` -> `/opt/seed-kit/wifi-kit/wifi-kit-recovery-guard.sh`, `root:root`, `0755`
+- `prototype/wifi-kit-action-wrapper.sh` -> `/opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh`, `root:root`, `0755`
+
+The privileged wrapper must be root-owned and must not be writable by the UI
+user in the final install. Future config files under `/etc/seed-kit/wifi-kit`
+should use strict permissions such as `0600` or `0640`, depending on the final
+owner/group model.
+
 ## Contract summary
 
 - `id`: `wifi-kit`
