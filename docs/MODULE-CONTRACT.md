@@ -187,5 +187,45 @@ The validator is intentionally conservative. It uses read-only checks such as
 `iproute2` to `ip`). It does not run module actions, write sudoers, install
 systemd units, start AP mode, or infer secrets.
 
+## Install-packages preview
+
+`sh seed-kit.sh modules install-packages-preview <module>` is a read-only
+package-preview for planned install-only module setup. It does not install
+anything and does not apply runtime changes.
+
+For V1 it is expected to:
+
+- load the same structured contract source as `modules validate`
+- read required/recommended/conditional dependencies from the contract
+- check whether each dependency is already present
+- show which dependencies are already present versus those that would be added in
+  a package-install pass
+- show required capabilities again with blockers that would still remain after
+  adding installable dependencies
+
+For now this is a planning view only. It does not perform apt writes, privileged
+wrapper changes, systemd installation, sudoers updates, AP mode, network
+reconfiguration, runtime starts, or secret operations.
+
+Example of an install-packages-preview style output:
+
+```
+Seed-Kit > install-packages-preview - wifi-kit
+Mode: SAFE read-only
+
+Required packages:
+OK     python3
+WARN   network-manager     to install
+
+Recommended packages:
+INFO   rfkill             optional
+
+Conditional packages:
+INFO   hostapd            conditional
+
+After installation:
+WARN   ap-recovery         requires: sudoers-wrapper
+```
+
 If a module has no structured contract yet, Seed-Kit falls back to the existing
 dependency text and explains that structured validation is unavailable.

@@ -1783,6 +1783,23 @@ print_dependency_validation() {
   fi
 }
 
+contract_key_prefix() {
+  module=$1
+  printf '%s' "$module" | tr 'a-z-' 'A-Z_'
+}
+
+contract_dependencies_prefix() {
+  module=$1
+  module_prefix=$(contract_key_prefix "$module")
+  echo "${module_prefix}_DEPENDENCIES"
+}
+
+contract_capabilities_prefix() {
+  module=$1
+  module_prefix=$(contract_key_prefix "$module")
+  echo "${module_prefix}_CAPABILITIES"
+}
+
 validate_dependency_group() {
   contract_data=$1
   contract_key=$2
@@ -1868,10 +1885,274 @@ validate_capability() {
   fi
 }
 
+install_required_status_text() {
+  if [ "$(seed_lang)" = "fr" ]; then
+    echo "à installer"
+  else
+    echo "to install"
+  fi
+}
+
+install_recommended_status_text() {
+  if [ "$(seed_lang)" = "fr" ]; then
+    echo "optionnel"
+  else
+    echo "optional"
+  fi
+}
+
+install_conditional_status_text() {
+  if [ "$(seed_lang)" = "fr" ]; then
+    echo "conditionnel"
+  else
+    echo "conditional"
+  fi
+}
+
+contract_dependency_can_be_installed() {
+  contract_data=$1
+  dependency=$2
+  module=$3
+
+  dep_prefix=$(contract_dependencies_prefix "$module")
+
+  check_name=$(dependency_check_name "$dependency")
+  if [ -z "$check_name" ]; then
+    return 1
+  fi
+
+  dependency_present "$dependency" && return 0
+
+  if contract_value_matches "$contract_data" "${dep_prefix}_DEPENDENCIES_REQUIRED" "$dependency"; then
+    return 0
+  fi
+  if contract_value_matches "$contract_data" "${dep_prefix}_DEPENDENCIES_RECOMMENDED" "$dependency"; then
+    return 0
+  fi
+  if contract_value_matches "$contract_data" "${dep_prefix}_DEPENDENCIES_CONDITIONAL" "$dependency"; then
+    return 0
+  fi
+  # Backward compatibility with the first published wifi-kit contract key shape.
+  if contract_value_matches "$contract_data" "WIFI_KIT_DEPENDENCIES_REQUIRED" "$dependency"; then
+    return 0
+  fi
+  if contract_value_matches "$contract_data" "WIFI_KIT_DEPENDENCIES_RECOMMENDED" "$dependency"; then
+    return 0
+  fi
+  if contract_value_matches "$contract_data" "WIFI_KIT_DEPENDENCIES_CONDITIONAL" "$dependency"; then
+    return 0
+  fi
+
+  return 1
+}
+
+preview_capability_after_install() {
+  capability=$1
+  contract_data=$2
+  module=$3
+  requirements=$(capability_requirements "$capability")
+
+  if [ -z "$requirements" ]; then
+    print_dependency_validation "INFO" "$capability" "declared; no generic rule"
+    return 0
+  fi
+
+  missing=""
+  for requirement in $requirements; do
+    if ! contract_dependency_can_be_installed "$contract_data" "$requirement" "$module"; then
+      if [ -z "$missing" ]; then
+        missing="$requirement"
+      else
+        missing="$missing, $requirement"
+      fi
+    fi
+  done
+
+  if [ -z "$missing" ]; then
+    print_dependency_validation "OK" "$capability"
+  else
+    print_dependency_validation "WARN" "$capability" "requires: $missing"
+  fi
+}
+
+show_install_packages_preview() {
+  module=$1
+  contract_tmp=$(mktemp -t seed-kit-module-contract.XXXXXX)
+  trap 'rm -f "$contract_tmp"' EXIT HUP INT TERM
+  dep_prefix=$(contract_dependencies_prefix "$module")
+  cap_prefix=$(contract_capabilities_prefix "$module")
+  module_prefix=$(contract_key_prefix "$module")
+  module_prefix=$(contract_key_prefix "$module")
+
+  case " $MODULES " in
+    *" $module "*) ;;
+    *)
+      rm -f "$contract_tmp"
+      trap - EXIT HUP INT TERM
+      echo "unknown module: $module" >&2
+      return 2
+      ;;
+  esac
+
+  if ! module_contract_print "$module" > "$contract_tmp"; then
+    rm -f "$contract_tmp"
+    trap - EXIT HUP INT TERM
+    ui_header "Seed-Kit > install-packages-preview" "$module"
+    ui_line "Mode: SAFE read-only"
+    ui_line ""
+    ui_line "No structured module package preview is available."
+    ui_line ""
+    ui_line "No changes were made."
+    return 0
+  fi
+
+  if [ "$(seed_lang)" = "fr" ]; then
+    required_label="Paquets requis"
+    recommended_label="Paquets recommandés"
+    conditional_label="Paquets conditionnels"
+    after_install_label="Après installation"
+    package_to_install="à installer"
+    recommended_optional="optionnel"
+    conditional_require="requis"
+  else
+    required_label="Required packages"
+    recommended_label="Recommended packages"
+    conditional_label="Conditional packages"
+    after_install_label="After installation"
+    package_to_install="to install"
+    recommended_optional="optional"
+    conditional_require="required"
+  fi
+
+  ui_header "Seed-Kit > install-packages-preview" "- $module"
+  ui_line "Mode: SAFE read-only"
+  ui_line ""
+
+  required_missing=""
+  recommended_missing=""
+  conditional_missing=""
+
+  ui_line "$required_label:"
+  while IFS= read -r contract_line; do
+    case "$contract_line" in
+      "${dep_prefix}_DEPENDENCIES_REQUIRED="*)
+        dependency=${contract_line#*=}
+        if dependency_present "$dependency"; then
+          print_dependency_validation "OK" "$dependency"
+        else
+          print_dependency_validation "WARN" "$dependency" "$package_to_install"
+          required_missing="$required_missing $dependency"
+        fi
+        ;;
+      "WIFI_KIT_DEPENDENCIES_REQUIRED="*)
+        dependency=${contract_line#*=}
+        if dependency_present "$dependency"; then
+          print_dependency_validation "OK" "$dependency"
+        else
+          print_dependency_validation "WARN" "$dependency" "$package_to_install"
+          required_missing="$required_missing $dependency"
+        fi
+        ;;
+    esac
+  done < "$contract_tmp"
+
+  ui_line ""
+  ui_line "$recommended_label:"
+  while IFS= read -r contract_line; do
+    case "$contract_line" in
+      "${dep_prefix}_DEPENDENCIES_RECOMMENDED="*)
+        dependency=${contract_line#*=}
+        if dependency_present "$dependency"; then
+          print_dependency_validation "OK" "$dependency"
+        else
+          print_dependency_validation "INFO" "$dependency" "$recommended_optional"
+          recommended_missing="$recommended_missing $dependency"
+        fi
+        ;;
+      "WIFI_KIT_DEPENDENCIES_RECOMMENDED="*)
+        dependency=${contract_line#*=}
+        if dependency_present "$dependency"; then
+          print_dependency_validation "OK" "$dependency"
+        else
+          print_dependency_validation "INFO" "$dependency" "$recommended_optional"
+          recommended_missing="$recommended_missing $dependency"
+        fi
+        ;;
+    esac
+  done < "$contract_tmp"
+
+  ui_line ""
+  ui_line "$conditional_label:"
+  while IFS= read -r contract_line; do
+    case "$contract_line" in
+      "${dep_prefix}_DEPENDENCIES_CONDITIONAL="*)
+        dependency=${contract_line#*=}
+        if dependency_present "$dependency"; then
+          print_dependency_validation "OK" "$dependency" "${conditional_require}"
+        else
+          print_dependency_validation "INFO" "$dependency" "${conditional_require}"
+          conditional_missing="$conditional_missing $dependency"
+        fi
+        ;;
+      "WIFI_KIT_DEPENDENCIES_CONDITIONAL="*)
+        dependency=${contract_line#*=}
+        if dependency_present "$dependency"; then
+          print_dependency_validation "OK" "$dependency"
+        else
+          print_dependency_validation "INFO" "$dependency" "$conditional_require"
+          conditional_missing="$conditional_missing $dependency"
+        fi
+        ;;
+    esac
+  done < "$contract_tmp"
+
+  ui_line ""
+  ui_line "$after_install_label:"
+  capabilities_found=0
+  while IFS= read -r contract_line; do
+    case "$contract_line" in
+      "${cap_prefix}="*)
+        capabilities_found=1
+        preview_capability_after_install "${contract_line#*=}" "$contract_tmp" "$module"
+        ;;
+      "WIFI_KIT_CAPABILITIES="*)
+        capabilities_found=1
+        preview_capability_after_install "${contract_line#*=}" "$contract_tmp" "$module"
+        ;;
+    esac
+  done < "$contract_tmp"
+
+  if [ "$capabilities_found" -eq 0 ]; then
+    print_dependency_validation "INFO" "none" "declared; no structured capabilities"
+  fi
+
+  ui_line ""
+  ui_line "Summary"
+  if [ -n "$required_missing" ]; then
+    ui_line "WARN   required missing:$required_missing"
+  else
+    ui_line "OK     required dependencies available"
+  fi
+  if [ -n "$recommended_missing" ]; then
+    ui_line "INFO   recommended missing:$recommended_missing"
+  fi
+  if [ -n "$conditional_missing" ]; then
+    ui_line "WARN   conditional missing:$conditional_missing"
+  fi
+  ui_line ""
+  ui_line "No changes were made."
+
+  rm -f "$contract_tmp"
+  trap - EXIT HUP INT TERM
+}
+
 validate_module_contract() {
   module=$1
   contract_tmp=$(mktemp -t seed-kit-module-contract.XXXXXX)
   trap 'rm -f "$contract_tmp"' EXIT HUP INT TERM
+  dep_prefix=$(contract_dependencies_prefix "$module")
+  cap_prefix=$(contract_capabilities_prefix "$module")
+  module_prefix=$(contract_key_prefix "$module")
 
   case " $MODULES " in
     *" $module "*) ;;
@@ -1904,16 +2185,26 @@ validate_module_contract() {
   missing_recommended=""
   missing_conditional=""
 
-  validate_dependency_group "$contract_tmp" "WIFI_KIT_DEPENDENCIES_REQUIRED" "WARN" "missing" || true
-  validate_dependency_group "$contract_tmp" "WIFI_KIT_DEPENDENCIES_RECOMMENDED" "INFO" "optional missing" || true
-  validate_dependency_group "$contract_tmp" "WIFI_KIT_DEPENDENCIES_CONDITIONAL" "WARN" "conditional missing" || true
+  validate_dependency_group "$contract_tmp" "${dep_prefix}_DEPENDENCIES_REQUIRED" "WARN" "missing" || true
+  validate_dependency_group "$contract_tmp" "${dep_prefix}_DEPENDENCIES_RECOMMENDED" "INFO" "optional missing" || true
+  validate_dependency_group "$contract_tmp" "${dep_prefix}_DEPENDENCIES_CONDITIONAL" "WARN" "conditional missing" || true
+  # Backward compatibility for early contract payloads.
+  if [ "$module_prefix" != "WIFI_KIT" ]; then
+    validate_dependency_group "$contract_tmp" "WIFI_KIT_DEPENDENCIES_REQUIRED" "WARN" "missing" || true
+    validate_dependency_group "$contract_tmp" "WIFI_KIT_DEPENDENCIES_RECOMMENDED" "INFO" "optional missing" || true
+    validate_dependency_group "$contract_tmp" "WIFI_KIT_DEPENDENCIES_CONDITIONAL" "WARN" "conditional missing" || true
+  fi
 
   ui_line ""
   ui_line "Capabilities"
   capabilities_found=0
   while IFS= read -r contract_line; do
     case "$contract_line" in
-      WIFI_KIT_CAPABILITIES=*)
+      "${cap_prefix}="*)
+        capabilities_found=1
+        validate_capability "${contract_line#*=}"
+        ;;
+      "WIFI_KIT_CAPABILITIES="*)
         capabilities_found=1
         validate_capability "${contract_line#*=}"
         ;;
@@ -1961,6 +2252,7 @@ seed_kit_usage() {
   echo "  modules list     list module scripts available in modules/"
   echo "  modules deps <module>  show read-only module dependency declaration"
   echo "  modules validate <module>  validate read-only module contract prerequisites"
+  echo "  modules install-packages-preview <module>  preview package dependencies that could be installed for a module"
   echo "  package create --service <name> [--copy-home]  create a SAFE dry-run package"
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
@@ -5494,10 +5786,19 @@ case "${1:-}" in
         fi
         validate_module_contract "$1"
         ;;
+      install-packages-preview)
+        shift
+        if [ -z "${1:-}" ]; then
+          echo "usage: sh seed-kit.sh modules install-packages-preview <module>" >&2
+          exit 2
+        fi
+        show_install_packages_preview "$1"
+        ;;
       *)
         echo "usage: sh seed-kit.sh modules list" >&2
         echo "       sh seed-kit.sh modules deps <module>" >&2
         echo "       sh seed-kit.sh modules validate <module>" >&2
+        echo "       sh seed-kit.sh modules install-packages-preview <module>" >&2
         exit 2
         ;;
     esac
