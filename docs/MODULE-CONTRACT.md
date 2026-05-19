@@ -235,8 +235,27 @@ dependency text and explains that structured validation is unavailable.
 `sh seed-kit.sh modules install-files-preview <module>` is a read-only
 plan-only preview for the files a module declares in contract metadata.
 
-This command reads the same contract source as `modules deps`, `validate`, and
-`install-packages-preview`, without side effects. It is only for inspection:
+This command first looks for a specialized install-files manifest, then falls
+back to the main module contract. It remains side-effect free in both cases.
+
+Resolution order:
+
+1. `modules/<module>/contract/install-files.manifest.sh print`
+2. `modules/<module>/contract/<module>.contract.sh print`
+3. fallback module contract function such as `module_<name>_contract print`
+
+The specialized manifest is preferred because file installation needs richer
+metadata than a top-level contract usually carries: source path, target path,
+owner, mode, and role.
+
+Example manifest output:
+
+```sh
+WIFI_KIT_INSTALL_FILE=prototype/ui/index.html|/opt/seed-kit/wifi-kit/ui/index.html|root:root|0644|normal-ui-static
+WIFI_KIT_INSTALL_DIR=/opt/seed-kit/wifi-kit|root:root|0755|app-dir
+```
+
+This is only for inspection:
 
 - which contract file entries are expected
 - where they would be copied in planned `/opt`, `/etc`, `/var/log`, and `/run`
@@ -245,6 +264,14 @@ This command reads the same contract source as `modules deps`, `validate`, and
 
 The command never creates directories, never writes files, and never changes
 network state.
+
+Current manifest-driven roadmap:
+
+- `runtime-service.manifest.sh` for systemd/unit previews
+- `sudoers.manifest.sh` for privileged wrapper and rule previews
+- `recovery.manifest.sh` for AP/captive/recovery previews
+- future guided apply should run manifest phases one at a time with explicit
+  confirmation, rollback notes, and recovery cleanup checkpoints
 
 Example V1 output shape:
 

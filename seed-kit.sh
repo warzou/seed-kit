@@ -1724,6 +1724,19 @@ module_contract_print() {
   return 1
 }
 
+module_manifest_print() {
+  module=$1
+  manifest_name=$2
+  manifest_file="$ROOT_DIR/modules/$module/contract/$manifest_name.manifest.sh"
+
+  if [ -f "$manifest_file" ]; then
+    sh "$manifest_file" print
+    return $?
+  fi
+
+  return 1
+}
+
 contract_value_matches() {
   contract_data=$1
   contract_key=$2
@@ -1854,6 +1867,14 @@ print_dependency_validation() {
 contract_key_prefix() {
   module=$1
   printf '%s' "$module" | tr 'a-z-' 'A-Z_'
+}
+
+manifest_key_prefix() {
+  module=$1
+  manifest_name=$2
+  module_prefix=$(contract_key_prefix "$module")
+  manifest_prefix=$(printf '%s' "$manifest_name" | tr 'a-z-' 'A-Z_')
+  printf '%s_%s' "$module_prefix" "$manifest_prefix"
 }
 
 contract_dependencies_prefix() {
@@ -2216,13 +2237,19 @@ show_install_packages_preview() {
 show_install_files_preview() {
   module=$1
   contract_tmp=$(mktemp -t seed-kit-module-contract.XXXXXX)
-  trap 'rm -f "$contract_tmp"' EXIT HUP INT TERM
+  manifest_tmp=$(mktemp -t seed-kit-module-manifest.XXXXXX)
+  trap 'rm -f "$contract_tmp" "$manifest_tmp"' EXIT HUP INT TERM
 
   module_prefix=$(contract_key_prefix "$module")
+  install_prefix=$(manifest_key_prefix "$module" "install")
   module_dir="$ROOT_DIR/modules/$module"
+  preview_source="contract"
 
-  if ! module_contract_print "$module" > "$contract_tmp"; then
-    rm -f "$contract_tmp"
+  if module_manifest_print "$module" "install-files" > "$manifest_tmp"; then
+    cp "$manifest_tmp" "$contract_tmp"
+    preview_source="install-files manifest"
+  elif ! module_contract_print "$module" > "$contract_tmp"; then
+    rm -f "$contract_tmp" "$manifest_tmp"
     trap - EXIT HUP INT TERM
     ui_header "Seed-Kit > install-files-preview" "$module"
     ui_line "Mode: SAFE read-only"
@@ -2236,6 +2263,7 @@ show_install_files_preview() {
 
   file_list_key=
   for contract_key in \
+    "${install_prefix}_FILE" \
     "${module_prefix}_FILES"
   do
     if contract_value_for_key "$contract_tmp" "$contract_key" >/dev/null; then
@@ -2245,15 +2273,19 @@ show_install_files_preview() {
   done
 
   app_dir=$(contract_first_matching_value "$contract_tmp" \
+    "${install_prefix}_APP_DIR" \
     "${module_prefix}_APP_DIR" \
     "${module_prefix}_TARGET_PATH_APP_DIR")
   config_dir=$(contract_first_matching_value "$contract_tmp" \
+    "${install_prefix}_CONFIG_DIR" \
     "${module_prefix}_CONFIG_DIR" \
     "${module_prefix}_TARGET_PATH_CONFIG_DIR")
   log_dir=$(contract_first_matching_value "$contract_tmp" \
+    "${install_prefix}_LOG_DIR" \
     "${module_prefix}_LOG_DIR" \
     "${module_prefix}_TARGET_PATH_LOG_DIR")
   run_dir=$(contract_first_matching_value "$contract_tmp" \
+    "${install_prefix}_RUNTIME_DIR" \
     "${module_prefix}_RUNTIME_DIR" \
     "${module_prefix}_TARGET_PATH_RUNTIME_DIR")
 
@@ -2267,6 +2299,7 @@ show_install_files_preview() {
     target_opt_label="Chemins cibles"
     persistence_label="Ce qui persiste / reste"
     runtime_label="Ce qui est runtime"
+    source_label="Source du preview"
   else
     files_label="Expected files"
     exists_label="present"
@@ -2277,10 +2310,12 @@ show_install_files_preview() {
     target_opt_label="Target paths"
     persistence_label="Persistent / stable"
     runtime_label="Runtime-only"
+    source_label="Preview source"
   fi
 
   ui_header "Seed-Kit > install-files-preview" "$module"
   ui_line "Mode: SAFE read-only"
+  ui_line "$source_label: $preview_source"
   ui_line ""
   ui_line "$files_label"
   ui_line "  Source paths: modules/$module"
@@ -2289,36 +2324,57 @@ show_install_files_preview() {
   if [ -n "$file_list_key" ]; then
     while IFS= read -r file_path; do
       [ -z "$file_path" ] && continue
+      file_entry=$file_path
+      explicit_target=
+      explicit_mode=
+      explicit_owner=
+      explicit_role=
+      case "$file_entry" in
+        *"|"*)
+          file_path=${file_entry%%|*}
+          rest=${file_entry#*|}
+          explicit_target=${rest%%|*}
+          rest=${rest#*|}
+          explicit_owner=${rest%%|*}
+          rest=${rest#*|}
+          explicit_mode=${rest%%|*}
+          explicit_role=${rest#*|}
+          ;;
+      esac
       file_count=$((file_count + 1))
       source_file="$module_dir/$file_path"
-      staged_file_target=$(
-        case "$file_path" in
-          *config*|configs/*|prototype/*/config/*|prototype/config/*)
-            if [ -n "$config_dir" ]; then
-              printf '%s' "$config_dir"
-            else
+      if [ -n "$explicit_target" ]; then
+        staged_file_target=$explicit_target
+      else
+        staged_file_target=$(
+          case "$file_path" in
+            *config*|configs/*|prototype/*/config/*|prototype/config/*)
+              if [ -n "$config_dir" ]; then
+                printf '%s' "$config_dir"
+              else
+                printf '%s' "$app_dir"
+              fi
+              ;;
+            *log*|logs/*|prototype/*/log/*|prototype/logs/*)
+              if [ -n "$log_dir" ]; then
+                printf '%s' "$log_dir"
+              else
+                printf '%s' "$app_dir"
+              fi
+              ;;
+            *run*|runtime/*|prototype/*/run/*|run/*)
+              if [ -n "$run_dir" ]; then
+                printf '%s' "$run_dir"
+              else
+                printf '%s' "$app_dir"
+              fi
+              ;;
+            *)
               printf '%s' "$app_dir"
-            fi
-            ;;
-          *log*|logs/*|prototype/*/log/*|prototype/logs/*)
-            if [ -n "$log_dir" ]; then
-              printf '%s' "$log_dir"
-            else
-              printf '%s' "$app_dir"
-            fi
-            ;;
-          *run*|runtime/*|prototype/*/run/*|run/*)
-            if [ -n "$run_dir" ]; then
-              printf '%s' "$run_dir"
-            else
-              printf '%s' "$app_dir"
-            fi
-            ;;
-          *)
-            printf '%s' "$app_dir"
-            ;;
-        esac
-      )
+              ;;
+          esac
+        )
+      fi
 
       staged_file_class="persistent"
       if printf '%s' "$staged_file_target" | grep -q '^/run/'; then
@@ -2332,11 +2388,17 @@ show_install_files_preview() {
         ui_line "  $file_path"
         ui_line "    source: $source_file ($exists_label)"
         ui_line "    target: $staged_file_target"
+        if [ -n "$explicit_owner$explicit_mode$explicit_role" ]; then
+          ui_line "    metadata: ${explicit_owner:-owner?} ${explicit_mode:-mode?} ${explicit_role:-role?}"
+        fi
         ui_line "    state: $staged_file_class / $exists_label"
       else
         ui_line "  $file_path"
         ui_line "    source: $source_file ($missing_label)"
         ui_line "    target: $staged_file_target"
+        if [ -n "$explicit_owner$explicit_mode$explicit_role" ]; then
+          ui_line "    metadata: ${explicit_owner:-owner?} ${explicit_mode:-mode?} ${explicit_role:-role?}"
+        fi
         ui_line "    state: $staged_file_class ($missing_label)"
       fi
     done <<EOF
@@ -2369,7 +2431,7 @@ EOF
   ui_line "$preview_only"
   ui_line "$no_changes"
 
-  rm -f "$contract_tmp"
+  rm -f "$contract_tmp" "$manifest_tmp"
   trap - EXIT HUP INT TERM
 }
 
