@@ -288,6 +288,53 @@ module_wifi_kit_dependencies() {
   echo "- no arbitrary shell commands"
 }
 
+module_wifi_kit_contract() {
+  case "${1:-print}" in
+    print|validate)
+      module_wifi_kit_contract_print
+      ;;
+    dependencies)
+      module_wifi_kit_dependencies
+      ;;
+    *)
+      echo "unknown wifi-kit contract mode: $1" >&2
+      return 2
+      ;;
+  esac
+}
+
+module_wifi_kit_contract_print() {
+  echo "WIFI_KIT_MODULE_ID=wifi-kit"
+  echo "WIFI_KIT_MODULE_TYPE=network-ui"
+  echo "WIFI_KIT_BACKEND=networkmanager"
+  echo "WIFI_KIT_MODE=normal-ui+ap-recovery"
+  echo "WIFI_KIT_RUNTIME_UI_NORMAL_PORT=54321"
+  echo "WIFI_KIT_RUNTIME_UI_RECOVERY_PORT=80"
+  echo "WIFI_KIT_DEPENDENCIES_REQUIRED=python3"
+  echo "WIFI_KIT_DEPENDENCIES_REQUIRED=network-manager"
+  echo "WIFI_KIT_DEPENDENCIES_REQUIRED=nmcli"
+  echo "WIFI_KIT_DEPENDENCIES_REQUIRED=wpa_cli"
+  echo "WIFI_KIT_DEPENDENCIES_REQUIRED=iw"
+  echo "WIFI_KIT_DEPENDENCIES_REQUIRED=iproute2"
+  echo "WIFI_KIT_DEPENDENCIES_RECOMMENDED=rfkill"
+  echo "WIFI_KIT_DEPENDENCIES_CONDITIONAL=hostapd"
+  echo "WIFI_KIT_DEPENDENCIES_CONDITIONAL=dnsmasq"
+  echo "WIFI_KIT_DEPENDENCIES_CONDITIONAL=sudoers-wrapper"
+  echo "WIFI_KIT_DEPENDENCIES_CONDITIONAL=systemd-service"
+  echo "WIFI_KIT_CAPABILITIES=normal-ui"
+  echo "WIFI_KIT_CAPABILITIES=wifi-scan"
+  echo "WIFI_KIT_CAPABILITIES=wifi-connect-recovery"
+  echo "WIFI_KIT_CAPABILITIES=ap-recovery"
+  echo "WIFI_KIT_CAPABILITIES=captive-portal"
+  echo "WIFI_KIT_CAPABILITIES=recovery-cleanup"
+  echo "WIFI_KIT_CAPABILITIES=privileged-actions"
+  echo "WIFI_KIT_FORBIDDEN_ACTIONS=no-reboot"
+  echo "WIFI_KIT_FORBIDDEN_ACTIONS=no-ap-start-without-explicit-action"
+  echo "WIFI_KIT_FORBIDDEN_ACTIONS=no-sudoers-write-in-dry-run"
+  echo "WIFI_KIT_FORBIDDEN_ACTIONS=no-secret-in-git"
+  echo "WIFI_KIT_FORBIDDEN_ACTIONS=no-arbitrary-shell-command"
+}
+
 module_wifi_kit_apply() {
   echo "- SAFE apply simulation (dry-run only)"
   echo "- no real network action: no hostapd, no dnsmasq, no NetworkManager"

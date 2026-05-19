@@ -1699,6 +1699,251 @@ show_module_dependencies() {
   fi
 }
 
+module_contract_print() {
+  module=$1
+  module_file="$ROOT_DIR/modules/$module.sh"
+  contract_base="$(printf '%s' "$module" | tr '-' '_')"
+  contract_fn="module_${contract_base}_contract"
+  contract_file="$ROOT_DIR/modules/$module/contract/$module.contract.sh"
+
+  if [ -f "$contract_file" ]; then
+    sh "$contract_file" print
+    return $?
+  fi
+
+  if [ ! -f "$module_file" ]; then
+    return 2
+  fi
+
+  . "$module_file"
+  if command -v "$contract_fn" >/dev/null 2>&1; then
+    "$contract_fn" print
+    return $?
+  fi
+
+  return 1
+}
+
+contract_value_matches() {
+  contract_data=$1
+  contract_key=$2
+  contract_value=$3
+
+  while IFS= read -r contract_line; do
+    case "$contract_line" in
+      "$contract_key=$contract_value")
+        return 0
+        ;;
+    esac
+  done < "$contract_data"
+
+  return 1
+}
+
+dependency_check_name() {
+  case "$1" in
+    network-manager|NetworkManager)
+      echo "nmcli"
+      ;;
+    iproute2)
+      echo "ip"
+      ;;
+    wpasupplicant)
+      echo "wpa_cli"
+      ;;
+    sudoers-wrapper|systemd-service)
+      echo ""
+      ;;
+    *)
+      echo "$1"
+      ;;
+  esac
+}
+
+dependency_present() {
+  dependency=$1
+  check_name=$(dependency_check_name "$dependency")
+
+  if [ -z "$check_name" ]; then
+    return 1
+  fi
+
+  command -v "$check_name" >/dev/null 2>&1
+}
+
+print_dependency_validation() {
+  status=$1
+  name=$2
+  detail=${3:-}
+
+  if [ -n "$detail" ]; then
+    printf '%-6s %-22s %s\n' "$status" "$name" "$detail"
+  else
+    printf '%-6s %s\n' "$status" "$name"
+  fi
+}
+
+validate_dependency_group() {
+  contract_data=$1
+  contract_key=$2
+  status_missing=$3
+  detail_missing=$4
+  found=0
+
+  while IFS= read -r contract_line; do
+    case "$contract_line" in
+      "$contract_key="*)
+        found=1
+        dependency=${contract_line#*=}
+        if dependency_present "$dependency"; then
+          print_dependency_validation "OK" "$dependency"
+        else
+          print_dependency_validation "$status_missing" "$dependency" "$detail_missing"
+          case "$contract_key" in
+            *_REQUIRED)
+              missing_required="$missing_required $dependency"
+              ;;
+            *_RECOMMENDED)
+              missing_recommended="$missing_recommended $dependency"
+              ;;
+            *_CONDITIONAL)
+              missing_conditional="$missing_conditional $dependency"
+              ;;
+          esac
+        fi
+        ;;
+    esac
+  done < "$contract_data"
+
+  [ "$found" -eq 1 ]
+}
+
+capability_requirements() {
+  case "$1" in
+    normal-ui)
+      echo "python3"
+      ;;
+    wifi-scan)
+      echo "network-manager nmcli wpa_cli iw"
+      ;;
+    wifi-connect-recovery|ap-recovery|captive-portal)
+      echo "hostapd dnsmasq sudoers-wrapper"
+      ;;
+    privileged-actions)
+      echo "sudoers-wrapper"
+      ;;
+    recovery-cleanup)
+      echo "systemd-service"
+      ;;
+    *)
+      echo ""
+      ;;
+  esac
+}
+
+validate_capability() {
+  capability=$1
+  requirements=$(capability_requirements "$capability")
+  missing=""
+
+  if [ -z "$requirements" ]; then
+    printf '%-6s %-22s %s\n' "INFO" "$capability" "declared; no generic rule"
+    return 0
+  fi
+
+  for requirement in $requirements; do
+    if ! dependency_present "$requirement"; then
+      if [ -z "$missing" ]; then
+        missing="$requirement"
+      else
+        missing="$missing, $requirement"
+      fi
+    fi
+  done
+
+  if [ -z "$missing" ]; then
+    printf '%-6s %s\n' "OK" "$capability"
+  else
+    printf '%-6s %-22s requires: %s\n' "WARN" "$capability" "$missing"
+  fi
+}
+
+validate_module_contract() {
+  module=$1
+  contract_tmp=$(mktemp -t seed-kit-module-contract.XXXXXX)
+  trap 'rm -f "$contract_tmp"' EXIT HUP INT TERM
+
+  case " $MODULES " in
+    *" $module "*) ;;
+    *)
+      rm -f "$contract_tmp"
+      trap - EXIT HUP INT TERM
+      echo "unknown module: $module" >&2
+      return 2
+      ;;
+  esac
+
+  if ! module_contract_print "$module" > "$contract_tmp"; then
+    rm -f "$contract_tmp"
+    trap - EXIT HUP INT TERM
+    ui_header "Seed-Kit > validate" "$module"
+    ui_line "No structured module contract available."
+    ui_line "Fallback:"
+    show_module_dependencies "$module"
+    ui_line ""
+    ui_line "No changes were made."
+    return 0
+  fi
+
+  ui_header "Seed-Kit > validate - $module"
+  ui_line "Mode: SAFE read-only"
+  ui_line ""
+  ui_line "Dependencies"
+
+  missing_required=""
+  missing_recommended=""
+  missing_conditional=""
+
+  validate_dependency_group "$contract_tmp" "WIFI_KIT_DEPENDENCIES_REQUIRED" "WARN" "missing" || true
+  validate_dependency_group "$contract_tmp" "WIFI_KIT_DEPENDENCIES_RECOMMENDED" "INFO" "optional missing" || true
+  validate_dependency_group "$contract_tmp" "WIFI_KIT_DEPENDENCIES_CONDITIONAL" "WARN" "conditional missing" || true
+
+  ui_line ""
+  ui_line "Capabilities"
+  capabilities_found=0
+  while IFS= read -r contract_line; do
+    case "$contract_line" in
+      WIFI_KIT_CAPABILITIES=*)
+        capabilities_found=1
+        validate_capability "${contract_line#*=}"
+        ;;
+    esac
+  done < "$contract_tmp"
+
+  if [ "$capabilities_found" -eq 0 ]; then
+    ui_line "INFO   none declared"
+  fi
+
+  ui_line ""
+  ui_line "Summary"
+  if [ -n "$missing_required" ]; then
+    ui_line "WARN   required missing:$missing_required"
+  else
+    ui_line "OK     required dependencies available"
+  fi
+  if [ -n "$missing_recommended" ]; then
+    ui_line "INFO   recommended missing:$missing_recommended"
+  fi
+  if [ -n "$missing_conditional" ]; then
+    ui_line "WARN   conditional missing:$missing_conditional"
+  fi
+  ui_line ""
+  ui_line "No changes were made."
+
+  rm -f "$contract_tmp"
+  trap - EXIT HUP INT TERM
+}
+
 seed_kit_usage() {
   echo "Usage: sh seed-kit.sh [--plan|--detect|--ui-demo|--modules|--apply]"
   echo ""
@@ -1715,6 +1960,7 @@ seed_kit_usage() {
   echo "  --modules        list available modules"
   echo "  modules list     list module scripts available in modules/"
   echo "  modules deps <module>  show read-only module dependency declaration"
+  echo "  modules validate <module>  validate read-only module contract prerequisites"
   echo "  package create --service <name> [--copy-home]  create a SAFE dry-run package"
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
@@ -5240,9 +5486,18 @@ case "${1:-}" in
         fi
         show_module_dependencies "$1"
         ;;
+      validate)
+        shift
+        if [ -z "${1:-}" ]; then
+          echo "usage: sh seed-kit.sh modules validate <module>" >&2
+          exit 2
+        fi
+        validate_module_contract "$1"
+        ;;
       *)
         echo "usage: sh seed-kit.sh modules list" >&2
         echo "       sh seed-kit.sh modules deps <module>" >&2
+        echo "       sh seed-kit.sh modules validate <module>" >&2
         exit 2
         ;;
     esac

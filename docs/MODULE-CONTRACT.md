@@ -101,6 +101,7 @@ Current examples:
 ```sh
 sh seed-kit.sh modules deps wifi-kit
 sh seed-kit.sh --plan --modules=wifi-kit
+sh seed-kit.sh modules validate wifi-kit
 ```
 
 ## Wifi-Kit reference mapping
@@ -158,3 +159,33 @@ If structured parsing is needed later, the preferred shape is a module-provided
 print mode that emits simple sectioned text or `KEY=value` lines from a child
 `sh` process. The core should not parse arbitrary shell code or run contract
 actions directly.
+
+## Validate preview
+
+`sh seed-kit.sh modules validate <module>` is a read-only preview command. It
+loads the same contract source as `modules deps`, then checks simple local
+prerequisites without installing packages or changing services.
+
+For V1, the generic validator consumes repeated `KEY=value` lines such as:
+
+```sh
+WIFI_KIT_DEPENDENCIES_REQUIRED=python3
+WIFI_KIT_DEPENDENCIES_RECOMMENDED=rfkill
+WIFI_KIT_DEPENDENCIES_CONDITIONAL=hostapd
+WIFI_KIT_CAPABILITIES=wifi-scan
+```
+
+The command reports:
+
+- required dependencies as OK or missing
+- recommended dependencies as optional
+- conditional dependencies as capability blockers
+- capabilities as available, unavailable, or declared without a generic rule
+
+The validator is intentionally conservative. It uses read-only checks such as
+`command -v` and simple command-name mappings (`network-manager` to `nmcli`,
+`iproute2` to `ip`). It does not run module actions, write sudoers, install
+systemd units, start AP mode, or infer secrets.
+
+If a module has no structured contract yet, Seed-Kit falls back to the existing
+dependency text and explains that structured validation is unavailable.
