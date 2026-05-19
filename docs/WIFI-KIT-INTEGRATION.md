@@ -26,14 +26,14 @@ changing action must stay explicit, inspectable, and operator confirmed.
 
 Wifi-Kit depends on host-level tools rather than Docker:
 
+- `python3`
 - `NetworkManager` / `nmcli`
 - `wpa_cli`
 - `hostapd`
 - `dnsmasq`
-- `python3`
 - `iw`
 - `iproute2`
-- `rfkill` when available
+- `rfkill` recommended
 
 The dependency declaration should remain shell-readable and read-only. Seed-Kit
 core may display or validate it later, but should not implement a dependency
@@ -48,11 +48,11 @@ module_wifi_kit_dependencies
 ```text
 requires: debian-like
 requires: sudo
+package: python3
 package: network-manager
 package: wpasupplicant
 package: hostapd
 package: dnsmasq
-package: python3
 package: iw
 package: iproute2
 package: rfkill
@@ -76,11 +76,23 @@ Stable paths should keep code, config, logs, and runtime state separate:
 Temporary recovery data may use `/run` or `/tmp` only when cleanup is strict and
 the data is not needed after reboot.
 
+The initial install-file contract from the Wifi-Kit supervisor is:
+
+```text
+prototype/ui/serve-readonly.py
+prototype/ui/index.html
+prototype/ap-setup-test.sh
+prototype/wifi-kit-connect-recovery.sh
+prototype/wifi-kit-recovery-guard.sh
+prototype/wifi-kit-action-wrapper.sh
+```
+
 ## Normal UI service
 
 The normal UI target is:
 
 - port: `54321`
+- command: `python3 /opt/seed-kit/wifi-kit/ui/serve-readonly.py --host 0.0.0.0 --port 54321`
 - user: non-root if possible
 - start: automatic only after explicit install/apply design is accepted
 - boot behavior: normal UI only, no AP recovery at boot by default
@@ -92,6 +104,9 @@ itself.
 
 Recovery mode is a separate explicit action:
 
+- SSID: `Wifi-Kit-<hostname>`
+- AP IP: `192.168.50.1/24`
+- DHCP range: `192.168.50.20-192.168.50.80`
 - captive portal port: `80`
 - AP tools: `hostapd` and `dnsmasq`
 - lifetime: temporary
@@ -133,6 +148,7 @@ It should:
 - run at boot before or alongside the normal UI service
 - remove only Wifi-Kit runtime state
 - stop only Wifi-Kit-owned `hostapd`/`dnsmasq` processes
+- remove residual recovery IP state when it is clearly Wifi-Kit-owned
 - hand `wlan0` back to NetworkManager when possible
 - avoid reboot, broad network restart, or global service resets
 
@@ -147,6 +163,7 @@ Expected fields:
 - recovery AP password
 - default known network label or id
 - interface, default `wlan0`
+- prototype timeouts
 
 Rules:
 
@@ -175,6 +192,32 @@ V1 apply, once implemented, should install files and dependencies only. It
 should not start AP mode, reconnect Wi-Fi, or write sudoers until those guided
 steps are individually designed and confirmed.
 
+## Future guided sub-plans
+
+The first Seed-Kit integration should expose previews before any real apply:
+
+- `install-packages`: package list and persistence boundaries only
+- `install-files`: source files and target paths only
+- `configure-sudoers-preview`: exact wrapper-only sudoers rule preview
+- `install-service-preview`: normal UI service shape, no AP at boot
+- `recovery-preview`: AP/recovery behavior, ports, DHCP, cleanup boundaries
+- `readiness-preview`: status checks for UI, NetworkManager, wlan0, scan, and recovery cleanup
+- `uninstall-preview`: files/services/sudoers cleanup plan, preserving user Wi-Fi profiles
+
+These previews are design contracts. They must not run apt, write sudoers,
+install systemd units, change networking, start AP mode, or store secrets.
+
+## Health checks
+
+Future readiness checks should be read-only:
+
+- normal UI responds on `/status`
+- NetworkManager is active
+- `wlan0` is visible
+- Wi-Fi scan works
+- no Wifi-Kit `hostapd`/`dnsmasq` is active in normal mode
+- recovery guard reports clean state
+
 ## Non-goals
 
 - no hidden network cutover
@@ -183,9 +226,21 @@ steps are individually designed and confirmed.
 - no automatic AP at boot
 - no manual sudoers edits on target nodes
 - no stored Wi-Fi secrets in Git
+- no deletion of user Wi-Fi profiles without explicit confirmation
 - no Docker, Homepage, or Caddy dependency
 - no cloud sync
 - no generic orchestration engine
+
+## Rollback/uninstall model
+
+Future uninstall must be explicit and conservative:
+
+- stop only the Wifi-Kit normal UI service
+- remove only the Wifi-Kit sudoers rule
+- remove only files installed under the declared Wifi-Kit paths
+- clean only Wifi-Kit-owned processes and runtime state
+- restore NetworkManager ownership where possible
+- preserve user Wi-Fi profiles unless the operator confirms otherwise
 
 ## Risks to resolve before apply
 
@@ -195,4 +250,3 @@ steps are individually designed and confirmed.
 - port `80` requires root or a controlled privilege boundary
 - sudoers mistakes can create privilege escalation
 - recovery cleanup must avoid breaking the current SSH path
-

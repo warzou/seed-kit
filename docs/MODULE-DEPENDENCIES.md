@@ -72,6 +72,22 @@ The core integration contract is documented in `docs/WIFI-KIT-INTEGRATION.md`.
 That document is design-only for now: no sudoers, systemd unit, network change,
 or runtime file install is implied by the dependency declaration.
 
+The Wifi-Kit declaration is owned by the Wifi-Kit module contract and consumed by
+Seed-Kit core as a plan-only interface. The current core preview may expose:
+
+- required system packages such as `python3`, `network-manager`, `hostapd`,
+  `dnsmasq`, `iw`, `iproute2`, and recommended `rfkill`
+- target paths under `/opt/seed-kit/wifi-kit/`, `/etc/seed-kit/wifi-kit/`,
+  `/var/log/seed-kit/wifi-kit/`, and `/run/seed-kit/wifi-kit/`
+- the normal UI port `54321` and recovery captive portal port `80`
+- the future wrapper-only sudoers boundary
+- future sub-plans such as `install-packages`, `install-files`,
+  `configure-sudoers-preview`, `install-service-preview`, `recovery-preview`,
+  `readiness-preview`, and `uninstall-preview`
+
+Those previews must stay read-only until a guided apply is explicitly designed
+and validated.
+
 ## Why not a resolver yet?
 
 Field use is still shaping the real module graph. A resolver would be premature
