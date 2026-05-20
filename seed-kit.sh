@@ -5102,7 +5102,7 @@ deployed_stack_check() {
         deployed_stack_add_msg "docker compose config failed"
       fi
     else
-      DEPL_STACK_COMPOSE_VALID="no"
+      DEPL_STACK_COMPOSE_VALID="unavailable"
       deployed_stack_add_msg "docker compose unavailable"
     fi
   else
@@ -5353,6 +5353,8 @@ apply_guided_validate_deployed() {
       ui_line "  OK"
   elif [ "$DEPL_STACK_COMPOSE_VALID" = "no" ]; then
       ui_line "  warning: docker compose config failed"
+  elif [ "$DEPL_STACK_COMPOSE_VALID" = "unavailable" ]; then
+      ui_line "  warning: docker compose unavailable, skipped"
   elif [ "$DEPL_STACK_COMPOSE_VALID" = "unknown" ]; then
       ui_line "  warning: docker compose unavailable, skipped"
   else
@@ -5725,6 +5727,7 @@ cloudflared_configured() {
 
 apply_guided_readiness() {
   package_root=$1
+  package_file=${2:-<package>}
   descriptor_content=""
   if [ -r "$package_root/seed-kit-package.sh" ]; then
     descriptor_content=$(sed -n '1,80p' "$package_root/seed-kit-package.sh")
@@ -5877,7 +5880,7 @@ apply_guided_readiness() {
   fi
   next_index=1
   if [ "$docker_ready" != "yes" ]; then
-    ui_line "$next_index. sh seed-kit.sh package apply-guided <package> --step install-modules"
+    ui_line "$next_index. sh seed-kit.sh package apply-guided $package_file --step install-modules"
     next_index=$((next_index + 1))
   fi
   if [ "$tailscale_connected" != "yes" ]; then
@@ -5890,14 +5893,14 @@ apply_guided_readiness() {
   fi
   if [ "$services_startable" = "no" ] || [ "$services_validated" != "yes" ]; then
     if [ "$services_deployed" = "yes" ]; then
-      ui_line "$next_index. sh seed-kit.sh package apply-guided <package> --step validate-deployed"
+      ui_line "$next_index. sh seed-kit.sh package apply-guided $package_file --step validate-deployed"
     else
-      ui_line "$next_index. sh seed-kit.sh package apply-guided <package> --step deploy-configs"
+      ui_line "$next_index. sh seed-kit.sh package apply-guided $package_file --step deploy-configs"
     fi
     next_index=$((next_index + 1))
   fi
   if [ "$services_deployed" = "yes" ] && [ "$services_startable" = "yes" ] && [ "$cloudflared_configured_status" != "yes" ] && [ "$tailscale_connected" != "yes" ]; then
-    ui_line "$next_index. sh seed-kit.sh package apply-guided <package> --step suggest-start"
+    ui_line "$next_index. sh seed-kit.sh package apply-guided $package_file --step suggest-start"
   fi
   if [ "$next_index" -eq 1 ]; then
     ui_line "$(seed_msg none)"
@@ -6207,7 +6210,7 @@ apply_guided_package() {
       ui_line "Readiness: package root not found"
       return 2
     fi
-    apply_guided_readiness "$package_root"
+    apply_guided_readiness "$package_root" "$package_file"
     readiness_rc=$?
     cleanup_guided_stage_if_compact "$guided_compact_step" "$stage_dir"
     return "$readiness_rc"
