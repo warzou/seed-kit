@@ -41,6 +41,29 @@ sh seed-kit.sh doctor
 sh seed-kit.sh restore ~/rpi-edge-service.tar.gz
 ```
 
+## Restore-first flow
+
+On the source node:
+
+```sh
+sh seed-kit.sh package create --service rpi-edge-vps --copy-home
+```
+
+On a fresh target node:
+
+```sh
+wget https://raw.githubusercontent.com/warzou/seed-kit/main/install-seed-kit.sh
+less install-seed-kit.sh
+sh install-seed-kit.sh
+cd ~/seed-kit
+sh seed-kit.sh package verify ~/rpi-edge-service.tar.gz
+sh seed-kit.sh restore ~/rpi-edge-service.tar.gz
+```
+
+`restore` verifies, stages, inspects, and prints the explicit human-guided
+steps to continue. It does not start services, restore secrets, or perform a
+DNS/cutover.
+
 ## Installer minimal
 
 Commande cible pour une machine fraiche :

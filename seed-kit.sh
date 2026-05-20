@@ -3148,8 +3148,8 @@ seed_kit_usage() {
   echo "Usage: sh seed-kit.sh [restore <package>|package|modules|--plan|--apply]"
   echo ""
   echo "Fresh-node bootstrap:"
-  echo "  wget https://raw.githubusercontent.com/warzou/seed-kit/main/seed-kit.sh"
-  echo "  sh seed-kit.sh [--yes] [--target <dir>]"
+  echo "  wget https://raw.githubusercontent.com/warzou/seed-kit/main/install-seed-kit.sh"
+  echo "  sh install-seed-kit.sh"
   echo "  installs git when needed, then clones/updates Seed-Kit"
   echo ""
   echo "Commands:"
@@ -3196,6 +3196,12 @@ restore_usage() {
   echo "  - stage under /tmp for inspection"
   echo "  - inspect package metadata"
   echo "  - show next human steps"
+  echo ""
+  echo "Typical continuation:"
+  echo "  sh seed-kit.sh package apply-guided <package.tar.gz> --step install-modules"
+  echo "  sh seed-kit.sh package apply-guided <package.tar.gz> --step review-configs"
+  echo "  sh seed-kit.sh package apply-guided <package.tar.gz> --step validate-services"
+  echo "  sh seed-kit.sh package apply-guided <package.tar.gz> --step deploy-configs"
   echo ""
   echo "No files are restored, no services are started, and no secrets are copied."
 }
@@ -6110,6 +6116,16 @@ apply_guided_package() {
       ui_line "$(seed_msg future_validate_configs)"
     fi
     ui_line "$(seed_msg future_optional_start)"
+
+    ui_section "Continue step by step"
+    ui_line "sh seed-kit.sh package apply-guided $package_file --step install-modules"
+    ui_line "sh seed-kit.sh package apply-guided $package_file --step review-configs"
+    if [ -n "$guided_services" ]; then
+      ui_line "sh seed-kit.sh package apply-guided $package_file --step validate-services"
+    fi
+    ui_line "sh seed-kit.sh package apply-guided $package_file --step deploy-configs"
+    ui_line "sh seed-kit.sh package apply-guided $package_file --step validate-deployed"
+    ui_line "sh seed-kit.sh package apply-guided $package_file --step suggest-start"
 
     ui_section "$(seed_msg nothing_changed)"
     ui_line "$(seed_msg no_restore)"
