@@ -115,7 +115,7 @@ seed_msg() {
       no_secret_copy) printf '%s\n' "Aucun secret n'a été copié." ;;
       no_dns_cutover) printf '%s\n' "Aucun DNS/cutover n'a été tenté." ;;
       no_reboot_network) printf '%s\n' "Aucun reboot ou restart réseau n'a été tenté." ;;
-      package_apply_disabled) printf '%s\n' "Package apply reste désactivé en V1." ;;
+      package_apply_disabled) printf '%s\n' "Le restore automatique reste désactivé en V1; utilisez les étapes guidées explicitement." ;;
       future_install_system) printf '%s\n' "- installer les paquets système manquants" ;;
       future_review_configs) printf '%s\n' "- relire services/configs" ;;
       future_reconnect_identity) printf '%s\n' "- reconnecter %s manuellement" ;;
@@ -177,7 +177,7 @@ seed_msg() {
     no_secret_copy) printf '%s\n' "No secret was copied." ;;
     no_dns_cutover) printf '%s\n' "No DNS/cutover was attempted." ;;
     no_reboot_network) printf '%s\n' "No reboot or network restart was attempted." ;;
-    package_apply_disabled) printf '%s\n' "Package apply remains disabled in V1." ;;
+    package_apply_disabled) printf '%s\n' "Automatic restore remains disabled in V1; use guided steps explicitly." ;;
     future_install_system) printf '%s\n' "- install missing system packages" ;;
     future_review_configs) printf '%s\n' "- review services/configs" ;;
     future_reconnect_identity) printf '%s\n' "- reconnect %s manually" ;;
@@ -4486,7 +4486,7 @@ package_create_wrapper() {
   fi
 
   ui_section "Package"
-  ui_line "$archive"
+  ui_line "Package: $archive"
   if command -v sha256sum >/dev/null 2>&1; then
     set -- $(sha256sum "$archive")
     archive_sha=$1
@@ -4516,7 +4516,7 @@ package_create_wrapper() {
 
     if [ -f "$home_target" ]; then
       ui_section "Copied package"
-      ui_line "$home_target"
+      ui_line "Package: $home_target"
       if command -v sha256sum >/dev/null 2>&1; then
         set -- $(sha256sum "$home_target")
         ui_line "SHA256: $1"
@@ -6060,6 +6060,8 @@ apply_guided_package() {
   if [ "$guided_compact_step" -eq 0 ]; then
     ui_report_ok "stage"
     ui_line "Stage dir: $stage_dir"
+    ui_line "Staging kept for inspection: $stage_dir"
+    ui_line "Remove it manually when no longer needed."
   fi
   package_root=$(find_stage_package_root "$stage_dir")
   descriptor_content=""
