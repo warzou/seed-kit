@@ -2953,6 +2953,10 @@ safe_apply_manifest_source() {
 
 show_safe_apply_plan() {
   module=$1
+  with_checkpoints=0
+  if [ "${2:-}" = "--with-checkpoints" ]; then
+    with_checkpoints=1
+  fi
   contract_tmp=$(mktemp -t seed-kit-module-apply-plan.XXXXXX)
   trap 'rm -f "$contract_tmp"' EXIT HUP INT TERM
 
@@ -2993,6 +2997,21 @@ show_safe_apply_plan() {
     no_secret_label="aucun secret"
     no_network_label="aucun réseau/AP/runtime"
     no_system_label="aucun sudo, systemd, chmod/chown/mkdir"
+    checkpoint_header="Moteur de checkpoints V0"
+    checkpoint_intro="Statuts de phase supportés"
+    status_pending="en attente"
+    status_planned="planifiée"
+    status_skipped="ignorée"
+    status_blocked="bloquée"
+    status_done="accomplie"
+    status_rollback="rollback-ready"
+    lock_label="Verrou :"
+    journal_label="Journal :"
+    state_label_future="Exemple d’état futur :"
+    resume_label="Reprise après interruption :"
+    resume_body1="1) Lire le verrou et le journal (non créés en dry-run)"
+    resume_body2="2) Corriger la cause du blocage"
+    resume_body3="3) Rejouer la phase marquée 'planned/blocked' lors d’un apply réel futur"
   else
     mode_label="Mode: SAFE dry-run only"
     summary_label="Summary"
@@ -3007,6 +3026,21 @@ show_safe_apply_plan() {
     no_secret_label="no secrets"
     no_network_label="no network/AP/runtime"
     no_system_label="no sudo, systemd, chmod/chown/mkdir"
+    checkpoint_header="V0 checkpoint engine"
+    checkpoint_intro="Supported phase statuses"
+    status_pending="pending"
+    status_planned="planned"
+    status_skipped="skipped"
+    status_blocked="blocked"
+    status_done="done-future"
+    status_rollback="rollback-ready"
+    lock_label="Lock file:"
+    journal_label="Apply journal:"
+    state_label_future="Future state schema:"
+    resume_label="Interruption recovery:"
+    resume_body1="1) Read lock and journal (not created in dry-run)"
+    resume_body2="2) Fix the blocking condition"
+    resume_body3="3) Re-run the planned future apply flow"
   fi
 
   ui_header "Seed-Kit > apply-plan" "$module"
@@ -3060,12 +3094,37 @@ show_safe_apply_plan() {
   ui_line "  - checkpoints are module-scoped"
   ui_line "  - failed phases stop the transaction before the next phase"
 
+  if [ "$with_checkpoints" -eq 1 ]; then
+    ui_line ""
+    ui_line "$checkpoint_header"
+    ui_line "  $checkpoint_intro:"
+    ui_line "    $status_pending, $status_planned, $status_skipped, $status_blocked, $status_done, $status_rollback"
+    ui_line "  - checkpoints are module-scoped and tied to one phase each"
+    ui_line "  - lock prevents concurrent writes for the same module plan"
+  fi
+
   ui_line ""
   ui_line "$state_label"
   ui_line "  state file: /var/lib/seed-kit/apply/$module/state"
+  ui_line "  $lock_label /var/lib/seed-kit/apply/$module/.lock"
+  ui_line "  $journal_label /var/log/seed-kit/apply-$module.log"
   ui_line "  checkpoint dir: /var/lib/seed-kit/apply/$module/checkpoints/"
   ui_line "  apply log: /var/log/seed-kit/apply-$module.log"
   ui_line "  dry-run: $not_created_label"
+  if [ "$with_checkpoints" -eq 1 ]; then
+    ui_line ""
+    ui_line "$state_label_future"
+    ui_line "  SEED_KIT_APPLY_PLAN_VERSION=0"
+    ui_line "  SEED_KIT_APPLY_MODULE=$module"
+    ui_line "  SEED_KIT_APPLY_MODE=dry-run"
+    ui_line "  SEED_KIT_APPLY_PHASE=install-files"
+    ui_line "  SEED_KIT_APPLY_STATUS=$status_planned"
+    ui_line "  SEED_KIT_APPLY_CHECKPOINT=files-staged-before-copy"
+    ui_line "  SEED_KIT_APPLY_ROLLBACK=restore-seed-kit-owned-files"
+    ui_line "  SEED_KIT_APPLY_LOCK=/var/lib/seed-kit/apply/$module/.lock"
+    ui_line "  SEED_KIT_APPLY_JOURNAL=/var/log/seed-kit/apply-$module.log"
+    ui_line "  SEED_KIT_APPLY_TIMESTAMP=(future runtime timestamp)"
+  fi
 
   ui_line ""
   ui_line "$rollback_label"
@@ -3100,6 +3159,14 @@ EOF
   ui_line "  - $no_system_label"
   ui_line "  - $no_network_label"
   ui_line "  - $no_secret_label"
+  if [ "$with_checkpoints" -eq 1 ]; then
+    ui_line ""
+    ui_line "$resume_label"
+    ui_line "  $resume_body1"
+    ui_line "  $resume_body2"
+    ui_line "  $resume_body3"
+    ui_line "  - checkpoints keep checkpoint->next-phase mapping"
+  fi
 
   ui_line ""
   ui_line "$nothing_label"
@@ -3219,7 +3286,7 @@ seed_kit_usage() {
   echo "  modules configure-sudoers-preview <module>  preview privileged wrapper and sudoers contract"
   echo "  modules install-service-preview <module>  preview runtime service contract"
   echo "  modules recovery-preview <module>  preview recovery/AP safety contract"
-  echo "  apply-plan <module> --dry-run  render SAFE apply orchestration plan without changes"
+  echo "  apply-plan <module> --dry-run [--with-checkpoints]  render SAFE apply orchestration plan"
   echo "  package create --service <name> [--copy-home]  create a SAFE dry-run package"
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
@@ -6809,17 +6876,31 @@ case "${1:-}" in
   apply-plan)
     shift
     if [ -z "${1:-}" ]; then
-      echo "usage: sh seed-kit.sh apply-plan <module> --dry-run" >&2
+      echo "usage: sh seed-kit.sh apply-plan <module> --dry-run [--with-checkpoints]" >&2
       exit 2
     fi
     apply_plan_module=$1
     shift
-    if [ "${1:-}" != "--dry-run" ] || [ -n "${2:-}" ]; then
-      echo "usage: sh seed-kit.sh apply-plan <module> --dry-run" >&2
+    if [ -z "${1:-}" ] || [ "${1:-}" != "--dry-run" ]; then
+      echo "usage: sh seed-kit.sh apply-plan <module> --dry-run [--with-checkpoints]" >&2
       echo "apply-plan is dry-run only in V0" >&2
       exit 2
     fi
-    show_safe_apply_plan "$apply_plan_module"
+    shift
+    apply_plan_checkpoints=0
+    if [ "${1:-}" = "--with-checkpoints" ]; then
+      apply_plan_checkpoints=1
+      shift
+    elif [ -n "${1:-}" ]; then
+      echo "usage: sh seed-kit.sh apply-plan <module> --dry-run [--with-checkpoints]" >&2
+      echo "apply-plan is dry-run only in V0" >&2
+      exit 2
+    fi
+    if [ "$apply_plan_checkpoints" -eq 1 ]; then
+      show_safe_apply_plan "$apply_plan_module" "--with-checkpoints"
+    else
+      show_safe_apply_plan "$apply_plan_module"
+    fi
     ;;
   package)
     shift

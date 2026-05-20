@@ -356,5 +356,9 @@ plan for a module. It consumes the same contract and manifest sources as the
 previews, but only prints the future phase order, checkpoints, rollback notes,
 state paths, and forbidden automatic actions.
 
+`sh seed-kit.sh apply-plan <module> --dry-run --with-checkpoints` also renders
+planned checkpoint engine metadata (state keys, lock, journal, and interruption
+recovery guidance), still without touching the filesystem.
+
 The command is dry-run only and creates no state files. See
 `docs/SAFE-APPLY-V0.md` for the detailed orchestration model.

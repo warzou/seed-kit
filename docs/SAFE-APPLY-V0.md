@@ -19,6 +19,15 @@ sh seed-kit.sh apply-plan <module> --dry-run
 `--dry-run` is mandatory. Any future non-dry-run apply must be introduced as a
 separate, reviewed step with explicit confirmations.
 
+For checkpoint-engine preview:
+
+```sh
+sh seed-kit.sh apply-plan wifi-kit --dry-run --with-checkpoints
+```
+
+With `--with-checkpoints`, the planner renders additional V0 metadata targets and
+status model without creating files.
+
 ## Inputs
 
 The planner consumes the same read-only contract sources used by module
@@ -64,6 +73,29 @@ The V0 CLI only displays these paths. It never creates them.
 /var/lib/seed-kit/apply/<module>/checkpoints/
 /var/log/seed-kit/apply-<module>.log
 ```
+
+When checkpoint mode is requested, it also displays:
+
+- `/var/lib/seed-kit/apply/<module>/.lock`
+- apply journal: `/var/log/seed-kit/apply-<module>.log`
+- key/value plan state (future schema):
+
+```text
+SEED_KIT_APPLY_PLAN_VERSION=0
+SEED_KIT_APPLY_MODULE=wifi-kit
+SEED_KIT_APPLY_MODE=dry-run
+SEED_KIT_APPLY_PHASE=install-files
+SEED_KIT_APPLY_STATUS=planned
+SEED_KIT_APPLY_CHECKPOINT=files-staged-before-copy
+SEED_KIT_APPLY_ROLLBACK=restore-seed-kit-owned-files
+SEED_KIT_APPLY_LOCK=/var/lib/seed-kit/apply/wifi-kit/.lock
+SEED_KIT_APPLY_JOURNAL=/var/log/seed-kit/apply-wifi-kit.log
+SEED_KIT_APPLY_TIMESTAMP=...
+```
+
+Supported phase statuses are:
+
+`pending`, `planned`, `skipped`, `blocked`, `done-future`, `rollback-ready`.
 
 ## Future State Format
 
