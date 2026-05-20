@@ -98,6 +98,14 @@ start-ui
 health-check
 '
 
+WIFI_KIT_PHASE_ALIASES='
+install-files|install-files-preview|install-files.manifest.sh
+install-sudoers-rule|configure-sudoers-preview|sudoers.manifest.sh
+install-normal-ui-service|install-service-preview|runtime-service.manifest.sh
+recovery-config|recovery-preview|recovery.manifest.sh
+ap-recovery|recovery-preview|recovery.manifest.sh
+'
+
 WIFI_KIT_ROLLBACK_PHASES='
 stop-ui
 stop-recovery-if-active
@@ -164,6 +172,7 @@ module_wifi_kit_contract() {
   _wifi_kit_print_list WIFI_KIT_READINESS_CHECKS "$WIFI_KIT_READINESS_CHECKS"
   _wifi_kit_print_list WIFI_KIT_HEALTH_CHECKS "$WIFI_KIT_HEALTH_CHECKS"
   _wifi_kit_print_list WIFI_KIT_INSTALL_PHASES "$WIFI_KIT_INSTALL_PHASES"
+  _wifi_kit_print_list WIFI_KIT_PHASE_ALIAS "$WIFI_KIT_PHASE_ALIASES"
   _wifi_kit_print_list WIFI_KIT_ROLLBACK_PHASES "$WIFI_KIT_ROLLBACK_PHASES"
   _wifi_kit_print_list WIFI_KIT_FORBIDDEN_ACTIONS "$WIFI_KIT_FORBIDDEN_ACTIONS"
   _wifi_kit_print_list WIFI_KIT_SECRETS_POLICY "$WIFI_KIT_SECRETS_POLICY"
@@ -174,4 +183,3 @@ if [ "${1-}" = "print" ]; then
   module_wifi_kit_contract
   exit 0
 fi
-

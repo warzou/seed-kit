@@ -38,6 +38,7 @@ Variables available:
   - `WIFI_KIT_READINESS_CHECKS`
   - `WIFI_KIT_HEALTH_CHECKS`
   - `WIFI_KIT_INSTALL_PHASES`
+  - `WIFI_KIT_PHASE_ALIASES`
   - `WIFI_KIT_ROLLBACK_PHASES`
   - `WIFI_KIT_FORBIDDEN_ACTIONS`
   - `WIFI_KIT_SECRETS_POLICY`
@@ -54,6 +55,27 @@ sh modules/wifi-kit/contract/wifi-kit.contract.sh print
 ```
 
 This prints a stable `KEY=VALUE` stream consumable by scripts.
+
+## Phase aliases
+
+The base contract keeps historical module phase names for compatibility, while
+the specialized manifests expose the canonical Seed-Kit preview phase targets.
+Seed-Kit core should use `WIFI_KIT_PHASE_ALIAS` entries when mapping module
+phases to manifest-driven previews.
+
+Alias entries use this shape:
+
+```text
+module-phase|core-preview-phase|manifest-file
+```
+
+Current aliases:
+
+- `install-files` -> `install-files-preview` via `install-files.manifest.sh`
+- `install-sudoers-rule` -> `configure-sudoers-preview` via `sudoers.manifest.sh`
+- `install-normal-ui-service` -> `install-service-preview` via `runtime-service.manifest.sh`
+- `recovery-config` -> `recovery-preview` via `recovery.manifest.sh`
+- `ap-recovery` -> `recovery-preview` via `recovery.manifest.sh`
 
 ## Install-files manifest
 
