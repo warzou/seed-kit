@@ -238,12 +238,14 @@
 
     .status-mini {
       display: grid;
-      grid-template-columns: 28px minmax(0, 1fr);
-      gap: 7px;
-      align-items: center;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 3px;
+      align-items: start;
+      justify-items: center;
       min-width: 0;
-      min-height: 34px;
+      min-height: 50px;
       padding: 0;
+      text-align: center;
     }
 
     .safe-mini {
@@ -277,6 +279,7 @@
     .status-icon {
       width: 28px;
       height: 28px;
+      justify-self: center;
     }
 
     .status-mini:nth-child(1) .status-icon {
@@ -471,8 +474,12 @@
     .network-main {
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) auto;
-      gap: 10px;
+      gap: 8px;
       align-items: center;
+    }
+
+    .network-main.has-active {
+      grid-template-columns: auto auto minmax(0, 1fr) auto;
     }
 
     .network-left {
@@ -517,16 +524,19 @@
       min-width: 0;
     }
 
-    .network-current {
-      display: inline-grid;
-      place-items: center;
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      background: rgba(83, 220, 98, 0.2);
+    .network-active-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-height: 24px;
+      border: 1px solid rgba(83, 220, 98, 0.35);
+      border-radius: 999px;
+      background: rgba(83, 220, 98, 0.12);
       color: #a8ffbe;
-      font-size: 0.7rem;
+      padding: 2px 7px;
+      font-size: 0.68rem;
       font-weight: 950;
+      white-space: nowrap;
     }
 
 
@@ -674,6 +684,65 @@
 
     .prepare-plan[hidden] { display: none; }
 
+    .inline-plan,
+    .action-plan {
+      border: 1px solid rgba(68, 212, 230, 0.16);
+      border-radius: 17px;
+      background: rgba(68, 212, 230, 0.055);
+      padding: 0;
+    }
+
+    .inline-plan summary,
+    .action-plan summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 42px;
+      padding: 10px 12px;
+      color: var(--soft);
+      font-size: 0.82rem;
+      font-weight: 950;
+      list-style: none;
+    }
+
+    .inline-plan summary::-webkit-details-marker,
+    .action-plan summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .inline-plan summary::after,
+    .action-plan summary::after {
+      content: "";
+      width: 0.72rem;
+      height: 0.72rem;
+      border-right: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      transform: rotate(45deg);
+      transition: transform 160ms ease;
+      opacity: 0.85;
+    }
+
+    .inline-plan[open] summary::after,
+    .action-plan[open] summary::after {
+      transform: rotate(225deg);
+    }
+
+    .inline-plan .prepare-plan,
+    .action-plan p {
+      margin: 0;
+      border: 0;
+      border-top: 1px solid rgba(68, 212, 230, 0.12);
+      border-radius: 0 0 17px 17px;
+      background: transparent;
+    }
+
+    .action-plan p {
+      padding: 0 12px 12px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
     .safe-lines {
       display: grid;
       gap: 8px;
@@ -747,7 +816,7 @@
 
     .section-tabs {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 6px;
       border: 1px solid var(--line);
       border-radius: 22px;
@@ -1003,7 +1072,6 @@
 
     <nav class="section-tabs" aria-label="Navigation Wifi-Kit">
       <button class="tab-button active" type="button" data-page-target="networks" aria-current="page"><svg class="icon-svg" aria-hidden="true"><use href="#icon-wifi"></use></svg>Wifi</button>
-      <button class="tab-button" type="button" data-page-target="node"><svg class="icon-svg" aria-hidden="true"><use href="#icon-server"></use></svg>Node</button>
       <button class="tab-button" type="button" data-page-target="recovery"><svg class="icon-svg" aria-hidden="true"><use href="#icon-shield"></use></svg>R&eacute;cup.</button>
       <button class="tab-button" type="button" data-page-target="diagnostic"><svg class="icon-svg" aria-hidden="true"><use href="#icon-activity"></use></svg>Diag.</button>
       <button class="tab-button" type="button" data-page-target="config"><svg class="icon-svg" aria-hidden="true"><use href="#icon-gear"></use></svg>Config.</button>
@@ -1021,33 +1089,6 @@
         <span id="scan-spinner" class="scan-spinner" hidden>Scan en cours</span>
         <div id="scan-message" class="callout" hidden></div>
         <div id="network-list" class="network-list"></div>
-      </section>
-    </div>
-
-    <div class="page" data-page="node" hidden>
-      <section class="panel node-state-panel" aria-labelledby="node-state-title">
-        <div class="section-head">
-          <div>
-            <h2 id="node-state-title">Etat du node</h2>
-            <p class="section-copy" id="mode-copy">Mode normal: le node reste connecte au Wi-Fi habituel.</p>
-          </div>
-          <span class="chip" id="mode-chip">Mode normal</span>
-        </div>
-        <div class="mode-line">
-          <strong id="mode-summary">Wifi-Kit observe le reseau sans mutation.</strong>
-          <p class="section-copy" id="mode-detail">Le mode AP demarre seulement sur demande explicite ou quand aucun Wi-Fi utilisable n'est disponible.</p>
-        </div>
-        <div class="node-grid" aria-label="Etat detaille du node">
-          <div class="metric"><span>Hostname</span><strong id="node-hostname">...</strong></div>
-          <div class="metric"><span>IP actuelle</span><strong id="node-ip">...</strong></div>
-          <div class="metric"><span>Wi-Fi actuel</span><strong id="node-wifi">...</strong></div>
-          <div class="metric"><span>NetworkManager</span><strong id="node-nm">...</strong></div>
-          <div class="metric"><span>Uptime</span><strong id="node-uptime">...</strong></div>
-          <div class="metric"><span>Temperature</span><strong id="node-temp">...</strong></div>
-          <div class="metric"><span>Mode</span><strong id="node-recovery">...</strong></div>
-          <div class="metric"><span>AP</span><strong id="node-ap">...</strong></div>
-          <div class="metric"><span>DHCP</span><strong id="node-dhcp">...</strong></div>
-        </div>
       </section>
     </div>
 
@@ -1084,18 +1125,28 @@
             <strong>Wi-Fi par d&eacute;faut</strong>
             <p>Arr&ecirc;te le mode AP et reconnecte le Wi-Fi pr&eacute;c&eacute;dent.</p>
             <button class="button" type="button" data-network-action="reconnect-previous">Wi-Fi par d&eacute;faut</button>
-            <button class="button secondary" type="button" data-network-plan="reconnect-previous">Afficher le plan</button>
+            <details class="action-plan">
+              <summary>Afficher le plan</summary>
+              <p>Le mode AP, DHCP, DNS et cette UI s'arr&ecirc;tent, puis wlan0 revient &agrave; NetworkManager. Le portail peut dispara&icirc;tre pendant le retour.</p>
+            </details>
           </div>
           <div class="action-card">
             <strong>Activer le mode AP</strong>
             <p>D&eacute;marre l'AP Wifi-Kit avec DHCP, DNS captive et UI locale sur le port 80.</p>
             <button class="button" type="button" data-network-action="start-ap-mode">Activer le mode AP</button>
-            <button class="button secondary" type="button" data-network-plan="start-ap-mode">Afficher le plan</button>
+            <details class="action-plan">
+              <summary>Afficher le plan</summary>
+              <p>Snapshot NetworkManager, bascule wlan0 en AP-only, lancement temporaire hostapd, dnsmasq DHCP/DNS captive et UI locale sur 192.168.50.1:80. Timeout prototype: 300 s.</p>
+            </details>
           </div>
           <div class="action-card">
             <strong>Retour au r&eacute;seau initial</strong>
             <p>Reconnecte la connexion de test autoris&eacute;e: netplan-wlan0-GL-MT6000-d53.</p>
             <button class="button secondary" type="button" data-network-action="return-default-network">Retour au r&eacute;seau initial</button>
+            <details class="action-plan">
+              <summary>Afficher le plan</summary>
+              <p>Demande &agrave; NetworkManager de reconnecter uniquement la connexion autoris&eacute;e netplan-wlan0-GL-MT6000-d53. L'acc&egrave;s r&eacute;seau peut couper quelques secondes.</p>
+            </details>
           </div>
         </div>
         <div id="network-action-result" class="callout recovery-result" hidden></div>
@@ -1113,6 +1164,15 @@
           <span class="chip">SAFE</span>
         </div>
         <div class="node-grid">
+          <div class="metric"><span>Hostname</span><strong id="node-hostname">...</strong></div>
+          <div class="metric"><span>IP actuelle</span><strong id="node-ip">...</strong></div>
+          <div class="metric"><span>Wi-Fi actuel</span><strong id="node-wifi">...</strong></div>
+          <div class="metric"><span>NetworkManager</span><strong id="node-nm">...</strong></div>
+          <div class="metric"><span>Uptime</span><strong id="node-uptime">...</strong></div>
+          <div class="metric"><span>Temperature</span><strong id="node-temp">...</strong></div>
+          <div class="metric"><span>Mode</span><strong id="node-recovery">...</strong></div>
+          <div class="metric"><span>AP</span><strong id="node-ap">...</strong></div>
+          <div class="metric"><span>DHCP</span><strong id="node-dhcp">...</strong></div>
           <div class="metric"><span>Dernier evenement</span><strong id="diag-last-event">...</strong></div>
           <div class="metric"><span>AP</span><strong id="diag-ap">...</strong></div>
           <div class="metric"><span>DHCP</span><strong id="diag-dhcp">...</strong></div>
@@ -1675,22 +1735,24 @@
       button.className = 'button';
       button.textContent = 'Connecter un Wi-Fi';
 
-      const planButton = document.createElement('button');
-      planButton.type = 'button';
-      planButton.className = 'button secondary';
-      planButton.textContent = 'Afficher le plan';
-
       const summary = document.createElement('p');
       summary.className = 'prep-summary';
-      summary.textContent = 'Action reelle uniquement depuis le mode recovery. En mode normal, Wifi-Kit affiche le plan.';
+      summary.textContent = "Action reelle uniquement depuis le mode AP. Aucun mot de passe deja valide n'est persiste dans ce prototype; le champ reste donc vide.";
 
+      const planDetails = document.createElement('details');
+      planDetails.className = 'inline-plan';
+      const planSummary = document.createElement('summary');
+      planSummary.textContent = 'Afficher le plan';
       const plan = document.createElement('div');
       plan.className = 'prepare-plan';
       plan.hidden = true;
+      planDetails.append(planSummary, plan);
 
-      planButton.addEventListener('click', (event) => {
+      planDetails.addEventListener('toggle', () => {
+        if (planDetails.open) renderInlinePlan(network, plan);
+      });
+      planDetails.addEventListener('click', (event) => {
         event.stopPropagation();
-        renderInlinePlan(network, plan);
       });
       button.addEventListener('click', (event) => {
         event.stopPropagation();
@@ -1699,7 +1761,7 @@
       password.addEventListener('click', (event) => event.stopPropagation());
       password.addEventListener('keydown', (event) => event.stopPropagation());
 
-      prep.append(passwordLabel, button, planButton, summary, plan);
+      prep.append(passwordLabel, button, summary, planDetails);
       return prep;
     }
 
@@ -1866,11 +1928,12 @@
         const qualityLabel = document.createElement('span');
         const signal = document.createElement('div');
         const signalLabel = document.createElement('div');
-        const current = document.createElement('span');
+        const activeLabel = document.createElement('span');
         const dot = document.createElement('span');
         const ssid = displaySsid(network);
 
         main.className = 'network-main';
+        if (network.current === 'yes') main.classList.add('has-active');
         left.className = 'network-left';
         center.className = 'network-center';
         right.className = 'network-right';
@@ -1897,12 +1960,12 @@
         signalLabel.className = 'signal-quality';
         signalLabel.textContent = quality.dbm;
         signalLabel.style.setProperty('--signal-color', quality.color);
-        current.className = 'network-current';
         if (network.current === 'yes') {
-          current.textContent = '✓';
-          current.title = 'Wi-Fi actuel';
+          activeLabel.className = 'network-active-label';
+          activeLabel.textContent = '✓ Actif';
+          activeLabel.title = 'Wi-Fi actuel';
         } else {
-          current.textContent = '';
+          activeLabel.setAttribute('aria-hidden', 'true');
         }
         dot.className = 'choice-dot';
         dot.appendChild(makeIcon('chevron'));
@@ -1910,7 +1973,8 @@
         center.append(title, meta);
         signal.append(signalBars(quality), signalLabel);
         left.append(orb, qualityLabel);
-        right.append(current, signal, dot);
+        right.append(signal, dot);
+        if (network.current === 'yes') main.append(activeLabel);
         main.append(left, center, right);
         row.append(main);
 

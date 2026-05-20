@@ -230,6 +230,12 @@ Current action matrix:
 The AP recovery password flow remains placeholder until Wifi-Kit has a
 contracted persistence/API model outside Git with strict permissions.
 
+The Wi-Fi password field is intentionally not pre-filled. Wifi-Kit does not yet
+have a SAFE runtime source for a password that was previously validated
+successfully, and the prototype must not invent persistence or echo secrets back
+into the UI. A future prefill can only use an explicit secret store/API that
+keeps passwords outside Git, out of logs, and out of diagnostic payloads.
+
 ## Field validation milestone
 
 Validated on `pocket-node.lan` from branch `wifi-kit-work` up to commit
