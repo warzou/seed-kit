@@ -226,3 +226,62 @@ units, write secrets, or reboot.
 - no secrets are declared in the contract
 - no sudoers write, no direct shell execution, and no hostapd/dnsmasq process
   control are done in this artifact
+
+## Prototype and legacy scope
+
+To avoid a parallel orchestration track, keep this file as the only contract
+source for Seed-Kit core orchestration. The items below are intentionally
+separated by confidence level.
+
+### Active contract surface
+
+- `modules/wifi-kit/contract/*.sh`
+- manifest readers (`install-files`, `sudoers`, `runtime-service`,
+  `recovery`)
+- phase aliases in `wifi-kit.contract.sh`
+- SAFE docs:
+  `APPLY-SAFE.md`, `MODULE-CONTRACT.md`, `SECURITY-ACTIONS.md`,
+  `WIFI-KIT-GUIDED-APPLY-V0.md`
+
+This is the preferred surface for core consumption and future preview/apply
+automation.
+
+### Runtime prototype surface
+
+- `modules/wifi-kit/prototype/wifi-kit.sh`
+- `modules/wifi-kit/prototype/helpers.sh`
+- `modules/wifi-kit/prototype/backends/`
+- `modules/wifi-kit/prototype/ui/serve-readonly.py`
+- `modules/wifi-kit/prototype/ui/render-readonly-ui.sh`
+- `modules/wifi-kit/prototype/wifi-kit-action-wrapper.sh`
+- `modules/wifi-kit/prototype/wifi-kit-connect-recovery.sh`
+- `modules/wifi-kit/prototype/wifi-kit-recovery-guard.sh`
+
+These scripts are valid product prototypes/examples and useful references for
+behaviour, but they must **not** become a second independent orchestration
+layer for Seed-Kit core.
+
+### Legacy / plan-only candidates
+
+- `modules/wifi-kit/prototype/connect-safe-plan.sh`
+- `modules/wifi-kit/prototype/connect-safe-apply.sh`
+- `modules/wifi-kit/prototype/connect-safe-networkmanager.sh`
+- `modules/wifi-kit/prototype/connect-safe-scenario-plan.sh`
+- `modules/wifi-kit/prototype/ap-reconnect-plan.sh`
+- `modules/wifi-kit/prototype/candidate-match-plan.sh`
+- `modules/wifi-kit/prototype/registry-plan.sh`
+- `modules/wifi-kit/prototype/wpa-cli-scan-results-to-json.sh`
+
+These are not for V0 guided apply work. Keep them for context, but do not
+extend them for the contract-driven path; they are future candidates for
+archival after migration.
+
+### Ambiguities to resolve
+
+- `NORMAL_UI_PORT` is currently used as `18089` in prototype flow, while the
+  contract runtime target is `54321`.
+- `modules/wifi-kit/prototype/wifi-kit.sh` still mixes prototype flow,
+  readiness checks, and connect-safe helpers.
+
+Both points are non-blockers today but must be clarified before any operational
+guided-apply rollout in V0.
