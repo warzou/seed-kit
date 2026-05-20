@@ -200,6 +200,36 @@ section. It must not connect, save, select, enable, or reconfigure Wi-Fi.
 This remains a local prototype.
 No AP mode, captive portal, or hotspot rescue is enabled now.
 
+## UI action capabilities
+
+The current UI mixes read-only status, explicit plans, and a few gated recovery
+actions. Buttons must not imply that an unavailable action will run.
+
+Capability states:
+
+- `readonly`: reads state or scan data only.
+- `planned`: displays the future plan and performs no mutation.
+- `requires-recovery`: can run only while AP recovery is active.
+- `requires-privileged-wrapper`: can run only after the strict wrapper and
+  sudoers rule are installed and explicitly enabled.
+- `real-enabled`: performs a real action in the narrow allowed context.
+- `placeholder`: visible UX rehearsal only; no backend persistence or mutation.
+
+Current action matrix:
+
+| UI action | State | Notes |
+| --- | --- | --- |
+| Scan Wi-Fi | `readonly` | `GET /wifi/scan?refresh=1`; may trigger a bounded scan refresh, but does not connect, save, enable, or reconfigure Wi-Fi. |
+| Connecter un Wi-Fi | `requires-recovery` / `real-enabled` | Real only from AP recovery with root privileges; normal mode returns `409 recovery-required` and shows the plan. Password is runtime-only and must not be logged. |
+| Wi-Fi par défaut | `requires-recovery` / `real-enabled` | Stops AP recovery and returns wlan0 to NetworkManager; must be explicit because the captive portal disappears on success. |
+| Activer le mode AP | `requires-privileged-wrapper` | Planned by default. Real execution requires `WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS=1` plus the strict sudo wrapper. |
+| Retour au réseau initial | `requires-privileged-wrapper` | Planned by default. Real execution is limited to the whitelisted default NetworkManager connection. |
+| Mot de passe AP recovery | `placeholder` | The current UI only previews a future AP password change. No value is persisted, sent as a durable config, or used by AP recovery yet. |
+| `/exit-recovery`, `/reboot-recovery`, `/set-recovery-password` | `placeholder` | Endpoints remain plan-only placeholders and should not be presented as real controls until a SAFE backend exists. |
+
+The AP recovery password flow remains placeholder until Wifi-Kit has a
+contracted persistence/API model outside Git with strict permissions.
+
 ## Field validation milestone
 
 Validated on `pocket-node.lan` from branch `wifi-kit-work` up to commit
