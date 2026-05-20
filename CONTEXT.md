@@ -6,6 +6,7 @@ Debian, Raspberry Pi OS, mini VPS, and later OpenWRT/Flint.
 ## Core Rule
 
 Do one thing well: install tools, apps, and GitHub repos cleanly on small machines.
+Seed-Kit keeps to a minimal bootstrap/install/restore role and avoids becoming an orchestration platform.
 
 Everything else is secondary.
 
@@ -32,6 +33,16 @@ Everything else is secondary.
 * read-only diagnostics: `doctor`, `--self-check`, `self-update --plan`
 * safe update path: `self-update --apply` uses only `git pull --ff-only`
 * profile-state supports SAFE reconstruction planning and package verification
+
+Principal mental flow:
+
+1. Fresh install
+2. Seed-Kit installer
+3. Restore/replay package or profile
+4. Guided human steps only when required
+
+`restore <package>` is the intended principal restore concept (implementation naming can follow current CLI names),
+and `guided` must only describe human-judgment steps.
 
 ## Architecture Direction
 
@@ -101,15 +112,30 @@ Avoid:
 * enterprise architecture
 * generic abstractions before real need
 
+Avoid for now (anti-bloat):
+
+* complex planners
+* checkpoint engines
+* readiness/state layers that create runtime dependency
+* state managers for pseudo-workflows
+* full framework-style shell abstractions
+
+Principle:
+
+* remove > rewrite
+* simplify > abstract
+* concrete behavior > simulation
+
 ## Not Now
 
 * advanced restore
 * complex secrets
 * GDrive/rclone backend
 * advanced profiles
-* orchestration
+* orchestration frameworks
 * distributed system
 * multi-layer abstractions
+* restore/replay command engines or checkpointing before end-to-end manual flow is clear
 
 ## Workflow
 
