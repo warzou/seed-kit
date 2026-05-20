@@ -2953,10 +2953,6 @@ safe_apply_manifest_source() {
 
 show_safe_apply_plan() {
   module=$1
-  with_checkpoints=0
-  if [ "${2:-}" = "--with-checkpoints" ]; then
-    with_checkpoints=1
-  fi
   contract_tmp=$(mktemp -t seed-kit-module-apply-plan.XXXXXX)
   trap 'rm -f "$contract_tmp"' EXIT HUP INT TERM
 
@@ -2986,61 +2982,23 @@ show_safe_apply_plan() {
   if [ "$(seed_lang)" = "fr" ]; then
     mode_label="Mode : SAFE dry-run uniquement"
     summary_label="Résumé"
-    plan_label="Plan transactionnel V0"
-    checkpoint_label="Checkpoints futurs"
-    state_label="État et logs futurs"
-    rollback_label="Rollback futur"
-    validation_label="Validations futures"
+    plan_label="Plan futur simple"
+    source_label="Sources"
     forbidden_label="Interdits automatiques"
     nothing_label="Aucun changement effectué."
-    not_created_label="Non créé en dry-run"
     no_secret_label="aucun secret"
     no_network_label="aucun réseau/AP/runtime"
     no_system_label="aucun sudo, systemd, chmod/chown/mkdir"
-    checkpoint_header="Moteur de checkpoints V0"
-    checkpoint_intro="Statuts de phase supportés"
-    status_pending="en attente"
-    status_planned="planifiée"
-    status_skipped="ignorée"
-    status_blocked="bloquée"
-    status_done="accomplie"
-    status_rollback="rollback-ready"
-    lock_label="Verrou :"
-    journal_label="Journal :"
-    state_label_future="Exemple d’état futur :"
-    resume_label="Reprise après interruption :"
-    resume_body1="1) Lire le verrou et le journal (non créés en dry-run)"
-    resume_body2="2) Corriger la cause du blocage"
-    resume_body3="3) Rejouer la phase marquée 'planned/blocked' lors d’un apply réel futur"
   else
     mode_label="Mode: SAFE dry-run only"
     summary_label="Summary"
-    plan_label="V0 transaction plan"
-    checkpoint_label="Future checkpoints"
-    state_label="Future state and logs"
-    rollback_label="Future rollback"
-    validation_label="Future validations"
+    plan_label="Simple future plan"
+    source_label="Sources"
     forbidden_label="Forbidden automatic actions"
     nothing_label="No changes were made."
-    not_created_label="Not created during dry-run"
     no_secret_label="no secrets"
     no_network_label="no network/AP/runtime"
     no_system_label="no sudo, systemd, chmod/chown/mkdir"
-    checkpoint_header="V0 checkpoint engine"
-    checkpoint_intro="Supported phase statuses"
-    status_pending="pending"
-    status_planned="planned"
-    status_skipped="skipped"
-    status_blocked="blocked"
-    status_done="done-future"
-    status_rollback="rollback-ready"
-    lock_label="Lock file:"
-    journal_label="Apply journal:"
-    state_label_future="Future state schema:"
-    resume_label="Interruption recovery:"
-    resume_body1="1) Read lock and journal (not created in dry-run)"
-    resume_body2="2) Fix the blocking condition"
-    resume_body3="3) Re-run the planned future apply flow"
   fi
 
   ui_header "Seed-Kit > apply-plan" "$module"
@@ -3054,89 +3012,19 @@ show_safe_apply_plan() {
 
   ui_line ""
   ui_line "$plan_label"
-  ui_line "  1. preflight"
-  ui_line "     preview: modules validate $module"
-  ui_line "     checkpoint: preflight-ok"
-  ui_line "     rollback: none"
-  ui_line "  2. install-packages"
-  ui_line "     preview: modules install-packages-preview $module"
-  ui_line "     source: module contract"
-  ui_line "     checkpoint: packages-planned"
-  ui_line "     rollback: package rollback notes only in V0"
-  ui_line "  3. install-files"
-  ui_line "     preview: modules install-files-preview $module"
-  ui_line "     source: $(safe_apply_manifest_source "$module" "install-files")"
-  ui_line "     checkpoint: files-staged-before-copy"
-  ui_line "     rollback: restore previous files from checkpoint metadata"
-  ui_line "  4. configure-sudoers"
-  ui_line "     preview: modules configure-sudoers-preview $module"
-  ui_line "     source: $(safe_apply_manifest_source "$module" "sudoers")"
-  ui_line "     checkpoint: sudoers-before-write"
-  ui_line "     rollback: remove exact Seed-Kit sudoers rule"
-  ui_line "  5. install-service"
-  ui_line "     preview: modules install-service-preview $module"
-  ui_line "     source: $(safe_apply_manifest_source "$module" "runtime-service")"
-  ui_line "     checkpoint: service-before-install"
-  ui_line "     rollback: disable/remove exact Seed-Kit service"
-  ui_line "  6. recovery"
-  ui_line "     preview: modules recovery-preview $module"
-  ui_line "     source: $(safe_apply_manifest_source "$module" "recovery")"
-  ui_line "     checkpoint: recovery-before-enable"
-  ui_line "     rollback: cleanup module-scoped recovery state"
-  ui_line "  7. validate"
-  ui_line "     preview: modules validate $module"
-  ui_line "     checkpoint: final-validation"
-  ui_line "     rollback: print rollback plan if validation fails"
+  ui_line "  1. modules validate $module"
+  ui_line "  2. modules install-packages-preview $module"
+  ui_line "  3. modules install-files-preview $module"
+  ui_line "  4. modules configure-sudoers-preview $module"
+  ui_line "  5. modules install-service-preview $module"
+  ui_line "  6. modules recovery-preview $module"
 
   ui_line ""
-  ui_line "$checkpoint_label"
-  ui_line "  - every future mutating phase gets a before/after checkpoint"
-  ui_line "  - checkpoints are module-scoped"
-  ui_line "  - failed phases stop the transaction before the next phase"
-
-  if [ "$with_checkpoints" -eq 1 ]; then
-    ui_line ""
-    ui_line "$checkpoint_header"
-    ui_line "  $checkpoint_intro:"
-    ui_line "    $status_pending, $status_planned, $status_skipped, $status_blocked, $status_done, $status_rollback"
-    ui_line "  - checkpoints are module-scoped and tied to one phase each"
-    ui_line "  - lock prevents concurrent writes for the same module plan"
-  fi
-
-  ui_line ""
-  ui_line "$state_label"
-  ui_line "  state file: /var/lib/seed-kit/apply/$module/state"
-  ui_line "  $lock_label /var/lib/seed-kit/apply/$module/.lock"
-  ui_line "  $journal_label /var/log/seed-kit/apply-$module.log"
-  ui_line "  checkpoint dir: /var/lib/seed-kit/apply/$module/checkpoints/"
-  ui_line "  apply log: /var/log/seed-kit/apply-$module.log"
-  ui_line "  dry-run: $not_created_label"
-  if [ "$with_checkpoints" -eq 1 ]; then
-    ui_line ""
-    ui_line "$state_label_future"
-    ui_line "  SEED_KIT_APPLY_PLAN_VERSION=0"
-    ui_line "  SEED_KIT_APPLY_MODULE=$module"
-    ui_line "  SEED_KIT_APPLY_MODE=dry-run"
-    ui_line "  SEED_KIT_APPLY_PHASE=install-files"
-    ui_line "  SEED_KIT_APPLY_STATUS=$status_planned"
-    ui_line "  SEED_KIT_APPLY_CHECKPOINT=files-staged-before-copy"
-    ui_line "  SEED_KIT_APPLY_ROLLBACK=restore-seed-kit-owned-files"
-    ui_line "  SEED_KIT_APPLY_LOCK=/var/lib/seed-kit/apply/$module/.lock"
-    ui_line "  SEED_KIT_APPLY_JOURNAL=/var/log/seed-kit/apply-$module.log"
-    ui_line "  SEED_KIT_APPLY_TIMESTAMP=(future runtime timestamp)"
-  fi
-
-  ui_line ""
-  ui_line "$rollback_label"
-  ui_line "  - rollback metadata is planned before each future write"
-  ui_line "  - rollback only targets Seed-Kit-owned paths/rules/services"
-  ui_line "  - user Wi-Fi profiles and secrets are preserved unless explicitly confirmed"
-
-  ui_line ""
-  ui_line "$validation_label"
-  ui_line "  - contract is readable"
-  ui_line "  - manifests are readable or fallback is available"
-  ui_line "  - forbidden automatic actions remain blocked"
+  ui_line "$source_label"
+  ui_line "  install-files: $(safe_apply_manifest_source "$module" "install-files")"
+  ui_line "  sudoers: $(safe_apply_manifest_source "$module" "sudoers")"
+  ui_line "  runtime-service: $(safe_apply_manifest_source "$module" "runtime-service")"
+  ui_line "  recovery: $(safe_apply_manifest_source "$module" "recovery")"
 
   ui_line ""
   ui_line "$forbidden_label"
@@ -3159,271 +3047,9 @@ EOF
   ui_line "  - $no_system_label"
   ui_line "  - $no_network_label"
   ui_line "  - $no_secret_label"
-  if [ "$with_checkpoints" -eq 1 ]; then
-    ui_line ""
-    ui_line "$resume_label"
-    ui_line "  $resume_body1"
-    ui_line "  $resume_body2"
-    ui_line "  $resume_body3"
-    ui_line "  - checkpoints keep checkpoint->next-phase mapping"
-  fi
 
   ui_line ""
   ui_line "$nothing_label"
-
-  rm -f "$contract_tmp"
-  trap - EXIT HUP INT TERM
-}
-
-show_apply_readiness() {
-  module=$1
-  contract_tmp=$(mktemp -t seed-kit-module-apply-readiness.XXXXXX)
-  trap 'rm -f "$contract_tmp"' EXIT HUP INT TERM
-  readiness_missing=0
-  readiness_partial=0
-
-  case " $MODULES " in
-    *" $module "*) ;;
-    *)
-      rm -f "$contract_tmp"
-      trap - EXIT HUP INT TERM
-      echo "unknown module: $module" >&2
-      return 2
-      ;;
-  esac
-
-  if ! module_contract_print "$module" > "$contract_tmp"; then
-    rm -f "$contract_tmp"
-    trap - EXIT HUP INT TERM
-    ui_header "Seed-Kit > apply-readiness" "$module"
-    ui_line "Mode: SAFE read-only"
-    ui_line ""
-    ui_line "No structured module contract is available."
-    ui_line "Futures apply-readiness commands require a consumable module contract."
-    ui_line ""
-    ui_line "BLOCKED"
-    ui_line "  missing: module contract source"
-    ui_line ""
-    ui_line "No changes were made."
-    return 0
-  fi
-
-  module_prefix=$(contract_key_prefix "$module")
-  dep_prefix=$(contract_dependencies_prefix "$module")
-
-  ui_header "Seed-Kit > apply-readiness" "$module"
-  ui_line "Mode: SAFE read-only"
-  ui_line ""
-
-  if [ "$(seed_lang)" = "fr" ]; then
-    status_ready="READY"
-    status_partial="PARTIAL"
-    status_blocked="BLOCKED"
-    ready_label="Prêt"
-    partial_label="Partiel"
-    blocked_label="Bloqué"
-    check_label="Vérifications"
-    blocker_label="Bloquants"
-    preview_label="Previews disponibles"
-    source_label="Sources de données"
-    next_label="Préparation du futur apply réel"
-    required_label="Dépendances requises"
-    recommended_label="Dépendances recommandées"
-    conditional_label="Dépendances conditionnelles"
-    capability_label="Capacités"
-    present_label="présent"
-    missing_label="manquante"
-    none_label="Aucun blocage"
-    no_changes="Aucun changement effectué."
-    warn_label="ATTENTION"
-  else
-    status_ready="READY"
-    status_partial="PARTIAL"
-    status_blocked="BLOCKED"
-    ready_label="ready"
-    partial_label="partial"
-    blocked_label="blocked"
-    check_label="Checks"
-    blocker_label="Blockers"
-    preview_label="Preview availability"
-    source_label="Readiness source"
-    next_label="Future real apply preparation"
-    required_label="Required dependencies"
-    recommended_label="Recommended dependencies"
-    conditional_label="Conditional dependencies"
-    capability_label="Capabilities"
-    present_label="present"
-    missing_label="missing"
-    none_label="No blockers"
-    no_changes="No changes were made."
-    warn_label="WARN"
-  fi
-
-  missing_required=""
-  missing_recommended=""
-  missing_conditional=""
-  capability_blockers=""
-
-  validate_dependency_group "$contract_tmp" "${dep_prefix}_DEPENDENCIES_REQUIRED" "WARN" "missing" || true
-  validate_dependency_group "$contract_tmp" "${dep_prefix}_DEPENDENCIES_RECOMMENDED" "INFO" "optional missing" || true
-  validate_dependency_group "$contract_tmp" "${dep_prefix}_DEPENDENCIES_CONDITIONAL" "WARN" "conditional missing" || true
-  if [ "$module_prefix" != "WIFI_KIT" ]; then
-    validate_dependency_group "$contract_tmp" "WIFI_KIT_DEPENDENCIES_REQUIRED" "WARN" "missing" || true
-    validate_dependency_group "$contract_tmp" "WIFI_KIT_DEPENDENCIES_RECOMMENDED" "INFO" "optional missing" || true
-    validate_dependency_group "$contract_tmp" "WIFI_KIT_DEPENDENCIES_CONDITIONAL" "WARN" "conditional missing" || true
-  fi
-
-  # Required dependency missing => hard blocker.
-  if [ -n "$missing_required" ]; then
-    readiness_missing=1
-  fi
-
-  ui_line "${check_label}:"
-  ui_line "  $source_label: contract + capabilities + manifest probes"
-  ui_line "  $required_label"
-  if [ -n "$missing_required" ]; then
-    for dependency in $missing_required; do
-      print_dependency_validation "WARN" "$dependency" "$missing_label"
-    done
-  else
-    print_dependency_validation "OK" "required" "$present_label"
-  fi
-
-  ui_line "  $recommended_label"
-  if [ -n "$missing_recommended" ]; then
-    for dependency in $missing_recommended; do
-      print_dependency_validation "INFO" "$dependency" "optional"
-    done
-  else
-    print_dependency_validation "OK" "recommended" "$present_label"
-  fi
-
-  ui_line "  $conditional_label"
-  if [ -n "$missing_conditional" ]; then
-    for dependency in $missing_conditional; do
-      print_dependency_validation "WARN" "$dependency" "$present_label if condition met"
-    done
-  else
-    print_dependency_validation "OK" "conditional" "$present_label"
-  fi
-
-  ui_line ""
-  ui_line "$capability_label"
-  capabilities_found=0
-  while IFS= read -r contract_line; do
-    case "$contract_line" in
-      "${module_prefix}_CAPABILITIES="*)
-        capabilities_found=1
-        capability=${contract_line#*=}
-        missing_capability=""
-        for requirement in $(capability_requirements "$capability"); do
-          if ! dependency_present "$requirement"; then
-            if [ -z "$missing_capability" ]; then
-              missing_capability="$requirement"
-            else
-              missing_capability="$missing_capability, $requirement"
-            fi
-          fi
-        done
-        if [ -n "$missing_capability" ]; then
-          print_dependency_validation "WARN" "$capability" "requires: $missing_capability"
-          capability_blockers="${capability_blockers}${capability} "
-        else
-          print_dependency_validation "OK" "$capability"
-        fi
-        ;;
-      "WIFI_KIT_CAPABILITIES="*)
-        capabilities_found=1
-        capability=${contract_line#*=}
-        missing_capability=""
-        for requirement in $(capability_requirements "$capability"); do
-          if ! dependency_present "$requirement"; then
-            if [ -z "$missing_capability" ]; then
-              missing_capability="$requirement"
-            else
-              missing_capability="$missing_capability, $requirement"
-            fi
-          fi
-        done
-        if [ -n "$missing_capability" ]; then
-          print_dependency_validation "WARN" "$capability" "requires: $missing_capability"
-          capability_blockers="${capability_blockers}${capability} "
-        else
-          print_dependency_validation "OK" "$capability"
-        fi
-        ;;
-    esac
-  done < "$contract_tmp"
-  if [ "$capabilities_found" -eq 0 ]; then
-    print_dependency_validation "INFO" "none" "declared"
-  fi
-
-  if [ -n "$capability_blockers" ]; then
-    readiness_partial=1
-  fi
-
-  install_files_source=$(safe_apply_manifest_source "$module" "install-files")
-  runtime_service_source=$(safe_apply_manifest_source "$module" "runtime-service")
-  sudoers_source=$(safe_apply_manifest_source "$module" "sudoers")
-  recovery_source=$(safe_apply_manifest_source "$module" "recovery")
-
-  if [ -n "$missing_required" ]; then
-    readiness_missing=1
-  fi
-
-  if [ "$readiness_missing" -eq 1 ]; then
-    readiness_label="$blocked_label"
-  elif [ "$readiness_partial" -eq 1 ] || [ -n "$missing_recommended" ] || [ -n "$missing_conditional" ]; then
-    readiness_label="$partial_label"
-  else
-    readiness_label="$ready_label"
-  fi
-
-  if [ -n "$missing_required" ]; then
-    blockers="Missing required dependencies: ${missing_required# }"
-  elif [ -z "$capability_blockers" ] && [ -z "$missing_recommended" ] && [ -z "$missing_conditional" ]; then
-    blockers="$none_label"
-  else
-    blockers="Missing optional/conditional items remain for full readiness"
-  fi
-
-  ui_line ""
-  ui_line "Readiness: $readiness_label"
-  ui_line "  $blocker_label:"
-  ui_line "    $blockers"
-
-  ui_line ""
-  ui_line "$preview_label"
-  ui_line "  modules validate: available"
-  ui_line "  modules install-packages-preview: available"
-  if [ "$install_files_source" = "unavailable" ]; then
-    ui_line "  modules install-files-preview: unavailable"
-  else
-    ui_line "  modules install-files-preview: available ($install_files_source)"
-  fi
-  if [ "$runtime_service_source" = "unavailable" ]; then
-    ui_line "  modules install-service-preview: unavailable"
-  else
-    ui_line "  modules install-service-preview: available ($runtime_service_source)"
-  fi
-  if [ "$sudoers_source" = "unavailable" ]; then
-    ui_line "  modules configure-sudoers-preview: unavailable"
-  else
-    ui_line "  modules configure-sudoers-preview: available ($sudoers_source)"
-  fi
-  if [ "$recovery_source" = "unavailable" ]; then
-    ui_line "  modules recovery-preview: unavailable"
-  else
-    ui_line "  modules recovery-preview: available ($recovery_source)"
-  fi
-
-  ui_line ""
-  ui_line "$next_label"
-  ui_line "  sh seed-kit.sh apply-plan $module --dry-run"
-  ui_line "  (and optional: sh seed-kit.sh apply-plan $module --dry-run --with-checkpoints)"
-
-  ui_line ""
-  ui_line "$no_changes"
 
   rm -f "$contract_tmp"
   trap - EXIT HUP INT TERM
@@ -3540,8 +3166,7 @@ seed_kit_usage() {
   echo "  modules configure-sudoers-preview <module>  preview privileged wrapper and sudoers contract"
   echo "  modules install-service-preview <module>  preview runtime service contract"
   echo "  modules recovery-preview <module>  preview recovery/AP safety contract"
-  echo "  apply-plan <module> --dry-run [--with-checkpoints]  render SAFE apply orchestration plan"
-  echo "  apply-readiness <module>  summarize if module is ready for real apply"
+  echo "  apply-plan <module> --dry-run  show future apply order without changing anything"
   echo "  package create --service <name> [--copy-home]  create a SAFE dry-run package"
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
@@ -7131,39 +6756,23 @@ case "${1:-}" in
   apply-plan)
     shift
     if [ -z "${1:-}" ]; then
-      echo "usage: sh seed-kit.sh apply-plan <module> --dry-run [--with-checkpoints]" >&2
+      echo "usage: sh seed-kit.sh apply-plan <module> --dry-run" >&2
       exit 2
     fi
     apply_plan_module=$1
     shift
     if [ -z "${1:-}" ] || [ "${1:-}" != "--dry-run" ]; then
-      echo "usage: sh seed-kit.sh apply-plan <module> --dry-run [--with-checkpoints]" >&2
-      echo "apply-plan is dry-run only in V0" >&2
+      echo "usage: sh seed-kit.sh apply-plan <module> --dry-run" >&2
+      echo "apply-plan is dry-run only" >&2
       exit 2
     fi
     shift
-    apply_plan_checkpoints=0
-    if [ "${1:-}" = "--with-checkpoints" ]; then
-      apply_plan_checkpoints=1
-      shift
-    elif [ -n "${1:-}" ]; then
-      echo "usage: sh seed-kit.sh apply-plan <module> --dry-run [--with-checkpoints]" >&2
-      echo "apply-plan is dry-run only in V0" >&2
+    if [ -n "${1:-}" ]; then
+      echo "usage: sh seed-kit.sh apply-plan <module> --dry-run" >&2
+      echo "apply-plan is dry-run only" >&2
       exit 2
     fi
-    if [ "$apply_plan_checkpoints" -eq 1 ]; then
-      show_safe_apply_plan "$apply_plan_module" "--with-checkpoints"
-    else
-      show_safe_apply_plan "$apply_plan_module"
-    fi
-    ;;
-  apply-readiness)
-    shift
-    if [ -z "${1:-}" ]; then
-      echo "usage: sh seed-kit.sh apply-readiness <module>" >&2
-      exit 2
-    fi
-    show_apply_readiness "$1"
+    show_safe_apply_plan "$apply_plan_module"
     ;;
   package)
     shift

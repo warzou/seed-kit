@@ -271,7 +271,7 @@ Current manifest-driven roadmap:
 - `sudoers.manifest.sh` for privileged wrapper and rule previews
 - `recovery.manifest.sh` for AP/captive/recovery previews
 - future guided apply should run manifest phases one at a time with explicit
-  confirmation, rollback notes, and recovery cleanup checkpoints
+  confirmation and clear rollback notes
 
 Example V1 output shape:
 
@@ -351,14 +351,10 @@ never change networking, never start AP mode, and never launch module runtime.
 
 ## SAFE apply planning
 
-`sh seed-kit.sh apply-plan <module> --dry-run` renders the first V0 transaction
-plan for a module. It consumes the same contract and manifest sources as the
-previews, but only prints the future phase order, checkpoints, rollback notes,
-state paths, and forbidden automatic actions.
+`sh seed-kit.sh apply-plan <module> --dry-run` renders a small future step order
+for a module. It consumes the same contract and manifest sources as the previews,
+but only prints the order, source manifests, and forbidden automatic actions.
 
-`sh seed-kit.sh apply-plan <module> --dry-run --with-checkpoints` also renders
-planned checkpoint engine metadata (state keys, lock, journal, and interruption
-recovery guidance), still without touching the filesystem.
-
-The command is dry-run only and creates no state files. See
-`docs/SAFE-APPLY-V0.md` for the detailed orchestration model.
+The command is dry-run only. It creates no files, services, sudoers rules, or
+runtime state. See
+`docs/SAFE-APPLY-V0.md` for the short apply-plan boundary.
