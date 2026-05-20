@@ -2934,6 +2934,180 @@ EOF
   trap - EXIT HUP INT TERM
 }
 
+safe_apply_manifest_source() {
+  module=$1
+  manifest_name=$2
+
+  if module_manifest_print "$module" "$manifest_name" >/dev/null 2>&1; then
+    echo "$manifest_name.manifest.sh"
+    return 0
+  fi
+
+  if module_contract_print "$module" >/dev/null 2>&1; then
+    echo "module contract fallback"
+    return 0
+  fi
+
+  echo "unavailable"
+}
+
+show_safe_apply_plan() {
+  module=$1
+  contract_tmp=$(mktemp -t seed-kit-module-apply-plan.XXXXXX)
+  trap 'rm -f "$contract_tmp"' EXIT HUP INT TERM
+
+  if ! module_contract_print "$module" > "$contract_tmp"; then
+    rm -f "$contract_tmp"
+    trap - EXIT HUP INT TERM
+    ui_header "Seed-Kit > apply-plan" "$module"
+    ui_line "Mode: SAFE dry-run only"
+    ui_line ""
+    ui_line "No structured module contract is available."
+    ui_line "No plan was generated."
+    ui_line ""
+    ui_line "No changes were made."
+    return 0
+  fi
+
+  module_prefix=$(contract_key_prefix "$module")
+  module_id=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_MODULE_ID" \
+    "${module_prefix}_ID")
+  module_type=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_MODULE_TYPE" \
+    "${module_prefix}_TYPE")
+  module_mode=$(contract_first_matching_value "$contract_tmp" \
+    "${module_prefix}_MODE")
+
+  if [ "$(seed_lang)" = "fr" ]; then
+    mode_label="Mode : SAFE dry-run uniquement"
+    summary_label="Résumé"
+    plan_label="Plan transactionnel V0"
+    checkpoint_label="Checkpoints futurs"
+    state_label="État et logs futurs"
+    rollback_label="Rollback futur"
+    validation_label="Validations futures"
+    forbidden_label="Interdits automatiques"
+    nothing_label="Aucun changement effectué."
+    not_created_label="Non créé en dry-run"
+    no_secret_label="aucun secret"
+    no_network_label="aucun réseau/AP/runtime"
+    no_system_label="aucun sudo, systemd, chmod/chown/mkdir"
+  else
+    mode_label="Mode: SAFE dry-run only"
+    summary_label="Summary"
+    plan_label="V0 transaction plan"
+    checkpoint_label="Future checkpoints"
+    state_label="Future state and logs"
+    rollback_label="Future rollback"
+    validation_label="Future validations"
+    forbidden_label="Forbidden automatic actions"
+    nothing_label="No changes were made."
+    not_created_label="Not created during dry-run"
+    no_secret_label="no secrets"
+    no_network_label="no network/AP/runtime"
+    no_system_label="no sudo, systemd, chmod/chown/mkdir"
+  fi
+
+  ui_header "Seed-Kit > apply-plan" "$module"
+  ui_line "$mode_label"
+  ui_line ""
+  ui_line "$summary_label"
+  ui_line "  module: ${module_id:-$module}"
+  ui_line "  type: ${module_type:-unknown}"
+  ui_line "  mode: ${module_mode:-unknown}"
+  ui_line "  dry-run: required"
+
+  ui_line ""
+  ui_line "$plan_label"
+  ui_line "  1. preflight"
+  ui_line "     preview: modules validate $module"
+  ui_line "     checkpoint: preflight-ok"
+  ui_line "     rollback: none"
+  ui_line "  2. install-packages"
+  ui_line "     preview: modules install-packages-preview $module"
+  ui_line "     source: module contract"
+  ui_line "     checkpoint: packages-planned"
+  ui_line "     rollback: package rollback notes only in V0"
+  ui_line "  3. install-files"
+  ui_line "     preview: modules install-files-preview $module"
+  ui_line "     source: $(safe_apply_manifest_source "$module" "install-files")"
+  ui_line "     checkpoint: files-staged-before-copy"
+  ui_line "     rollback: restore previous files from checkpoint metadata"
+  ui_line "  4. configure-sudoers"
+  ui_line "     preview: modules configure-sudoers-preview $module"
+  ui_line "     source: $(safe_apply_manifest_source "$module" "sudoers")"
+  ui_line "     checkpoint: sudoers-before-write"
+  ui_line "     rollback: remove exact Seed-Kit sudoers rule"
+  ui_line "  5. install-service"
+  ui_line "     preview: modules install-service-preview $module"
+  ui_line "     source: $(safe_apply_manifest_source "$module" "runtime-service")"
+  ui_line "     checkpoint: service-before-install"
+  ui_line "     rollback: disable/remove exact Seed-Kit service"
+  ui_line "  6. recovery"
+  ui_line "     preview: modules recovery-preview $module"
+  ui_line "     source: $(safe_apply_manifest_source "$module" "recovery")"
+  ui_line "     checkpoint: recovery-before-enable"
+  ui_line "     rollback: cleanup module-scoped recovery state"
+  ui_line "  7. validate"
+  ui_line "     preview: modules validate $module"
+  ui_line "     checkpoint: final-validation"
+  ui_line "     rollback: print rollback plan if validation fails"
+
+  ui_line ""
+  ui_line "$checkpoint_label"
+  ui_line "  - every future mutating phase gets a before/after checkpoint"
+  ui_line "  - checkpoints are module-scoped"
+  ui_line "  - failed phases stop the transaction before the next phase"
+
+  ui_line ""
+  ui_line "$state_label"
+  ui_line "  state file: /var/lib/seed-kit/apply/$module/state"
+  ui_line "  checkpoint dir: /var/lib/seed-kit/apply/$module/checkpoints/"
+  ui_line "  apply log: /var/log/seed-kit/apply-$module.log"
+  ui_line "  dry-run: $not_created_label"
+
+  ui_line ""
+  ui_line "$rollback_label"
+  ui_line "  - rollback metadata is planned before each future write"
+  ui_line "  - rollback only targets Seed-Kit-owned paths/rules/services"
+  ui_line "  - user Wi-Fi profiles and secrets are preserved unless explicitly confirmed"
+
+  ui_line ""
+  ui_line "$validation_label"
+  ui_line "  - contract is readable"
+  ui_line "  - manifests are readable or fallback is available"
+  ui_line "  - forbidden automatic actions remain blocked"
+
+  ui_line ""
+  ui_line "$forbidden_label"
+  forbidden_found=0
+  while IFS= read -r forbidden_action; do
+    [ -z "$forbidden_action" ] && continue
+    forbidden_found=1
+    ui_line "  - $forbidden_action"
+  done <<EOF
+$(contract_values_for_keys "$contract_tmp" \
+  "${module_prefix}_FORBIDDEN_ACTIONS" \
+  "${module_prefix}_FORBIDDEN_AUTOMATIC_ACTIONS")
+EOF
+  if [ "$forbidden_found" -eq 0 ]; then
+    ui_line "  - reboot"
+    ui_line "  - secrets"
+    ui_line "  - network changes"
+    ui_line "  - arbitrary shell commands"
+  fi
+  ui_line "  - $no_system_label"
+  ui_line "  - $no_network_label"
+  ui_line "  - $no_secret_label"
+
+  ui_line ""
+  ui_line "$nothing_label"
+
+  rm -f "$contract_tmp"
+  trap - EXIT HUP INT TERM
+}
+
 validate_module_contract() {
   module=$1
   contract_tmp=$(mktemp -t seed-kit-module-contract.XXXXXX)
@@ -3045,6 +3219,7 @@ seed_kit_usage() {
   echo "  modules configure-sudoers-preview <module>  preview privileged wrapper and sudoers contract"
   echo "  modules install-service-preview <module>  preview runtime service contract"
   echo "  modules recovery-preview <module>  preview recovery/AP safety contract"
+  echo "  apply-plan <module> --dry-run  render SAFE apply orchestration plan without changes"
   echo "  package create --service <name> [--copy-home]  create a SAFE dry-run package"
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
@@ -6630,6 +6805,21 @@ case "${1:-}" in
         exit 2
         ;;
     esac
+    ;;
+  apply-plan)
+    shift
+    if [ -z "${1:-}" ]; then
+      echo "usage: sh seed-kit.sh apply-plan <module> --dry-run" >&2
+      exit 2
+    fi
+    apply_plan_module=$1
+    shift
+    if [ "${1:-}" != "--dry-run" ] || [ -n "${2:-}" ]; then
+      echo "usage: sh seed-kit.sh apply-plan <module> --dry-run" >&2
+      echo "apply-plan is dry-run only in V0" >&2
+      exit 2
+    fi
+    show_safe_apply_plan "$apply_plan_module"
     ;;
   package)
     shift

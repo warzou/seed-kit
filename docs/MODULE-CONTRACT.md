@@ -348,3 +348,13 @@ Manifest resolution is specific per preview:
 All three commands are SAFE previews. They never write sudoers, never call
 `systemctl`, never install packages, never copy files, never create directories,
 never change networking, never start AP mode, and never launch module runtime.
+
+## SAFE apply planning
+
+`sh seed-kit.sh apply-plan <module> --dry-run` renders the first V0 transaction
+plan for a module. It consumes the same contract and manifest sources as the
+previews, but only prints the future phase order, checkpoints, rollback notes,
+state paths, and forbidden automatic actions.
+
+The command is dry-run only and creates no state files. See
+`docs/SAFE-APPLY-V0.md` for the detailed orchestration model.
