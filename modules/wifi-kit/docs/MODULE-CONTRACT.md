@@ -214,8 +214,8 @@ units, write secrets, or reboot.
   - `start-ap-mode`
   - `return-default-network`
 - normal UI ports:
-  - `18089` currently used in current prototype/test workflow.
-  - `54321` is the target port for Seed-Kit-installed normal UI service.
+  - `18089` = prototype/dev local workflow only (manual launch only).
+  - `54321` = target port for Seed-Kit-installed normal UI service.
 - recovery/captive port: `80`
 
 `WIFI_KIT_RUNTIME_UI_NORMAL_PORT` in contract is `54321` to match the future Seed-Kit service target.
