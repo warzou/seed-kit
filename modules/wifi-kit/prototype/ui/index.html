@@ -507,22 +507,32 @@
       min-width: 70px;
     }
 
-    .network-ssid {
+    .network-ssid,
+    .network-name {
       margin: 0;
       font-size: 0.98rem;
       line-height: 1.14;
-      display: grid;
-      gap: 9px;
-      justify-items: start;
+      display: block;
     }
 
-    .network-name {
-      display: inline-block;
+    .network-text {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
       min-width: 0;
     }
 
-    .network.current .network-ssid {
+    .network-name {
+      min-width: 0;
+    }
+
+    .network.current .network-name {
       color: #8fe989;
+    }
+
+    .connected-row {
+      display: block;
     }
 
     .network-meta {
@@ -539,6 +549,7 @@
     .network-connected-badge {
       display: inline-flex;
       align-items: center;
+      width: fit-content;
       gap: 5px;
       min-height: 21px;
       border: 1px solid rgba(83, 220, 98, 0.24);
@@ -2221,8 +2232,9 @@
         const center = document.createElement('div');
         const right = document.createElement('div');
         const orb = document.createElement('span');
-        const title = document.createElement('h3');
+        const title = document.createElement('div');
         const ssidText = document.createElement('span');
+        const connectedRow = document.createElement('div');
         const meta = document.createElement('p');
         const qualityLabel = document.createElement('span');
         const signal = document.createElement('div');
@@ -2241,13 +2253,16 @@
         qualityLabel.className = 'network-quality';
         qualityLabel.textContent = '';
         qualityLabel.style.setProperty('--signal-color', quality.color);
+        title.className = 'network-text';
         ssidText.className = 'network-name';
         ssidText.textContent = ssid;
         title.appendChild(ssidText);
         if (network.current === 'yes') {
+          connectedRow.className = 'connected-row';
           connected.className = 'network-connected-badge';
           connected.textContent = 'Connecté';
-          title.appendChild(connected);
+          connectedRow.appendChild(connected);
+          title.appendChild(connectedRow);
         }
         meta.className = 'network-meta';
         if (network.security) {
@@ -2262,6 +2277,7 @@
         const channel = document.createElement('span');
         channel.textContent = `Canal ${channelLabel}`;
         meta.appendChild(channel);
+        title.appendChild(meta);
         signal.className = 'signal-cluster';
         signalLabel.className = 'signal-quality';
         signalLabel.textContent = `${quality.label} · ${quality.dbm}`;
@@ -2269,7 +2285,7 @@
         dot.className = 'choice-dot';
         dot.appendChild(makeIcon('chevron'));
 
-        center.append(title, meta);
+        center.append(title);
         signal.append(signalBars(quality), signalLabel);
         left.append(orb);
         right.append(signal, dot);
