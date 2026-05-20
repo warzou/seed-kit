@@ -772,6 +772,12 @@
       font-size: 0.9rem;
     }
 
+    .callout.info {
+      border-color: rgba(68, 212, 230, 0.2);
+      background: rgba(68, 212, 230, 0.07);
+      color: #c8eff7;
+    }
+
     .recovery-panel {
       display: grid;
       gap: 12px;
@@ -1064,7 +1070,7 @@
 
     <section class="overview" aria-label="Etat Wi-Fi courant">
       <div class="overview-grid" aria-label="Etat actuel du node">
-        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Interface</span><strong id="status-interface">...</strong></div></div>
+        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Hostname</span><strong id="status-hostname">...</strong></div></div>
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-location"></use></svg></span><div><span>Adresse IP</span><strong id="status-ip">...</strong></div></div>
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-wifi"></use></svg></span><div><span>Wi-Fi actuel</span><strong id="status-ssid">...</strong></div></div>
       </div>
@@ -1395,11 +1401,11 @@
       const system = systemState();
       const recovery = recoveryState();
       const ip = system.ip || value(data.diagnose, 'current_ip');
-      const iface = system.interface || value(data.diagnose, 'interface');
+      const hostname = system.hostname || 'inconnu';
       const ssid = system.mode === 'recovery'
         ? (recovery.ssid || system.recovery_ssid || 'Wifi-Kit-node')
         : (system.wifi || value(data.diagnose, 'current_ssid_state'));
-      document.getElementById('status-interface').textContent = iface;
+      document.getElementById('status-hostname').textContent = hostname;
       document.getElementById('status-ip').textContent = formatIpSummary(ip);
       document.getElementById('status-ssid').textContent = ssid;
     }
@@ -1527,7 +1533,7 @@
       if (reason === 'scan-tools-missing') return "Le scan Wi-Fi n'est pas disponible car nmcli et iw sont absents ou introuvables.";
       if (reason === 'iw-scan-failed') return 'Le fallback iw ne peut pas scanner les reseaux pour le moment tout en gardant la connexion Wi-Fi actuelle.';
       if (reason === 'iw-missing') return "Le scan Wi-Fi n'est pas disponible car l'outil iw est absent.";
-      if (reason === 'no-wifi-interface') return "Aucune interface Wi-Fi n'a ete detectee.";
+      if (reason === 'no-wifi-interface') return "Interface Wi-Fi non detectee dans cet environnement. C'est normal en previsualisation locale/WSL. Sur pocket-node, les reseaux apparaitront si wlan0 est disponible.";
       if (reason === 'demo-data') return 'Aucun reseau reel dans la demo. Lance le serveur local read-only pour afficher les donnees du Raspberry Pi.';
       return `Le scan Wi-Fi est indisponible pour le moment (${reason}).`;
     }
@@ -1887,6 +1893,7 @@
 
       if (networks.length === 0) {
         message.hidden = false;
+        message.classList.toggle('info', scan.reason === 'no-wifi-interface');
         message.textContent = describeScanReason(scan);
         const placeholder = document.createElement('div');
         placeholder.className = 'network';
@@ -1903,9 +1910,11 @@
       const hint = singleScanHint(networks);
       if (hint) {
         message.hidden = false;
+        message.classList.remove('info');
         message.textContent = hint;
       } else {
         message.hidden = true;
+        message.classList.remove('info');
       }
 
       networks.forEach((network) => {
