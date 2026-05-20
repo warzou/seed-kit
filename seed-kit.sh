@@ -3175,6 +3175,260 @@ EOF
   trap - EXIT HUP INT TERM
 }
 
+show_apply_readiness() {
+  module=$1
+  contract_tmp=$(mktemp -t seed-kit-module-apply-readiness.XXXXXX)
+  trap 'rm -f "$contract_tmp"' EXIT HUP INT TERM
+  readiness_missing=0
+  readiness_partial=0
+
+  case " $MODULES " in
+    *" $module "*) ;;
+    *)
+      rm -f "$contract_tmp"
+      trap - EXIT HUP INT TERM
+      echo "unknown module: $module" >&2
+      return 2
+      ;;
+  esac
+
+  if ! module_contract_print "$module" > "$contract_tmp"; then
+    rm -f "$contract_tmp"
+    trap - EXIT HUP INT TERM
+    ui_header "Seed-Kit > apply-readiness" "$module"
+    ui_line "Mode: SAFE read-only"
+    ui_line ""
+    ui_line "No structured module contract is available."
+    ui_line "Futures apply-readiness commands require a consumable module contract."
+    ui_line ""
+    ui_line "BLOCKED"
+    ui_line "  missing: module contract source"
+    ui_line ""
+    ui_line "No changes were made."
+    return 0
+  fi
+
+  module_prefix=$(contract_key_prefix "$module")
+  dep_prefix=$(contract_dependencies_prefix "$module")
+
+  ui_header "Seed-Kit > apply-readiness" "$module"
+  ui_line "Mode: SAFE read-only"
+  ui_line ""
+
+  if [ "$(seed_lang)" = "fr" ]; then
+    status_ready="READY"
+    status_partial="PARTIAL"
+    status_blocked="BLOCKED"
+    ready_label="Prêt"
+    partial_label="Partiel"
+    blocked_label="Bloqué"
+    check_label="Vérifications"
+    blocker_label="Bloquants"
+    preview_label="Previews disponibles"
+    source_label="Sources de données"
+    next_label="Préparation du futur apply réel"
+    required_label="Dépendances requises"
+    recommended_label="Dépendances recommandées"
+    conditional_label="Dépendances conditionnelles"
+    capability_label="Capacités"
+    present_label="présent"
+    missing_label="manquante"
+    none_label="Aucun blocage"
+    no_changes="Aucun changement effectué."
+    warn_label="ATTENTION"
+  else
+    status_ready="READY"
+    status_partial="PARTIAL"
+    status_blocked="BLOCKED"
+    ready_label="ready"
+    partial_label="partial"
+    blocked_label="blocked"
+    check_label="Checks"
+    blocker_label="Blockers"
+    preview_label="Preview availability"
+    source_label="Readiness source"
+    next_label="Future real apply preparation"
+    required_label="Required dependencies"
+    recommended_label="Recommended dependencies"
+    conditional_label="Conditional dependencies"
+    capability_label="Capabilities"
+    present_label="present"
+    missing_label="missing"
+    none_label="No blockers"
+    no_changes="No changes were made."
+    warn_label="WARN"
+  fi
+
+  missing_required=""
+  missing_recommended=""
+  missing_conditional=""
+  capability_blockers=""
+
+  validate_dependency_group "$contract_tmp" "${dep_prefix}_DEPENDENCIES_REQUIRED" "WARN" "missing" || true
+  validate_dependency_group "$contract_tmp" "${dep_prefix}_DEPENDENCIES_RECOMMENDED" "INFO" "optional missing" || true
+  validate_dependency_group "$contract_tmp" "${dep_prefix}_DEPENDENCIES_CONDITIONAL" "WARN" "conditional missing" || true
+  if [ "$module_prefix" != "WIFI_KIT" ]; then
+    validate_dependency_group "$contract_tmp" "WIFI_KIT_DEPENDENCIES_REQUIRED" "WARN" "missing" || true
+    validate_dependency_group "$contract_tmp" "WIFI_KIT_DEPENDENCIES_RECOMMENDED" "INFO" "optional missing" || true
+    validate_dependency_group "$contract_tmp" "WIFI_KIT_DEPENDENCIES_CONDITIONAL" "WARN" "conditional missing" || true
+  fi
+
+  # Required dependency missing => hard blocker.
+  if [ -n "$missing_required" ]; then
+    readiness_missing=1
+  fi
+
+  ui_line "${check_label}:"
+  ui_line "  $source_label: contract + capabilities + manifest probes"
+  ui_line "  $required_label"
+  if [ -n "$missing_required" ]; then
+    for dependency in $missing_required; do
+      print_dependency_validation "WARN" "$dependency" "$missing_label"
+    done
+  else
+    print_dependency_validation "OK" "required" "$present_label"
+  fi
+
+  ui_line "  $recommended_label"
+  if [ -n "$missing_recommended" ]; then
+    for dependency in $missing_recommended; do
+      print_dependency_validation "INFO" "$dependency" "optional"
+    done
+  else
+    print_dependency_validation "OK" "recommended" "$present_label"
+  fi
+
+  ui_line "  $conditional_label"
+  if [ -n "$missing_conditional" ]; then
+    for dependency in $missing_conditional; do
+      print_dependency_validation "WARN" "$dependency" "$present_label if condition met"
+    done
+  else
+    print_dependency_validation "OK" "conditional" "$present_label"
+  fi
+
+  ui_line ""
+  ui_line "$capability_label"
+  capabilities_found=0
+  while IFS= read -r contract_line; do
+    case "$contract_line" in
+      "${module_prefix}_CAPABILITIES="*)
+        capabilities_found=1
+        capability=${contract_line#*=}
+        missing_capability=""
+        for requirement in $(capability_requirements "$capability"); do
+          if ! dependency_present "$requirement"; then
+            if [ -z "$missing_capability" ]; then
+              missing_capability="$requirement"
+            else
+              missing_capability="$missing_capability, $requirement"
+            fi
+          fi
+        done
+        if [ -n "$missing_capability" ]; then
+          print_dependency_validation "WARN" "$capability" "requires: $missing_capability"
+          capability_blockers="${capability_blockers}${capability} "
+        else
+          print_dependency_validation "OK" "$capability"
+        fi
+        ;;
+      "WIFI_KIT_CAPABILITIES="*)
+        capabilities_found=1
+        capability=${contract_line#*=}
+        missing_capability=""
+        for requirement in $(capability_requirements "$capability"); do
+          if ! dependency_present "$requirement"; then
+            if [ -z "$missing_capability" ]; then
+              missing_capability="$requirement"
+            else
+              missing_capability="$missing_capability, $requirement"
+            fi
+          fi
+        done
+        if [ -n "$missing_capability" ]; then
+          print_dependency_validation "WARN" "$capability" "requires: $missing_capability"
+          capability_blockers="${capability_blockers}${capability} "
+        else
+          print_dependency_validation "OK" "$capability"
+        fi
+        ;;
+    esac
+  done < "$contract_tmp"
+  if [ "$capabilities_found" -eq 0 ]; then
+    print_dependency_validation "INFO" "none" "declared"
+  fi
+
+  if [ -n "$capability_blockers" ]; then
+    readiness_partial=1
+  fi
+
+  install_files_source=$(safe_apply_manifest_source "$module" "install-files")
+  runtime_service_source=$(safe_apply_manifest_source "$module" "runtime-service")
+  sudoers_source=$(safe_apply_manifest_source "$module" "sudoers")
+  recovery_source=$(safe_apply_manifest_source "$module" "recovery")
+
+  if [ -n "$missing_required" ]; then
+    readiness_missing=1
+  fi
+
+  if [ "$readiness_missing" -eq 1 ]; then
+    readiness_label="$blocked_label"
+  elif [ "$readiness_partial" -eq 1 ] || [ -n "$missing_recommended" ] || [ -n "$missing_conditional" ]; then
+    readiness_label="$partial_label"
+  else
+    readiness_label="$ready_label"
+  fi
+
+  if [ -n "$missing_required" ]; then
+    blockers="Missing required dependencies: ${missing_required# }"
+  elif [ -z "$capability_blockers" ] && [ -z "$missing_recommended" ] && [ -z "$missing_conditional" ]; then
+    blockers="$none_label"
+  else
+    blockers="Missing optional/conditional items remain for full readiness"
+  fi
+
+  ui_line ""
+  ui_line "Readiness: $readiness_label"
+  ui_line "  $blocker_label:"
+  ui_line "    $blockers"
+
+  ui_line ""
+  ui_line "$preview_label"
+  ui_line "  modules validate: available"
+  ui_line "  modules install-packages-preview: available"
+  if [ "$install_files_source" = "unavailable" ]; then
+    ui_line "  modules install-files-preview: unavailable"
+  else
+    ui_line "  modules install-files-preview: available ($install_files_source)"
+  fi
+  if [ "$runtime_service_source" = "unavailable" ]; then
+    ui_line "  modules install-service-preview: unavailable"
+  else
+    ui_line "  modules install-service-preview: available ($runtime_service_source)"
+  fi
+  if [ "$sudoers_source" = "unavailable" ]; then
+    ui_line "  modules configure-sudoers-preview: unavailable"
+  else
+    ui_line "  modules configure-sudoers-preview: available ($sudoers_source)"
+  fi
+  if [ "$recovery_source" = "unavailable" ]; then
+    ui_line "  modules recovery-preview: unavailable"
+  else
+    ui_line "  modules recovery-preview: available ($recovery_source)"
+  fi
+
+  ui_line ""
+  ui_line "$next_label"
+  ui_line "  sh seed-kit.sh apply-plan $module --dry-run"
+  ui_line "  (and optional: sh seed-kit.sh apply-plan $module --dry-run --with-checkpoints)"
+
+  ui_line ""
+  ui_line "$no_changes"
+
+  rm -f "$contract_tmp"
+  trap - EXIT HUP INT TERM
+}
+
 validate_module_contract() {
   module=$1
   contract_tmp=$(mktemp -t seed-kit-module-contract.XXXXXX)
@@ -3287,6 +3541,7 @@ seed_kit_usage() {
   echo "  modules install-service-preview <module>  preview runtime service contract"
   echo "  modules recovery-preview <module>  preview recovery/AP safety contract"
   echo "  apply-plan <module> --dry-run [--with-checkpoints]  render SAFE apply orchestration plan"
+  echo "  apply-readiness <module>  summarize if module is ready for real apply"
   echo "  package create --service <name> [--copy-home]  create a SAFE dry-run package"
   echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
@@ -6901,6 +7156,14 @@ case "${1:-}" in
     else
       show_safe_apply_plan "$apply_plan_module"
     fi
+    ;;
+  apply-readiness)
+    shift
+    if [ -z "${1:-}" ]; then
+      echo "usage: sh seed-kit.sh apply-readiness <module>" >&2
+      exit 2
+    fi
+    show_apply_readiness "$1"
     ;;
   package)
     shift
