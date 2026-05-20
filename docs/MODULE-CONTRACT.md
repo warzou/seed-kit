@@ -313,6 +313,17 @@ sh seed-kit.sh modules recovery-preview <module>
 These commands consume the same module contract as `modules deps`,
 `validate`, `install-packages-preview`, and `install-files-preview`.
 
+Manifest resolution is specific per preview:
+
+- `install-files-preview` uses `install-files.manifest.sh` first, then
+  `<module>.contract.sh`, then module-specific fallback.
+- `install-service-preview` uses `runtime-service.manifest.sh` first, then
+  `<module>.contract.sh`, then module-specific fallback.
+- `configure-sudoers-preview` uses `sudoers.manifest.sh` first, then
+  `<module>.contract.sh`, then module-specific fallback.
+- `recovery-preview` uses `recovery.manifest.sh` first, then
+  `<module>.contract.sh`, then module-specific fallback.
+
 `configure-sudoers-preview` may display:
 
 - declared privileged wrapper paths

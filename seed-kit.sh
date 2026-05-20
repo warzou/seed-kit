@@ -2438,11 +2438,17 @@ EOF
 show_configure_sudoers_preview() {
   module=$1
   contract_tmp=$(mktemp -t seed-kit-module-contract.XXXXXX)
-  trap 'rm -f "$contract_tmp"' EXIT HUP INT TERM
+  manifest_tmp=$(mktemp -t seed-kit-module-manifest.XXXXXX)
+  trap 'rm -f "$contract_tmp" "$manifest_tmp"' EXIT HUP INT TERM
 
   module_prefix=$(contract_key_prefix "$module")
+  sudoers_prefix=$(manifest_key_prefix "$module" "sudoers")
+  preview_source="contract"
 
-  if ! module_contract_print "$module" > "$contract_tmp"; then
+  if module_manifest_print "$module" "sudoers" > "$manifest_tmp"; then
+    cp "$manifest_tmp" "$contract_tmp"
+    preview_source="sudoers manifest"
+  elif ! module_contract_print "$module" > "$contract_tmp"; then
     rm -f "$contract_tmp"
     trap - EXIT HUP INT TERM
     show_contract_preview_unavailable "configure-sudoers-preview" "$module"
@@ -2450,6 +2456,7 @@ show_configure_sudoers_preview() {
   fi
 
   wrapper_path=$(contract_first_matching_value "$contract_tmp" \
+    "${sudoers_prefix}_WRAPPER_PATH" \
     "${module_prefix}_PRIVILEGED_WRAPPER" \
     "${module_prefix}_PRIVILEGED_WRAPPER_PATH" \
     "${module_prefix}_WRAPPER_PATH")
@@ -2458,18 +2465,24 @@ show_configure_sudoers_preview() {
     wrapper_label="Wrappers privilégiés déclarés"
     actions_label="Actions autorisées futures"
     sudoers_label="Sudoers futur potentiel"
+    readiness_label="Contrôles read-only"
     risks_label="Contraintes"
+    forbidden_label="Contraintes supplémentaires"
     none_label="Non déclaré"
     preview_only="Preview seulement : aucun sudoers écrit, aucun sudo exécuté."
     no_changes="Aucun changement effectué."
+    source_label="Source"
   else
     wrapper_label="Declared privileged wrappers"
     actions_label="Future allowed actions"
     sudoers_label="Potential future sudoers"
+    readiness_label="Read-only checks"
     risks_label="Constraints"
+    forbidden_label="Additional constraints"
     none_label="Not declared"
     preview_only="Preview only: no sudoers file written, no sudo executed."
     no_changes="No changes were made."
+    source_label="Preview source"
   fi
 
   ui_header "Seed-Kit > configure-sudoers-preview" "$module"
@@ -2487,11 +2500,27 @@ show_configure_sudoers_preview() {
     ui_line "  - $action"
   done <<EOF
 $(contract_values_for_keys "$contract_tmp" \
+  "${sudoers_prefix}_ALLOWED_ACTION" \
   "${module_prefix}_PRIVILEGED_ACTIONS" \
   "${module_prefix}_ALLOWED_ACTIONS" \
   "${module_prefix}_WRAPPER_ALLOWED_ACTIONS")
 EOF
   [ "$actions_found" -eq 0 ] && ui_line "  $none_label"
+
+  ui_line ""
+  ui_line "$readiness_label"
+  readiness_found=0
+  while IFS= read -r readiness_check; do
+    [ -z "$readiness_check" ] && continue
+    readiness_found=1
+    ui_line "  - $readiness_check"
+  done <<EOF
+$(contract_values_for_keys "$contract_tmp" \
+  "${sudoers_prefix}_READINESS_CHECK" \
+  "${sudoers_prefix}_READINESS_CHECKS" \
+  "${module_prefix}_SUDOERS_READINESS_CHECK")
+EOF
+  [ "$readiness_found" -eq 0 ] && ui_line "  $none_label"
 
   ui_line ""
   ui_line "$sudoers_label"
@@ -2502,6 +2531,9 @@ EOF
     ui_line "  - $requirement"
   done <<EOF
 $(contract_values_for_keys "$contract_tmp" \
+  "${sudoers_prefix}_ALLOWED_COMMAND" \
+  "${sudoers_prefix}_ALLOWED_SUDO_COMMAND" \
+  "${sudoers_prefix}_PREVIEW_RULE" \
   "${module_prefix}_SUDOERS_REQUIREMENTS" \
   "${module_prefix}_SUDOERS")
 EOF
@@ -2509,26 +2541,65 @@ EOF
 
   ui_line ""
   ui_line "$risks_label"
-  ui_line "  - no arbitrary shell"
-  ui_line "  - no broad sudo"
-  ui_line "  - no broad systemctl"
+  constraints_found=0
+  while IFS= read -r constraint; do
+    [ -z "$constraint" ] && continue
+    constraints_found=1
+    ui_line "  - $constraint"
+  done <<EOF
+$(contract_values_for_keys "$contract_tmp" \
+  "${sudoers_prefix}_FORBIDDEN" \
+  "${module_prefix}_SUDOERS_FORBIDDEN")
+EOF
+  if [ "$constraints_found" -eq 0 ]; then
+    ui_line "  - no arbitrary shell"
+    ui_line "  - no broad sudo"
+    ui_line "  - no broad systemctl"
+  fi
+
+  ui_line ""
+  ui_line "$forbidden_label"
+  non_action_found=0
+  while IFS= read -r non_action; do
+    [ -z "$non_action" ] && continue
+    non_action_found=1
+    ui_line "  - $non_action"
+  done <<EOF
+$(contract_values_for_keys "$contract_tmp" \
+  "${sudoers_prefix}_NON_ACTION" \
+  "${module_prefix}_SUDOERS_NON_ACTION")
+EOF
+  [ "$non_action_found" -eq 0 ] && ui_line "  no additional hardcoded constraints"
+
+  ui_line ""
+  if [ "$(seed_lang)" = "fr" ]; then
+    [ "$preview_source" = "contract" ] && ui_line "$source_label: contrat principal" || ui_line "$source_label: manifest dédié"
+  else
+    [ "$preview_source" = "contract" ] && ui_line "$source_label: module contract" || ui_line "$source_label: dedicated manifest"
+  fi
 
   ui_line ""
   ui_line "$preview_only"
   ui_line "$no_changes"
 
-  rm -f "$contract_tmp"
+  rm -f "$contract_tmp" "$manifest_tmp"
   trap - EXIT HUP INT TERM
 }
 
 show_install_service_preview() {
   module=$1
   contract_tmp=$(mktemp -t seed-kit-module-contract.XXXXXX)
-  trap 'rm -f "$contract_tmp"' EXIT HUP INT TERM
+  manifest_tmp=$(mktemp -t seed-kit-module-manifest.XXXXXX)
+  trap 'rm -f "$contract_tmp" "$manifest_tmp"' EXIT HUP INT TERM
 
   module_prefix=$(contract_key_prefix "$module")
+  service_prefix=$(manifest_key_prefix "$module" "runtime-service")
+  preview_source="contract"
 
-  if ! module_contract_print "$module" > "$contract_tmp"; then
+  if module_manifest_print "$module" "runtime-service" > "$manifest_tmp"; then
+    cp "$manifest_tmp" "$contract_tmp"
+    preview_source="runtime-service manifest"
+  elif ! module_contract_print "$module" > "$contract_tmp"; then
     rm -f "$contract_tmp"
     trap - EXIT HUP INT TERM
     show_contract_preview_unavailable "install-service-preview" "$module"
@@ -2536,31 +2607,60 @@ show_install_service_preview() {
   fi
 
   service_name=$(contract_first_matching_value "$contract_tmp" \
+    "${service_prefix}_NAME" \
+    "${service_prefix}_SERVICE_NAME" \
     "${module_prefix}_RUNTIME_SERVICE_NAME" \
     "${module_prefix}_SERVICE_NAME")
   service_command=$(contract_first_matching_value "$contract_tmp" \
+    "${service_prefix}_COMMAND" \
+    "${service_prefix}_SERVICE_COMMAND" \
     "${module_prefix}_RUNTIME_SERVICE_COMMAND" \
     "${module_prefix}_SERVICE_COMMAND")
   service_user=$(contract_first_matching_value "$contract_tmp" \
+    "${service_prefix}_USER" \
+    "${service_prefix}_SERVICE_USER" \
     "${module_prefix}_RUNTIME_SERVICE_USER" \
     "${module_prefix}_SERVICE_USER")
   autostart=$(contract_first_matching_value "$contract_tmp" \
+    "${service_prefix}_AUTOSTART" \
+    "${service_prefix}_SERVICE_AUTOSTART" \
     "${module_prefix}_RUNTIME_SERVICE_AUTOSTART" \
     "${module_prefix}_SERVICE_AUTOSTART")
   normal_port=$(contract_first_matching_value "$contract_tmp" \
+    "${service_prefix}_PORT" \
+    "${service_prefix}_NORMAL_UI_PORT" \
     "${module_prefix}_RUNTIME_UI_NORMAL_PORT" \
     "${module_prefix}_NORMAL_UI_PORT")
   run_dir=$(contract_first_matching_value "$contract_tmp" \
+    "${service_prefix}_RUNTIME_DIR" \
+    "${service_prefix}_TARGET_PATH_RUNTIME_DIR" \
     "${module_prefix}_RUNTIME_DIR" \
     "${module_prefix}_TARGET_PATH_RUNTIME_DIR")
   log_dir=$(contract_first_matching_value "$contract_tmp" \
+    "${service_prefix}_LOG_DIR" \
+    "${service_prefix}_TARGET_PATH_LOG_DIR" \
     "${module_prefix}_LOG_DIR" \
     "${module_prefix}_TARGET_PATH_LOG_DIR")
+  app_dir=$(contract_first_matching_value "$contract_tmp" \
+    "${service_prefix}_APP_DIR" \
+    "${service_prefix}_TARGET_PATH_APP_DIR" \
+    "${module_prefix}_APP_DIR" \
+    "${module_prefix}_TARGET_PATH_APP_DIR")
+  config_dir=$(contract_first_matching_value "$contract_tmp" \
+    "${service_prefix}_CONFIG_DIR" \
+    "${service_prefix}_TARGET_PATH_CONFIG_DIR" \
+    "${module_prefix}_CONFIG_DIR" \
+    "${module_prefix}_TARGET_PATH_CONFIG_DIR")
+  unit_path=$(contract_first_matching_value "$contract_tmp" \
+    "${service_prefix}_UNIT_PATH" \
+    "${module_prefix}_RUNTIME_SERVICE_UNIT_PATH")
 
   if [ "$(seed_lang)" = "fr" ]; then
     service_label="Service runtime déclaré"
     unit_label="Unit systemd potentielle"
-    dirs_label="Dépendances runtime"
+    dirs_label="Chemins runtime"
+    source_label="Source"
+    deps_label="Dépendances"
     not_done_label="Ne fera pas"
     none_label="Non déclaré"
     preview_only="Preview seulement : aucun systemctl, aucun service créé, aucun runtime lancé."
@@ -2568,7 +2668,9 @@ show_install_service_preview() {
   else
     service_label="Declared runtime service"
     unit_label="Potential systemd unit"
-    dirs_label="Runtime dependencies"
+    dirs_label="Runtime paths"
+    source_label="Preview source"
+    deps_label="Dependencies"
     not_done_label="Will NOT"
     none_label="Not declared"
     preview_only="Preview only: no systemctl, no service created, no runtime started."
@@ -2588,39 +2690,81 @@ show_install_service_preview() {
   ui_line ""
   ui_line "$unit_label"
   if [ -n "$service_name" ]; then
-    ui_line "  $service_name"
+    if [ -n "$unit_path" ]; then
+      ui_line "  ${unit_path}: $service_name"
+    else
+      ui_line "  $service_name"
+    fi
   else
     ui_line "  $none_label"
   fi
 
   ui_line ""
   ui_line "$dirs_label"
+  ui_line "  app dir: ${app_dir:-$none_label}"
+  ui_line "  config dir: ${config_dir:-$none_label}"
   ui_line "  runtime dir: ${run_dir:-$none_label}"
   ui_line "  log dir: ${log_dir:-$none_label}"
 
   ui_line ""
-  ui_line "$not_done_label"
+  ui_line "$deps_label"
+  deps_found=0
+  while IFS= read -r dep; do
+    [ -z "$dep" ] && continue
+    deps_found=1
+    ui_line "  - $dep"
+  done <<EOF
+$(contract_values_for_keys "$contract_tmp" \
+  "${service_prefix}_DEPENDENCY" \
+  "${service_prefix}_DEPENDENCIES" \
+  "${module_prefix}_RUNTIME_SERVICE_DEPENDENCIES")
+EOF
+  [ "$deps_found" -eq 0 ] && ui_line "  $none_label"
+
+  ui_line ""
+  ui_line "${not_done_label}"
   ui_line "  - systemctl"
   ui_line "  - service enable/start"
   ui_line "  - runtime launch"
 
   ui_line ""
+  if [ "$(seed_lang)" = "fr" ]; then
+    if [ "$preview_source" = "contract" ]; then
+      ui_line "$source_label: contrat principal"
+    else
+      ui_line "$source_label: manifest dédié"
+    fi
+  else
+    if [ "$preview_source" = "contract" ]; then
+      ui_line "$source_label: module contract"
+    else
+      ui_line "$source_label: dedicated manifest"
+    fi
+  fi
+
+  ui_line ""
   ui_line "$preview_only"
   ui_line "$no_changes"
 
-  rm -f "$contract_tmp"
+  rm -f "$contract_tmp" "$manifest_tmp"
   trap - EXIT HUP INT TERM
 }
 
 show_recovery_preview() {
   module=$1
   contract_tmp=$(mktemp -t seed-kit-module-contract.XXXXXX)
-  trap 'rm -f "$contract_tmp"' EXIT HUP INT TERM
+  manifest_tmp=$(mktemp -t seed-kit-module-manifest.XXXXXX)
+  trap 'rm -f "$contract_tmp" "$manifest_tmp"' EXIT HUP INT TERM
 
   module_prefix=$(contract_key_prefix "$module")
   cap_prefix=$(contract_capabilities_prefix "$module")
+  recovery_prefix=$(manifest_key_prefix "$module" "recovery")
+  preview_source="contract"
 
-  if ! module_contract_print "$module" > "$contract_tmp"; then
+  if module_manifest_print "$module" "recovery" > "$manifest_tmp"; then
+    cp "$manifest_tmp" "$contract_tmp"
+    preview_source="recovery manifest"
+  elif ! module_contract_print "$module" > "$contract_tmp"; then
     rm -f "$contract_tmp"
     trap - EXIT HUP INT TERM
     show_contract_preview_unavailable "recovery-preview" "$module"
@@ -2628,33 +2772,48 @@ show_recovery_preview() {
   fi
 
   recovery_port=$(contract_first_matching_value "$contract_tmp" \
+    "${recovery_prefix}_CAPTIVE_PORT" \
+    "${recovery_prefix}_NORMAL_UI_PORT" \
     "${module_prefix}_RUNTIME_UI_RECOVERY_PORT" \
     "${module_prefix}_RECOVERY_UI_PORT")
   recovery_ssid=$(contract_first_matching_value "$contract_tmp" \
+    "${recovery_prefix}_AP_SSID_TEMPLATE" \
     "${module_prefix}_RECOVERY_AP_SSID" \
     "${module_prefix}_AP_SSID")
   recovery_ip=$(contract_first_matching_value "$contract_tmp" \
+    "${recovery_prefix}_AP_IP" \
     "${module_prefix}_RECOVERY_AP_IP" \
     "${module_prefix}_AP_IP")
   recovery_dhcp=$(contract_first_matching_value "$contract_tmp" \
+    "${recovery_prefix}_DHCP_RANGE" \
     "${module_prefix}_RECOVERY_DHCP_RANGE" \
     "${module_prefix}_DHCP_RANGE")
+
+  recovery_mode=$(contract_first_matching_value "$contract_tmp" \
+    "${recovery_prefix}_MODE" \
+    "${module_prefix}_RECOVERY_MODE")
 
   if [ "$(seed_lang)" = "fr" ]; then
     recovery_label="Recovery déclarée"
     prereq_label="Prérequis"
+    source_label="Source"
+    checks_label="Checks"
     forbidden_label="Actions interdites automatiquement"
     risks_label="Risques réseau"
     none_label="Non déclaré"
+    unavailable_label="Indisponible"
     missing_label="manquant"
     preview_only="Preview seulement : aucun AP, aucun hostapd/dnsmasq, aucun changement réseau."
     no_changes="Aucun changement effectué."
   else
     recovery_label="Declared recovery"
     prereq_label="Prerequisites"
+    source_label="Preview source"
+    checks_label="Checks"
     forbidden_label="Forbidden automatic actions"
     risks_label="Network risks"
     none_label="Not declared"
+    unavailable_label="Unavailable"
     missing_label="missing"
     preview_only="Preview only: no AP, no hostapd/dnsmasq, no network change."
     no_changes="No changes were made."
@@ -2668,16 +2827,41 @@ show_recovery_preview() {
   ui_line "  AP IP: ${recovery_ip:-$none_label}"
   ui_line "  DHCP: ${recovery_dhcp:-$none_label}"
   ui_line "  captive port: ${recovery_port:-$none_label}"
+  ui_line "  mode: ${recovery_mode:-$none_label}"
+
+  if [ "$(seed_lang)" = "fr" ]; then
+    if [ "$preview_source" = "contract" ]; then
+      ui_line "  source: contrat principal"
+    else
+      ui_line "  source: manifest dédié"
+    fi
+  else
+    if [ "$preview_source" = "contract" ]; then
+      ui_line "  source: module contract"
+    else
+      ui_line "  source: dedicated manifest"
+    fi
+  fi
 
   ui_line ""
   ui_line "$prereq_label"
-  for dependency in hostapd dnsmasq sudoers-wrapper; do
+  prereq_found=0
+  while IFS= read -r dependency; do
+    [ -z "$dependency" ] && continue
+    prereq_found=1
     if dependency_present "$dependency"; then
       print_dependency_validation "OK" "$dependency"
     else
       print_dependency_validation "WARN" "$dependency" "$missing_label"
     fi
-  done
+  done <<EOF
+$(contract_values_for_keys "$contract_tmp" \
+  "${recovery_prefix}_REQUIRED_DEPENDENCY" \
+  "${recovery_prefix}_REQUIRED_DEPENDENCIES" \
+  "${module_prefix}_RECOVERY_REQUIRED_DEPENDENCY" \
+  "${module_prefix}_RECOVERY_PREREQUISITE")
+EOF
+  [ "$prereq_found" -eq 0 ] && ui_line "  $unavailable_label"
 
   ui_line ""
   ui_line "Capabilities"
@@ -2696,6 +2880,22 @@ EOF
   [ "$recovery_caps_found" -eq 0 ] && ui_line "INFO   $none_label"
 
   ui_line ""
+  ui_line "$checks_label"
+  checks_found=0
+  while IFS= read -r check; do
+    [ -z "$check" ] && continue
+    checks_found=1
+    ui_line "  - $check"
+  done <<EOF
+$(contract_values_for_keys "$contract_tmp" \
+  "${recovery_prefix}_READINESS_CHECK" \
+  "${recovery_prefix}_READINESS_CHECKS" \
+  "${recovery_prefix}_HEALTH_CHECK" \
+  "${recovery_prefix}_HEALTH_CHECKS")
+EOF
+  [ "$checks_found" -eq 0 ] && ui_line "  $unavailable_label"
+
+  ui_line ""
   ui_line "$forbidden_label"
   forbidden_found=0
   while IFS= read -r forbidden_action; do
@@ -2704,21 +2904,33 @@ EOF
     ui_line "  - $forbidden_action"
   done <<EOF
 $(contract_values_for_keys "$contract_tmp" \
-  "${module_prefix}_FORBIDDEN_ACTIONS")
+  "${recovery_prefix}_FORBIDDEN" \
+  "${recovery_prefix}_NON_ACTION" \
+  "${module_prefix}_FORBIDDEN_ACTIONS" \
+  "${module_prefix}_RECOVERY_FORBIDDEN")
 EOF
   [ "$forbidden_found" -eq 0 ] && ui_line "  $none_label"
 
   ui_line ""
   ui_line "$risks_label"
-  ui_line "  - captive portal port 80"
-  ui_line "  - temporary DHCP/DNS"
-  ui_line "  - explicit operator action required"
+  risk_found=0
+  while IFS= read -r risk; do
+    [ -z "$risk" ] && continue
+    risk_found=1
+    ui_line "  - $risk"
+  done <<EOF
+$(contract_values_for_keys "$contract_tmp" \
+  "${recovery_prefix}_RISK" \
+  "${recovery_prefix}_RISKS" \
+  "${module_prefix}_RECOVERY_RISK")
+EOF
+  [ "$risk_found" -eq 0 ] && ui_line "  $none_label"
 
   ui_line ""
   ui_line "$preview_only"
   ui_line "$no_changes"
 
-  rm -f "$contract_tmp"
+  rm -f "$contract_tmp" "$manifest_tmp"
   trap - EXIT HUP INT TERM
 }
 
