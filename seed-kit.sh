@@ -3191,19 +3191,17 @@ seed_kit_usage() {
 restore_usage() {
   echo "usage: sh seed-kit.sh restore <package.tar.gz>"
   echo ""
-  echo "Restores/replays a package up to the safe review point:"
+  echo "Restores/replays a package through the existing guided steps:"
   echo "  - verify archive and checksums"
   echo "  - stage under /tmp for inspection"
   echo "  - inspect package metadata"
-  echo "  - show next human steps"
+  echo "  - run guided install/review/validate/deploy/start checks"
   echo ""
-  echo "Typical continuation:"
-  echo "  sh seed-kit.sh package apply-guided <package.tar.gz> --step install-modules"
-  echo "  sh seed-kit.sh package apply-guided <package.tar.gz> --step review-configs"
-  echo "  sh seed-kit.sh package apply-guided <package.tar.gz> --step validate-services"
-  echo "  sh seed-kit.sh package apply-guided <package.tar.gz> --step deploy-configs"
+  echo "Guided steps keep their own confirmations."
+  echo "If a guided step is declined, restore reports it and continues with the next review step."
   echo ""
-  echo "No files are restored, no services are started, and no secrets are copied."
+  echo "No services are started and no secrets are copied."
+  echo "Files are copied only by the confirmed deploy-configs step under the user directory."
 }
 
 show_self_check() {
@@ -6120,15 +6118,21 @@ apply_guided_package() {
     fi
     ui_line "$(seed_msg future_optional_start)"
 
-    ui_section "Continue step by step"
-    ui_line "sh seed-kit.sh package apply-guided $package_file --step install-modules"
-    ui_line "sh seed-kit.sh package apply-guided $package_file --step review-configs"
-    if [ -n "$guided_services" ]; then
-      ui_line "sh seed-kit.sh package apply-guided $package_file --step validate-services"
+    if [ "${SEED_KIT_RESTORE_ENTRY:-0}" = "1" ]; then
+      ui_section "Restore continuation"
+      ui_line "Restore will continue with the guided steps below."
+      ui_line "Mutating steps keep their explicit confirmations."
+    else
+      ui_section "Continue step by step"
+      ui_line "sh seed-kit.sh package apply-guided $package_file --step install-modules"
+      ui_line "sh seed-kit.sh package apply-guided $package_file --step review-configs"
+      if [ -n "$guided_services" ]; then
+        ui_line "sh seed-kit.sh package apply-guided $package_file --step validate-services"
+      fi
+      ui_line "sh seed-kit.sh package apply-guided $package_file --step deploy-configs"
+      ui_line "sh seed-kit.sh package apply-guided $package_file --step validate-deployed"
+      ui_line "sh seed-kit.sh package apply-guided $package_file --step suggest-start"
     fi
-    ui_line "sh seed-kit.sh package apply-guided $package_file --step deploy-configs"
-    ui_line "sh seed-kit.sh package apply-guided $package_file --step validate-deployed"
-    ui_line "sh seed-kit.sh package apply-guided $package_file --step suggest-start"
 
     ui_section "$(seed_msg nothing_changed)"
     ui_line "$(seed_msg no_restore)"
@@ -6136,7 +6140,11 @@ apply_guided_package() {
     ui_line "$(seed_msg no_secret_copy)"
     ui_line "$(seed_msg no_dns_cutover)"
     ui_line "$(seed_msg no_reboot_network)"
-    ui_line "$(seed_msg package_apply_disabled)"
+    if [ "${SEED_KIT_RESTORE_ENTRY:-0}" = "1" ]; then
+      ui_line "Automatic unsafe actions remain disabled; guided confirmations stay explicit."
+    else
+      ui_line "$(seed_msg package_apply_disabled)"
+    fi
   fi
 
   if [ "$guided_step" = "install-modules" ]; then
@@ -6224,7 +6232,36 @@ restore_package() {
 
   SEED_KIT_RESTORE_ENTRY=1
   export SEED_KIT_RESTORE_ENTRY
-  apply_guided_package "$package_file" preview
+
+  for restore_step in \
+    preview \
+    install-modules \
+    review-configs \
+    validate-services \
+    deploy-configs \
+    validate-deployed \
+    suggest-start \
+    readiness
+  do
+    ui_separator "----------------------------------------"
+    ui_line "Restore step: $restore_step"
+    ui_separator "----------------------------------------"
+
+    if apply_guided_package "$package_file" "$restore_step"; then
+      continue
+    fi
+
+    restore_step_rc=$?
+    if [ "$restore_step" = "preview" ]; then
+      ui_line "Restore stopped: package verify/stage/inspect failed."
+      return "$restore_step_rc"
+    fi
+
+    ui_line "Restore step stopped: $restore_step"
+    ui_line "Continuing with the next restore review step."
+  done
+
+  return 0
 }
 
 show_package_plan() {

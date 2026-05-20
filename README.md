@@ -60,9 +60,10 @@ sh seed-kit.sh package verify ~/rpi-edge-service.tar.gz
 sh seed-kit.sh restore ~/rpi-edge-service.tar.gz
 ```
 
-`restore` verifies, stages, inspects, and prints the explicit human-guided
-steps to continue. It does not start services, restore secrets, or perform a
-DNS/cutover.
+`restore` verifies, stages, inspects, then runs the existing guided steps in
+order. Steps that can change the machine keep their explicit confirmations.
+It does not start services, restore secrets, or perform a DNS/cutover. Reviewed
+configs are copied only when the `deploy-configs` confirmation is accepted.
 
 ## Installer minimal
 
@@ -129,7 +130,7 @@ Commandes core legeres :
 - `self-update --apply` : applique uniquement un `git pull --ff-only`.
 - `package create --service <name>` : cree un package de reconstruction/replay.
 - `package verify <file>` : verifie un package.
-- `restore <package>` : verifie, stage, inspecte, puis affiche les prochaines etapes humaines.
+- `restore <package>` : verifie, stage, inspecte, puis enchaine les etapes guidees existantes.
 - `package apply-guided <file> --step <step>` : compatibilite pour les sous-etapes guidees.
 - `--apply [--modules=git,docker] [--yes|-y]` : installe explicitement les modules demandes.
 - Sans `--modules`, `--apply` reste en preview-only.
