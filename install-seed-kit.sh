@@ -137,8 +137,8 @@ show_next_steps() {
   log "Next steps:"
   log "  cd $TARGET_DIR"
   log
-  log "Package readiness:"
-  log "  SEED_KIT_LANG=fr sh seed-kit.sh package apply-guided ~/rpi-edge-service.tar.gz --step readiness"
+  log "Package restore/replay:"
+  log "  SEED_KIT_LANG=fr sh seed-kit.sh restore ~/rpi-edge-service.tar.gz"
   log
   log "Create package:"
   log "  sh seed-kit.sh package create --service rpi-edge-vps --copy-home"

@@ -3145,7 +3145,7 @@ validate_module_contract() {
 }
 
 seed_kit_usage() {
-  echo "Usage: sh seed-kit.sh [--plan|--detect|--ui-demo|--modules|--apply]"
+  echo "Usage: sh seed-kit.sh [restore <package>|package|modules|--plan|--apply]"
   echo ""
   echo "Fresh-node bootstrap:"
   echo "  wget https://raw.githubusercontent.com/warzou/seed-kit/main/seed-kit.sh"
@@ -3153,8 +3153,11 @@ seed_kit_usage() {
   echo "  installs git when needed, then clones/updates Seed-Kit"
   echo ""
   echo "Commands:"
+  echo "  restore <package>  verify, stage, inspect, and show next human steps"
+  echo "  package create --service <name> [--copy-home]  create a restore/replay package"
+  echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  --plan [--modules=git,docker]  show the execution plan"
-  echo "  --plan --package <file>  preview package-driven PRA design only"
+  echo "  --plan --package <file>  preview package restore/replay plan only"
   echo "  --profile=<name> --plan  show recommended modules for one profile"
   echo "  --profile=<name> --apply  preview profile apply order without running modules"
   echo "  --modules        list available modules"
@@ -3167,13 +3170,11 @@ seed_kit_usage() {
   echo "  modules install-service-preview <module>  preview runtime service contract"
   echo "  modules recovery-preview <module>  preview recovery/AP safety contract"
   echo "  apply-plan <module> --dry-run  show future apply order without changing anything"
-  echo "  package create --service <name> [--copy-home]  create a SAFE dry-run package"
-  echo "  package verify <file>  verify package archive, manifest, checksums, and exclusions"
   echo "  package stage <file>   verify and extract package to /tmp for manual inspection"
   echo "  package inspect-stage <dir>  inspect staged package without applying it"
-  echo "  package apply-guided <file> [--step install-modules|review-configs|validate-services|deploy-configs|validate-deployed|suggest-start|readiness]  guided SAFE package assistant"
+  echo "  package apply-guided <file> [--step install-modules|review-configs|validate-services|deploy-configs|validate-deployed|suggest-start|readiness]  legacy guided package steps"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
-  echo "  --apply --package <file> [--components=a,b]  preview package apply only"
+  echo "  --apply --package <file> [--components=a,b]  legacy package preview only"
   echo "  --apply-module=<module> [--yes|-y]  apply one module only"
   echo "  --fetch-module=wifi-kit [--yes|-y]  fetch one repo-backed module with git sparse checkout"
   echo "  --install-module=wifi-kit [--yes|-y]  prepare git if needed, then fetch one repo-backed module"
@@ -3185,6 +3186,18 @@ seed_kit_usage() {
   echo "  --detect         show OS detection details"
   echo "  --menu           open the interactive menu"
   echo "  --uninstall-runtime [--yes|-y]  remove local Seed-Kit runtime directories (lib/modules/backends)"
+}
+
+restore_usage() {
+  echo "usage: sh seed-kit.sh restore <package.tar.gz>"
+  echo ""
+  echo "Restores/replays a package up to the safe review point:"
+  echo "  - verify archive and checksums"
+  echo "  - stage under /tmp for inspection"
+  echo "  - inspect package metadata"
+  echo "  - show next human steps"
+  echo ""
+  echo "No files are restored, no services are started, and no secrets are copied."
 }
 
 show_self_check() {
@@ -5958,8 +5971,13 @@ apply_guided_print_header() {
   mode_label=$(apply_guided_mode_label "$guided_step")
 
   ui_separator "========================================"
-  ui_line "$(seed_msg apply_guided_title)"
-  ui_line "Seed-Kit > package apply-guided > $guided_step"
+  if [ "${SEED_KIT_RESTORE_ENTRY:-0}" = "1" ]; then
+    ui_line "PACKAGE RESTORE"
+    ui_line "Seed-Kit > restore > $guided_step"
+  else
+    ui_line "$(seed_msg apply_guided_title)"
+    ui_line "Seed-Kit > package apply-guided > $guided_step"
+  fi
   if [ "$(seed_lang)" = "fr" ]; then
     ui_line "$(seed_msg step_label) : $guided_step"
     ui_line "$(seed_msg package_label) : $package_label"
@@ -6178,6 +6196,14 @@ apply_guided_package() {
   fi
 
   cleanup_guided_stage_if_compact "$guided_compact_step" "$stage_dir"
+}
+
+restore_package() {
+  package_file=$1
+
+  SEED_KIT_RESTORE_ENTRY=1
+  export SEED_KIT_RESTORE_ENTRY
+  apply_guided_package "$package_file" preview
 }
 
 show_package_plan() {
@@ -6752,6 +6778,16 @@ case "${1:-}" in
         exit 2
         ;;
     esac
+    ;;
+  restore)
+    shift
+    case "${1:-}" in
+      ""|-h|--help)
+        restore_usage
+        exit 0
+        ;;
+    esac
+    restore_package "$1"
     ;;
   apply-plan)
     shift

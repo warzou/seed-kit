@@ -2,16 +2,17 @@
 
 ## Main mission
 
-Seed-Kit is a minimal shell toolkit for quickly preparing a node.
+Seed-Kit is a minimal shell toolkit for quickly preparing or restoring a node.
 
 It should help an operator:
 
-- install a fresh node quickly,
-- install Seed-Kit modules and profiles,
-- prepare a reproducible node,
-- get as close as possible to a one-command flow when it is safe.
+- install Seed-Kit on a fresh node,
+- restore/replay a node package or profile,
+- install only the modules needed for that restore,
+- ask for human action only when the step is inherently manual.
 
-The core goal is simple: take a fresh machine and make it operational quickly.
+The core goal is simple: take a fresh machine and make it operational again
+from an explicit package/profile, without hiding risky steps.
 
 ## Philosophy
 
@@ -38,7 +39,7 @@ Seed-Kit is not:
 - Terraform,
 - a complex orchestrator,
 - a secret vault,
-- an advanced dependency engine,
+- a module dependency database,
 - an opaque rollback system.
 
 If a workflow becomes risky, Seed-Kit should explain the next manual step
@@ -46,8 +47,8 @@ instead of pretending the risk disappeared.
 
 ## Modules
 
-Modules are installable capabilities that can be planned and applied
-individually.
+Modules are installable capabilities that own their own dependencies and
+configuration flow.
 
 Profiles are small named compositions of modules. They help describe common
 node shapes without becoming a dependency graph or an orchestration engine.
@@ -56,19 +57,19 @@ Some modules can be repo-backed and fetched sparsely when the full repository is
 not needed. `wifi-kit` is the first strategic repo-backed module, because it may
 grow documentation, prototypes, assets, and tests beyond the single-file core.
 
-Future modules should stay optional unless they are required for a documented
-profile.
+Seed-Kit core should read what a module declares, install the declared
+requirements after confirmation, then hand control to the module installer when
+one exists. Core should not memorize module-specific internals.
 
 ## Reconstruction mode
 
-Reconstruction is optional. It should not become a dependency of the core.
+Reconstruction is package/profile oriented. It should stay explicit and small.
 
-Future reconstruction work may include:
+Current reconstruction work may include:
 
-- guided restore steps,
+- restore/replay a package one step at a time,
 - `profile-state` inventory and dry-run flows,
-- encrypted archives,
-- private operator checklists,
+- private operator checklists and archives,
 - explicit validation before a node replaces another node.
 
 The public core should stay useful even when no private profile-state archive
@@ -92,7 +93,8 @@ Seed-Kit can guide sensitive work, but it should not silently own secrets.
 ## Long-term vision
 
 Seed-Kit should make it practical to take a fresh machine, run a small shell
-entrypoint, apply a clear profile, and reach an operational node quickly.
+entrypoint, restore/replay a clear package/profile, and reach an operational
+node quickly.
 
 Advanced reconstruction should remain layered on top:
 

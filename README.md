@@ -3,7 +3,8 @@
 Petit toolkit shell pour installer, deployer et reprendre simplement de petites machines:
 Debian, Raspberry Pi OS, OpenWRT/Flint plus tard, mini VPS.
 
-Objectif : une commande simple, une UI texte claire, des modules faciles a ajouter.
+Objectif : une commande simple, une UI texte claire, des packages/profils
+rejouables, et des modules faciles a ajouter.
 
 Le contexte et les limites du projet sont dans [CONTEXT.md](CONTEXT.md).
 Architecture monorepo: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -37,6 +38,7 @@ Then:
 ```sh
 cd ~/seed-kit
 sh seed-kit.sh doctor
+sh seed-kit.sh restore ~/rpi-edge-service.tar.gz
 ```
 
 ## Installer minimal
@@ -102,7 +104,11 @@ Commandes core legeres :
 - `doctor` : diagnostic read-only court.
 - `self-update --plan` : inspecte l'ecart avec `origin`.
 - `self-update --apply` : applique uniquement un `git pull --ff-only`.
-- `--apply [--modules=git,docker] [--yes|-y]` : preview puis apply SAFE des modules demandes.
+- `package create --service <name>` : cree un package de reconstruction/replay.
+- `package verify <file>` : verifie un package.
+- `restore <package>` : verifie, stage, inspecte, puis affiche les prochaines etapes humaines.
+- `package apply-guided <file> --step <step>` : compatibilite pour les sous-etapes guidees.
+- `--apply [--modules=git,docker] [--yes|-y]` : installe explicitement les modules demandes.
 - Sans `--modules`, `--apply` reste en preview-only.
 - `-y` : passe la confirmation SAFE (`[y/N]`) pour accelerer un apply explicite.
 

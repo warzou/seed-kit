@@ -3,7 +3,7 @@
 ## Goal
 
 Seed-Kit modules may publish a small, shell-readable contract that Seed-Kit core
-can display, validate later, and eventually apply through guided SAFE steps.
+can display, validate, and use during module installation.
 
 The contract belongs to the module. Seed-Kit core consumes it. Core must not
 reimplement module-specific runtime behavior or hide privileged/network actions
@@ -27,15 +27,16 @@ A module contract may describe:
 - volatile runtime directories
 - readiness checks
 - health checks
-- install phases
-- rollback phases
+- optional installer entrypoint
+- install phases owned by the module
 - forbidden automatic actions
 - secrets policy
 
 ## Dependency levels
 
 Required dependencies are needed for the base module flow. Missing required
-dependencies should block a future real apply for the relevant phase.
+dependencies should block module installation until the operator confirms the
+dependency install.
 
 Recommended dependencies improve behavior but are not hard blockers. For
 example, `rfkill` is useful for radio diagnostics but should not block every
@@ -69,14 +70,16 @@ persistent, privileged, or network-changing.
 Seed-Kit core may:
 
 - show the contract
-- plan phases
 - validate read-only prerequisites
-- stage files for inspection
-- guide explicit operator-confirmed steps
+- install declared dependencies after confirmation
+- call a declared module installer when one exists
+- guide explicit operator-confirmed human steps
 - report readiness and health
 
 Seed-Kit core must not:
 
+- memorize module-specific dependencies
+- reimplement module-specific configuration
 - run arbitrary module commands
 - infer broad sudoers rules
 - write secrets into Git
@@ -104,30 +107,17 @@ sh seed-kit.sh --plan --modules=wifi-kit
 sh seed-kit.sh modules validate wifi-kit
 ```
 
-## Wifi-Kit reference mapping
+## Module ownership
 
-Wifi-Kit is the first concrete contract that exercises conditional dependencies,
-privileged wrappers, sudoers preview, systemd preview, recovery mode, and
-network safety boundaries.
-
-Wifi-Kit maps to this contract as:
-
-- metadata: `id=wifi-kit`, `type=network-ui`, `platform=raspberrypi/debian`,
-  `backend=networkmanager`, `mode=normal-ui + ap-recovery`
-- required dependencies: `python3`, `network-manager`, `nmcli`, `wpa_cli`,
-  `iw`, `iproute2`
-- recommended dependencies: `rfkill`
-- conditional dependencies: `hostapd` and `dnsmasq` for recovery AP mode
-- capabilities: normal UI, scan, default Wi-Fi return, AP recovery, recovery
-  guard, readiness checks, uninstall preview
-- forbidden automatic actions: no reboot, no `save_config`, no AP start without
-  explicit action, no sudoers write during dry-run, no secret in Git, no Wi-Fi
-  profile deletion, no permanent AP+STA assumption, no arbitrary shell commands
+The module owns its dependency list, installer, configuration, runtime behavior,
+and safety boundaries. Seed-Kit core only consumes declarations and invokes
+declared entrypoints. This keeps the core from becoming a database of module
+internals.
 
 ## V1 status
 
 This document is a contract and planning model only. It does not install
-packages, write sudoers, install systemd services, change networking, start an
+packages, write sudoers, install services, change networking, start an
 AP, launch runtime services, or handle secrets.
 
 ## Core consumption model (Seed-Kit)

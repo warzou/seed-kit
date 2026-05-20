@@ -1,20 +1,24 @@
-# Package-driven PRA
+# Package-driven restore
 
 ## Goal
 
-Package-driven PRA makes the service package the source of truth.
+Package-driven restore makes the package the source of truth for replaying a
+node/service on a fresh machine.
 
 The package must include its own profile so the operator cannot accidentally use
 a valid package with the wrong external profile.
 
-Target commands:
+Current commands:
 
 ```sh
 sh seed-kit.sh --plan --package <file.tar.gz>
-sh seed-kit.sh --apply --package <file.tar.gz>
+sh seed-kit.sh restore <file.tar.gz>
 sh seed-kit.sh package apply-guided <file.tar.gz> --step install-modules
 sh seed-kit.sh package apply-guided <file.tar.gz> --step review-configs
 ```
+
+`restore` is the main package replay entrypoint. `package apply-guided` remains
+available for compatibility and for explicit human-guided sub-steps.
 
 ## Model
 
@@ -24,7 +28,8 @@ sh seed-kit.sh package apply-guided <file.tar.gz> --step review-configs
 - modules: internal Seed-Kit modules such as wifi-stability or wifi-kit
 - services: application services carried by the package, such as homepage or a compose stack
 - manual identities: trust/login steps that must be reconnected by the operator
-- Seed-Kit: SAFE engine that verifies, plans, stages, and guides partial apply
+- Seed-Kit: reads the package, stages it, restores/replays explicit steps, and
+  asks the operator only for actions that require human judgment
 
 Older packages may still expose `COMPONENTS`. Seed-Kit treats that as a
 temporary compatibility fallback while V1 packages move to `SYSTEM`, `MODULES`,
@@ -78,11 +83,13 @@ Packages may document where identity, DNS, tunnel, token, or service credentials
 must be reconnected manually. The operator remains responsible for reviewing and
 reconnecting trust.
 
-## SAFE modes
+## Restore/replay modes
 
 - verify: check archive presence, manifest, checksums, and declared shape
 - stage: extract only into a reviewable staging directory
-- apply-guided: perform explicit selected steps after SAFE confirmation
+- restore/replay step: perform one explicit package step after confirmation
+- guided: human-only steps such as identity login, review, validation, or start
+  decision
 
 ## Non-goals
 
@@ -90,4 +97,4 @@ reconnecting trust.
 - no automatic secret restore
 - no automatic DNS cutover
 - no automatic cloud sync
-- no automatic app stack restore in V1
+- no hidden app stack start in V1
