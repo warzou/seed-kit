@@ -15,7 +15,7 @@ EOF
 }
 
 iface="wlan0"
-fallback="Flint"
+fallback="WifiKit-Fallback"
 ap_ssid="Wifi-Kit-Setup"
 mode=""
 

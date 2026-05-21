@@ -27,8 +27,8 @@
       "hidden": false
     },
     {
-      "ssid": "Flint-Fallback",
-      "ssid_hash": "sha256-demo-flint-fallback",
+      "ssid": "WifiKit-Fallback",
+      "ssid_hash": "sha256-demo-wifikit-fallback",
       "signal_dbm": -62,
       "channel": 6,
       "frequency": 2437,

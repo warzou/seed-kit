@@ -21,8 +21,8 @@
       "retry_count": 0
     },
     {
-      "ssid": "Flint-Fallback",
-      "ssid_hash": "sha256-demo-flint-fallback",
+      "ssid": "WifiKit-Fallback",
+      "ssid_hash": "sha256-demo-wifikit-fallback",
       "priority": 90,
       "favorite": false,
       "validated": true,
@@ -57,8 +57,8 @@
     "gateway": "192.168.8.1"
   },
   "fallback_network": {
-    "ssid": "Flint-Fallback",
-    "ssid_hash": "sha256-demo-flint-fallback",
+    "ssid": "WifiKit-Fallback",
+    "ssid_hash": "sha256-demo-wifikit-fallback",
     "role": "fallback",
     "validated": true
   }
