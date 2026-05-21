@@ -1,0 +1,480 @@
+#!/bin/sh
+set -eu
+
+# EXPERIMENTAL PROTOTYPE ONLY.
+# This script is not a stable Wifi-Kit feature. The apply mode can disconnect
+# the current SSH session and must only be used during a controlled test window.
+
+mode=""
+iface="wlan0"
+target_ssid=""
+confirm_phrase=""
+dangerous_real_apply="0"
+tx_timeout_seconds="180"
+rollback_timeout_seconds="90"
+internet_probe="1.1.1.1"
+dns_probe="example.com"
+log_file=""
+state_file=""
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+ap_setup_script="$script_dir/ap-setup-test.sh"
+
+usage() {
+  cat <<'EOF'
+wifi-kit connect transaction prototype
+EXPERIMENTAL: apply can disconnect SSH and is only for controlled test windows.
+
+One guarded transaction for changing Wi-Fi with rollback and AP recovery
+fallback. Passwords are read from stdin only and are never logged.
+
+Usage:
+  sh modules/wifi-kit/prototype/wifi-kit-connect-transaction.sh audit
+  sh modules/wifi-kit/prototype/wifi-kit-connect-transaction.sh plan --ssid "<SSID>"
+  printf '%s\n' "$RUNTIME_PASSWORD" | \
+    sudo sh modules/wifi-kit/prototype/wifi-kit-connect-transaction.sh apply \
+      --ssid "<SSID>" \
+      --dangerous-real-apply \
+      --confirm "WIFI-KIT CONNECT SAFE TRANSACTION"
+EOF
+}
+
+fail() {
+  log_event "failure" "error=$1"
+  state_set "status" "failure"
+  state_set "error" "$1"
+  printf 'error: %s\n' "$1" >&2
+  exit 1
+}
+
+quote() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/^/"/; s/$/"/'
+}
+
+timestamp() {
+  date -u '+%Y-%m-%dT%H:%M:%SZ'
+}
+
+tx_id() {
+  date -u '+%Y%m%dT%H%M%SZ'
+}
+
+log_event() {
+  [ -n "$log_file" ] || return 0
+  status=$1
+  detail=${2:-}
+  {
+    printf 'timestamp=%s action=connect-transaction status=%s ssid=%s' \
+      "$(quote "$(timestamp)")" \
+      "$(quote "$status")" \
+      "$(quote "${target_ssid:-unknown}")"
+    if [ -n "$detail" ]; then
+      printf ' %s' "$detail"
+    fi
+    printf '\n'
+  } >>"$log_file" 2>/dev/null || true
+}
+
+state_init() {
+  umask 077
+  : >"$state_file" 2>/dev/null || true
+  chmod 600 "$state_file" 2>/dev/null || true
+}
+
+state_set() {
+  [ -n "$state_file" ] || return 0
+  key=$1
+  value=$2
+  printf '%s=%s\n' "$key" "$value" >>"$state_file" 2>/dev/null || true
+}
+
+kv() {
+  printf '%s=%s\n' "$1" "$2"
+}
+
+section() {
+  printf '\n[%s]\n' "$1"
+}
+
+find_tool() {
+  tool=$1
+  if command -v "$tool" >/dev/null 2>&1; then
+    command -v "$tool"
+    return 0
+  fi
+  for dir in /usr/sbin /sbin /usr/bin /bin; do
+    if [ -x "$dir/$tool" ]; then
+      printf '%s\n' "$dir/$tool"
+      return 0
+    fi
+  done
+  return 1
+}
+
+require_number() {
+  name=$1
+  value=$2
+  case "$value" in
+    ''|*[!0-9]*) fail "$name must be a non-negative integer" ;;
+  esac
+}
+
+need_ssid() {
+  [ -n "$target_ssid" ] || fail "missing-ssid"
+  bytes=$(printf '%s' "$target_ssid" | wc -c | tr -d ' ')
+  [ "$bytes" -le 32 ] || fail "ssid-too-long"
+}
+
+nmcli_bin() {
+  find_tool nmcli 2>/dev/null || true
+}
+
+active_connection() {
+  "$nmcli" -t --escape no -f DEVICE,CONNECTION device status 2>/dev/null |
+    awk -F: -v iface="$iface" '$1 == iface { print $2; exit }'
+}
+
+active_ssid() {
+  "$nmcli" -t --escape no -f ACTIVE,SSID device wifi list --rescan no 2>/dev/null |
+    awk -F: '$1 == "yes" { print $2; exit }'
+}
+
+device_state() {
+  "$nmcli" -t --escape no -f DEVICE,STATE device status 2>/dev/null |
+    awk -F: -v iface="$iface" '$1 == iface { print $2; exit }'
+}
+
+device_general_state() {
+  "$nmcli" -g GENERAL.STATE device show "$iface" 2>/dev/null | sed -n '1p'
+}
+
+ip_address() {
+  "$nmcli" -g IP4.ADDRESS device show "$iface" 2>/dev/null | sed -n '1p'
+}
+
+gateway() {
+  "$nmcli" -g IP4.GATEWAY device show "$iface" 2>/dev/null | sed -n '1p'
+}
+
+stable_connected() {
+  state=$1
+  general=$2
+  case "$(printf '%s %s' "$state" "$general" | tr '[:upper:]' '[:lower:]')" in
+    *connecting*|*configuring*|*prepare*|*auth*|*unavailable*|*disconnect*) return 1 ;;
+  esac
+  [ "$state" = "connected" ] && return 0
+  case "$general" in
+    100\ *|connected) return 0 ;;
+  esac
+  return 1
+}
+
+sshd_active() {
+  if command -v pgrep >/dev/null 2>&1 && pgrep -x sshd >/dev/null 2>&1; then
+    return 0
+  fi
+  if command -v ss >/dev/null 2>&1 && ss -lnt 2>/dev/null | awk '$4 ~ /:22$/ { found=1 } END { exit found ? 0 : 1 }'; then
+    return 0
+  fi
+  return 1
+}
+
+dns_ok() {
+  getent hosts "$dns_probe" >/dev/null 2>&1
+}
+
+validate_network() {
+  expected_ssid=$1
+  require_internet=$2
+
+  ssid_now=$(active_ssid || true)
+  ip_now=$(ip_address || true)
+  gateway_now=$(gateway || true)
+  state_now=$(device_state || true)
+  general_now=$(device_general_state || true)
+
+  if ! stable_connected "$state_now" "$general_now"; then
+    printf 'networkmanager-not-stable'
+    return 1
+  fi
+  if [ -n "$expected_ssid" ] && [ "$ssid_now" != "$expected_ssid" ]; then
+    printf 'ssid-not-active'
+    return 1
+  fi
+  if [ -z "$ip_now" ]; then
+    printf 'ipv4-missing'
+    return 1
+  fi
+  if [ -z "$gateway_now" ]; then
+    printf 'gateway-missing'
+    return 1
+  fi
+  if ! ping -c 1 -W 2 "$gateway_now" >/dev/null 2>&1; then
+    printf 'gateway-ping-failed'
+    return 1
+  fi
+  if [ "$require_internet" = "yes" ] && ! ping -c 1 -W 3 "$internet_probe" >/dev/null 2>&1; then
+    printf 'internet-ping-failed'
+    return 1
+  fi
+  if [ "$require_internet" = "yes" ] && ! dns_ok; then
+    printf 'dns-failed'
+    return 1
+  fi
+  if ! sshd_active; then
+    printf 'sshd-not-active'
+    return 1
+  fi
+  printf 'validated'
+  return 0
+}
+
+wait_validate() {
+  expected_ssid=$1
+  require_internet=$2
+  timeout=$3
+  elapsed=0
+  last_reason="not-started"
+  while [ "$elapsed" -lt "$timeout" ]; do
+    if reason=$(validate_network "$expected_ssid" "$require_internet"); then
+      printf 'validated'
+      return 0
+    fi
+    last_reason=$reason
+    case "$elapsed" in
+      0|15|30|60|90|120|150)
+        log_event "waiting" "step=validate reason=$(quote "$last_reason") elapsed_seconds=$(quote "$elapsed")"
+        ;;
+    esac
+    sleep 3
+    elapsed=$((elapsed + 3))
+  done
+  printf '%s' "$last_reason"
+  return 1
+}
+
+delete_temp_profile() {
+  [ -n "${temp_connection:-}" ] || return 0
+  "$nmcli" connection delete "$temp_connection" >/dev/null 2>&1 || true
+}
+
+rollback_previous() {
+  [ -n "$previous_connection" ] && [ "$previous_connection" != "--" ] ||
+    return 1
+  log_event "rollback-started" "previous_connection=$(quote "$previous_connection")"
+  "$nmcli" device set "$iface" managed yes >/dev/null 2>&1 || true
+  "$nmcli" --wait 45 connection up "$previous_connection" ifname "$iface" >>"$log_file" 2>&1 || return 1
+  reason=$(wait_validate "$previous_ssid" "no" "$rollback_timeout_seconds" || true)
+  [ "$reason" = "validated" ]
+}
+
+start_ap_recovery() {
+  [ -r "$ap_setup_script" ] || {
+    log_event "recovery-failure" "error=ap-setup-test-missing"
+    return 1
+  }
+  [ -n "${WIFI_KIT_AP_PSK:-}" ] || {
+    log_event "recovery-failure" "error=wifi-kit-ap-psk-required"
+    return 1
+  }
+  log_event "recovery-starting" "max_seconds=300"
+  # Do not append ap-setup-test output here: its plan text can include future
+  # commands with the runtime AP passphrase. Keep transaction logs secret-free.
+  sh "$ap_setup_script" apply-ap-recovery-manual-test \
+    --dangerous-real-apply \
+    --confirm "WIFI-KIT AP RECOVERY MANUAL TEST" \
+    --max-seconds 300 >/dev/null 2>&1 &
+  log_event "recovery-started" "status=background"
+}
+
+cmd_audit() {
+  nmcli=$(nmcli_bin)
+  printf '[wifi-kit] connect transaction audit\n'
+  kv "mode" "audit-readonly"
+  kv "network_writes" "false"
+  kv "secret_policy" "stdin-only-for-apply"
+  kv "iface" "$iface"
+  kv "nmcli" "${nmcli:-missing}"
+  if [ -n "$nmcli" ]; then
+    kv "networkmanager_running" "$("$nmcli" -t -f RUNNING general 2>/dev/null | sed -n '1p' || true)"
+    kv "device_state" "$(device_state || true)"
+    kv "active_connection" "$(active_connection || true)"
+    kv "active_ssid" "$(active_ssid || true)"
+    kv "ip" "$(ip_address || true)"
+    kv "gateway" "$(gateway || true)"
+  fi
+  kv "sshd_active" "$(sshd_active && printf yes || printf no)"
+  kv "ap_setup_script" "$ap_setup_script"
+  kv "ap_setup_present" "$([ -r "$ap_setup_script" ] && printf yes || printf no)"
+}
+
+cmd_plan() {
+  need_ssid
+  printf '[wifi-kit] connect transaction plan\n'
+  kv "mode" "plan-readonly"
+  kv "network_writes" "false"
+  kv "target_ssid" "$target_ssid"
+  kv "password_source" "stdin-only-during-apply"
+  kv "log_file" "/tmp/wifi-kit-connect-transaction-<txid>.log"
+  kv "state_file" "/tmp/wifi-kit-connect-transaction-<txid>.state"
+  kv "temporary_profile" "wifi-kit-tx-<txid>"
+  section "transaction"
+  kv "01.snapshot" "current wlan0 NetworkManager connection, SSID, IP, gateway"
+  kv "02.create_temp_profile" "wifi-kit-tx-<txid>, autoconnect=no, save=no"
+  kv "03.connect_target" "nmcli connection up temporary profile"
+  kv "04.validate_target" "IPv4, default gateway, gateway ping, ping $internet_probe, DNS $dns_probe, sshd active"
+  kv "05.success" "stay connected to target SSID"
+  kv "06.failure" "rollback previous active NetworkManager profile"
+  kv "07.rollback_failure" "start temporary AP recovery"
+  kv "08.cleanup" "delete only Wifi-Kit temporary profile"
+  section "forbidden"
+  kv "delete_user_profiles" "false"
+  kv "secret_logging" "false"
+  kv "sudoers_systemd" "false"
+  kv "ui_integration" "gated-by-recovery-privileged-actions-and-confirmation"
+}
+
+require_apply_gates() {
+  [ "$dangerous_real_apply" = "1" ] || fail "dangerous-real-apply-required"
+  [ "$confirm_phrase" = "WIFI-KIT CONNECT SAFE TRANSACTION" ] ||
+    fail "confirm-phrase-mismatch"
+  [ "$(id -u 2>/dev/null || printf 1)" = "0" ] || fail "root-required"
+}
+
+cmd_apply() {
+  need_ssid
+  require_apply_gates
+  require_number "--timeout-seconds" "$tx_timeout_seconds"
+  require_number "--rollback-timeout-seconds" "$rollback_timeout_seconds"
+
+  IFS= read -r runtime_password || runtime_password=""
+  [ -n "$runtime_password" ] || fail "missing-password"
+
+  nmcli=$(nmcli_bin)
+  [ -n "$nmcli" ] || fail "nmcli-required"
+  [ "$("$nmcli" -t -f RUNNING general 2>/dev/null | sed -n '1p' || true)" = "running" ] ||
+    fail "networkmanager-not-running"
+
+  tx=$(tx_id)-$$
+  temp_connection="wifi-kit-tx-$tx"
+  log_file="/tmp/wifi-kit-connect-transaction-$tx.log"
+  state_file="/tmp/wifi-kit-connect-transaction-$tx.state"
+  state_init
+  state_set "tx_id" "$tx"
+  state_set "target_ssid" "$target_ssid"
+  state_set "temporary_connection" "$temp_connection"
+  state_set "status" "started"
+  log_event "started" "tx_id=$(quote "$tx") temporary_connection=$(quote "$temp_connection") secret_policy=$(quote "stdin-only-not-logged")"
+
+  previous_connection=$(active_connection || true)
+  previous_ssid=$(active_ssid || true)
+  previous_ip=$(ip_address || true)
+  previous_gateway=$(gateway || true)
+  [ -n "$previous_connection" ] && [ "$previous_connection" != "--" ] ||
+    fail "previous-active-connection-missing"
+
+  state_set "previous_connection" "$previous_connection"
+  state_set "previous_ssid" "$previous_ssid"
+  state_set "previous_ip" "$previous_ip"
+  state_set "previous_gateway" "$previous_gateway"
+  log_event "snapshot" "previous_connection=$(quote "$previous_connection") previous_ssid=$(quote "$previous_ssid") previous_ip=$(quote "$previous_ip") previous_gateway=$(quote "$previous_gateway")"
+
+  cleanup() {
+    delete_temp_profile
+  }
+  trap cleanup EXIT INT TERM HUP
+
+  "$nmcli" connection add type wifi ifname "$iface" con-name "$temp_connection" ssid "$target_ssid" save no >>"$log_file" 2>&1 ||
+    fail "temporary-profile-create-failed"
+  "$nmcli" connection modify "$temp_connection" connection.autoconnect no >>"$log_file" 2>&1 || true
+  "$nmcli" connection modify "$temp_connection" 802-11-wireless-security.key-mgmt wpa-psk >>"$log_file" 2>&1 ||
+    fail "temporary-profile-security-failed"
+  "$nmcli" connection modify "$temp_connection" 802-11-wireless-security.psk "$runtime_password" >/dev/null 2>&1 ||
+    fail "temporary-profile-secret-attach-failed"
+  unset runtime_password
+
+  log_event "connect-starting" "temporary_connection=$(quote "$temp_connection")"
+  if "$nmcli" --wait 45 connection up "$temp_connection" ifname "$iface" >>"$log_file" 2>&1; then
+    reason=$(wait_validate "$target_ssid" "yes" "$tx_timeout_seconds" || true)
+    if [ "$reason" = "validated" ]; then
+      state_set "status" "success"
+      state_set "connected_ssid" "$target_ssid"
+      log_event "success" "connected_ssid=$(quote "$target_ssid")"
+      trap - EXIT INT TERM HUP
+      exit 0
+    fi
+    log_event "validation-failed" "reason=$(quote "$reason")"
+  else
+    log_event "connect-failed" "reason=nmcli-connection-up-failed"
+  fi
+
+  if rollback_previous; then
+    delete_temp_profile
+    state_set "status" "rolled-back"
+    log_event "rolled-back" "previous_connection=$(quote "$previous_connection")"
+    trap - EXIT INT TERM HUP
+    exit 1
+  fi
+
+  delete_temp_profile
+  state_set "status" "recovery-required"
+  log_event "rollback-failed" "fallback=ap-recovery"
+  start_ap_recovery || true
+  trap - EXIT INT TERM HUP
+  exit 1
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    audit|plan|apply)
+      [ -z "$mode" ] || fail "mode-already-set"
+      mode=$1
+      shift
+      ;;
+    --iface)
+      [ "$#" -ge 2 ] || fail "--iface requires a value"
+      iface=$2
+      shift 2
+      ;;
+    --ssid)
+      [ "$#" -ge 2 ] || fail "--ssid requires a value"
+      target_ssid=$2
+      shift 2
+      ;;
+    --confirm)
+      [ "$#" -ge 2 ] || fail "--confirm requires a value"
+      confirm_phrase=$2
+      shift 2
+      ;;
+    --dangerous-real-apply)
+      dangerous_real_apply="1"
+      shift
+      ;;
+    --timeout-seconds)
+      [ "$#" -ge 2 ] || fail "--timeout-seconds requires a value"
+      tx_timeout_seconds=$2
+      shift 2
+      ;;
+    --rollback-timeout-seconds)
+      [ "$#" -ge 2 ] || fail "--rollback-timeout-seconds requires a value"
+      rollback_timeout_seconds=$2
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+[ -n "$mode" ] || mode="audit"
+
+case "$mode" in
+  audit) cmd_audit ;;
+  plan) cmd_plan ;;
+  apply) cmd_apply ;;
+  *) usage >&2; exit 2 ;;
+esac
