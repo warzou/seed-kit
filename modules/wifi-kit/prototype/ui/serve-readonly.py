@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, urlparse
 SCRIPT_DIR = Path(__file__).resolve().parent
 WIFI_KIT_SH = SCRIPT_DIR.parent / "wifi-kit.sh"
 AP_SETUP_TEST_SH = SCRIPT_DIR.parent / "ap-setup-test.sh"
-CONNECT_RECOVERY_SH = SCRIPT_DIR.parent / "wifi-kit-connect-recovery.sh"
+CONNECT_TRANSACTION_SH = SCRIPT_DIR.parent / "wifi-kit-connect-transaction.sh"
 ACTION_WRAPPER_SH = SCRIPT_DIR.parent / "wifi-kit-action-wrapper.sh"
 INDEX_HTML = SCRIPT_DIR / "index.html"
 NORMAL_UI_PORT = 18089  # Prototype/dev local UI default; production/service target is 54321 in contract.
@@ -27,13 +27,15 @@ RECOVERY_UI_PORT = 80
 RECOVERY_AP_TEST_PASSWORD = "12345678"
 AP_ONLY_NM_STATE = Path("/tmp/wifi-kit-ap-only-nm-state")
 RECONNECT_PREVIOUS_LOG = Path("/tmp/wifi-kit-reconnect-previous.log")
-CONNECT_RECOVERY_LOG = Path("/tmp/wifi-kit-connect-recovery.log")
-CONNECT_RECOVERY_TIMEOUT_SECONDS = 180
+CONNECT_TRANSACTION_LOG = Path("/tmp/wifi-kit-connect-transaction-ui.log")
+CONNECT_TRANSACTION_TIMEOUT_SECONDS = 180
 START_AP_MODE_LOG = Path("/tmp/wifi-kit-start-ap-mode.log")
 RETURN_DEFAULT_NETWORK_LOG = Path("/tmp/wifi-kit-return-default-network.log")
 DEFAULT_NETWORK_CONNECTION = "netplan-wlan0-GL-MT6000-d53"
 AP_MODE_MAX_SECONDS = 300
 PRIVILEGED_ACTIONS_ENV = "WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS"
+AP_RECOVERY_CONFIRM = "WIFI-KIT AP RECOVERY MANUAL TEST"
+CONNECT_TRANSACTION_CONFIRM = "WIFI-KIT CONNECT SAFE TRANSACTION"
 
 CAPTIVE_PATHS = {
     "/generate_204",
@@ -56,12 +58,26 @@ ACTION_PATHS = {
 
 
 def run_json_command(args: list[str]) -> dict:
-    result = subprocess.run(
-        ["sh", str(WIFI_KIT_SH), *args],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    shell_bin = find_tool("sh")
+    if not shell_bin:
+        return {
+            "status": "error",
+            "command": " ".join(args),
+            "error": "sh-not-found",
+        }
+    try:
+        result = subprocess.run(
+            [shell_bin, str(WIFI_KIT_SH), *args],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as exc:
+        return {
+            "status": "error",
+            "command": " ".join(args),
+            "error": f"start-failed: {exc}",
+        }
 
     if result.returncode != 0:
         return {
@@ -192,16 +208,43 @@ def privileged_action_command(action: str) -> tuple[list[str], str]:
     return [sudo_bin, "-n", *wrapper_command], ""
 
 
+def privileged_connect_transaction_command() -> tuple[list[str], str]:
+    if not CONNECT_TRANSACTION_SH.exists():
+        return [], "connect-transaction-missing"
+    shell_bin = find_tool("sh")
+    if not shell_bin:
+        return [], "sh-not-found"
+    command = [shell_bin, str(CONNECT_TRANSACTION_SH)]
+    if os.geteuid() == 0:
+        return command, ""
+    sudo_bin = find_tool("sudo")
+    if not sudo_bin:
+        return [], "sudo-missing"
+    probe = subprocess.run(
+        [sudo_bin, "-n", "-l", *command],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if probe.returncode != 0:
+        return [], "privileged-connect-not-authorized"
+    return [sudo_bin, "-n", *command], ""
+
+
 def start_ap_mode(payload: dict) -> tuple[dict, int]:
     dry_run = bool_payload(payload.get("dry_run"))
+    dangerous_real_apply = bool_payload(payload.get("dangerous_real_apply"))
+    confirm = str(payload.get("confirm", ""))
     action = "start-ap-mode"
-    if dry_run or not privileged_actions_enabled():
+    if dry_run or not privileged_actions_enabled() or not dangerous_real_apply or confirm != AP_RECOVERY_CONFIRM:
         append_action_log(
             START_AP_MODE_LOG,
             action=action,
             status="planned",
             max_seconds=AP_MODE_MAX_SECONDS,
             privileged_actions_enabled=privileged_actions_enabled(),
+            dangerous_real_apply=dangerous_real_apply,
+            confirm_ok=confirm == AP_RECOVERY_CONFIRM,
         )
         return {
             "status": "planned",
@@ -209,6 +252,9 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
             "ap_started": False,
             "dry_run": dry_run,
             "privileged_actions_enabled": privileged_actions_enabled(),
+            "dangerous_real_apply": dangerous_real_apply,
+            "confirm_required": AP_RECOVERY_CONFIRM,
+            "confirm_ok": confirm == AP_RECOVERY_CONFIRM,
             "ssid": f"Wifi-Kit-{socket.gethostname() or 'node'}",
             "timeout_seconds": AP_MODE_MAX_SECONDS,
             "log": str(START_AP_MODE_LOG),
@@ -562,6 +608,8 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
     ssid = str(payload.get("ssid", "")).strip()
     password = str(payload.get("password", ""))
     security = str(payload.get("security", "")).strip()
+    dangerous_real_apply = bool_payload(payload.get("dangerous_real_apply"))
+    confirm = str(payload.get("confirm", ""))
     if not ssid:
         return {"status": "failure", "error": "missing-ssid", "connect_started": False}, 400
     if len(ssid.encode("utf-8")) > 32:
@@ -572,54 +620,67 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
         return {"status": "failure", "error": "password-too-short", "connect_started": False}, 400
 
     backend = "raspberrypi-networkmanager" if networkmanager_owns_wlan0() else "unknown"
-    if not recovery_active:
+    if (
+        not recovery_active
+        or not privileged_actions_enabled()
+        or not dangerous_real_apply
+        or confirm != CONNECT_TRANSACTION_CONFIRM
+    ):
         return (
             {
                 "status": "planned",
                 "mutation": "not-started",
-                "error": "recovery-required",
+                "error": "safe-gates-not-satisfied",
                 "requested_ssid": ssid,
                 "backend": backend,
                 "connect_started": False,
+                "recovery_active": recovery_active,
+                "privileged_actions_enabled": privileged_actions_enabled(),
+                "dangerous_real_apply": dangerous_real_apply,
+                "confirm_required": CONNECT_TRANSACTION_CONFIRM,
+                "confirm_ok": confirm == CONNECT_TRANSACTION_CONFIRM,
                 "secret_policy": "runtime-only; password was not logged or persisted",
-                "warning_if_recovery_active": "Real Wi-Fi connect is enabled only from AP recovery.",
+                "warning_if_recovery_active": "Real Wi-Fi connect requires AP recovery context, privileged actions, and exact confirmation.",
                 "connect_plan": [
-                    "start AP recovery",
-                    "scan and choose a Wi-Fi from the recovery UI",
-                    "attempt NetworkManager connection with runtime-only password",
-                    "validate stable NetworkManager connected state, target SSID, IPv4, gateway, and gateway ping",
-                    "on success: keep the new Wi-Fi and continue in normal mode",
-                    "on failure or timeout: keep or restart AP recovery for another attempt",
+                    "require AP recovery context",
+                    "require WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS=1",
+                    "require exact confirmation phrase",
+                    "read password only from this runtime request",
+                    "run guarded NetworkManager transaction",
+                    "rollback previous profile on failure",
+                    "start AP recovery only if rollback fails",
                 ],
             },
             409,
         )
 
-    if os.geteuid() != 0:
+    command, error = privileged_connect_transaction_command()
+    if error:
         return {
             "status": "failure",
-            "error": "root-required",
+            "error": error,
             "requested_ssid": ssid,
             "backend": backend,
             "connect_started": False,
-        }, 500
+        }, 403 if error == "privileged-connect-not-authorized" else 500
 
     try:
         process = subprocess.Popen(
             [
-                "sh",
-                str(CONNECT_RECOVERY_SH),
+                *command,
+                "apply",
                 "--ssid",
                 ssid,
-                "--security",
-                security,
+                "--dangerous-real-apply",
+                "--confirm",
+                CONNECT_TRANSACTION_CONFIRM,
                 "--timeout-seconds",
-                str(CONNECT_RECOVERY_TIMEOUT_SECONDS),
+                str(CONNECT_TRANSACTION_TIMEOUT_SECONDS),
             ],
             cwd=str(SCRIPT_DIR.parent),
             stdin=subprocess.PIPE,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=open(CONNECT_TRANSACTION_LOG, "a", encoding="utf-8"),
+            stderr=subprocess.STDOUT,
             start_new_session=True,
             text=True,
         )
@@ -638,21 +699,23 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
     return (
         {
             "status": "started",
-            "action": "wifi-connect-recovery",
+            "action": "wifi-connect-transaction",
             "requested_ssid": ssid,
             "backend": backend,
             "connect_started": True,
-            "timeout_seconds": CONNECT_RECOVERY_TIMEOUT_SECONDS,
-            "expected_behavior": "success-stops-recovery-failure-keeps-recovery",
+            "timeout_seconds": CONNECT_TRANSACTION_TIMEOUT_SECONDS,
+            "expected_behavior": "success-keeps-target-failure-rolls-back-rollback-failure-starts-ap-recovery",
             "secret_policy": "runtime-only; password is passed on stdin and never returned or logged",
-            "log": str(CONNECT_RECOVERY_LOG),
+            "log": str(CONNECT_TRANSACTION_LOG),
             "connect_plan": [
-                "stop AP recovery only for the STA validation attempt",
-                "create in-memory NetworkManager profile with save no",
-                "connect wlan0 to the requested SSID",
-                "validate stable NetworkManager connected state, target SSID, IPv4, gateway, and gateway ping",
-                "on success: keep the new Wi-Fi and leave recovery stopped",
-                "on failure: delete temporary profile and restart AP recovery",
+                "snapshot active NetworkManager profile and SSID",
+                "create temporary Wifi-Kit NetworkManager profile",
+                "connect wlan0 to the requested SSID with runtime-only password",
+                "validate stable connected state, target SSID, IPv4, gateway, internet ping, DNS, and sshd",
+                "on success: keep the new Wi-Fi",
+                "on failure: reconnect the previous NetworkManager profile",
+                "if rollback fails: start temporary AP recovery",
+                "cleanup only the temporary Wifi-Kit profile",
             ],
         },
         202,

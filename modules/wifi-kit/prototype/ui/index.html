@@ -1828,6 +1828,11 @@
       return plans[action] || `Action ${action}: plan-only.`;
     }
 
+    function strongConfirm(phrase, label) {
+      const typed = window.prompt(`${label}\n\nTape exactement : ${phrase}`);
+      return typed === phrase;
+    }
+
     async function triggerNetworkAction(action) {
       const button = document.querySelector(`[data-network-action="${action}"]`);
       const originalText = button ? button.textContent : '';
@@ -1846,9 +1851,21 @@
         } else {
           showNetworkActionResult(networkActionPlan(action));
         }
+        const payload = {};
+        if (action === 'start-ap-mode') {
+          const phrase = 'WIFI-KIT AP RECOVERY MANUAL TEST';
+          if (!strongConfirm(phrase, 'Confirmation forte requise pour activer le mode AP reel.')) {
+            showNetworkActionResult('Mode AP non lance: confirmation forte absente ou incorrecte.');
+            return;
+          }
+          payload.dangerous_real_apply = true;
+          payload.confirm = phrase;
+        }
         const response = await fetch(`/${action}`, {
           cache: 'no-store',
-          method: 'POST'
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
         });
         const payload = await response.json();
         if (action === 'reconnect-previous') {
@@ -2144,6 +2161,20 @@
         return;
       }
       const originalText = button.textContent;
+      const phrase = 'WIFI-KIT CONNECT SAFE TRANSACTION';
+      if (!strongConfirm(phrase, `Confirmation forte requise pour tenter ${ssid}.`)) {
+        renderConnectResponse({
+          status: 'planned',
+          requested_ssid: ssid,
+          secret_policy: 'Connexion non lancee: confirmation forte absente ou incorrecte.',
+          connect_plan: [
+            'aucune mutation reseau',
+            'mot de passe non transmis',
+            'retenter avec la confirmation exacte depuis le contexte recovery autorise'
+          ]
+        }, plan);
+        return;
+      }
       button.disabled = true;
       button.textContent = 'Connexion en cours...';
       try {
@@ -2155,6 +2186,8 @@
             ssid,
             security: network.security || '',
             password: passwordField.value,
+            dangerous_real_apply: true,
+            confirm: phrase,
           })
         });
         const payload = await response.json();
