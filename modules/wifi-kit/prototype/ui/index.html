@@ -1534,10 +1534,51 @@
       return String(source?.[key] ?? 'inconnu');
     }
 
+    function isUnknownValue(value) {
+      const normalized = String(value ?? '').trim().toLowerCase();
+      return normalized === '' || normalized === 'unknown' || normalized === 'inconnu';
+    }
+
+    function pickValue(...values) {
+      for (const valueItem of values) {
+        if (!isUnknownValue(valueItem)) return String(valueItem).trim();
+      }
+      return 'inconnu';
+    }
+
+    function resolveCurrentIp() {
+      return pickValue(
+        data?.system?.ip,
+        data?.diagnose?.current_ip,
+        data?.runtime_state?.data?.current_ip,
+      );
+    }
+
+    function resolveCurrentSsid() {
+      const system = systemState();
+      const scanCurrent = displayedScanNetworks(data?.scan).find((network) => network.current === 'yes');
+      if (system.mode === 'recovery') {
+        return pickValue(
+          system.recovery_ssid,
+          recoveryState().ssid,
+          data?.recovery?.ssid,
+        );
+      }
+
+      return pickValue(
+        system.wifi,
+        scanCurrent?.ssid,
+        data?.diagnose?.current_ssid_state,
+        data?.diagnose?.current_ssid,
+        data?.runtime_state?.data?.current_ssid_state,
+        data?.runtime_state?.data?.current_ssid,
+      );
+    }
+
     function formatIpSummary(rawIp) {
       const value = String(rawIp || '').trim();
       if (!value || value === 'inconnu' || value === 'unknown') return value || 'inconnu';
-      if (/\s*\/\s*/.test(value)) return value.replace(/\s*\/\s*/, ' / ');
+      if (/\s*\/\s*/.test(value)) return value.replace(/\s*\/\s*/, '/');
       return `${value} /24`;
     }
 
@@ -1581,12 +1622,13 @@
 
     function describeConnection() {
       const system = systemState();
-      const recovery = recoveryState();
-      const ip = system.ip || value(data.diagnose, 'current_ip');
-      const hostname = system.hostname || 'inconnu';
-      const ssid = system.mode === 'recovery'
-        ? (recovery.ssid || system.recovery_ssid || 'Wifi-Kit-node')
-        : (system.wifi || value(data.diagnose, 'current_ssid_state'));
+      const ip = resolveCurrentIp();
+      const hostname = pickValue(
+        system.hostname,
+        data?.runtime_state?.data?.hostname,
+        (data?.system?.hostname ?? data?.snapshot?.hostname),
+      );
+      const ssid = resolveCurrentSsid();
       document.getElementById('status-hostname').textContent = hostname;
       document.getElementById('status-ip').textContent = formatIpSummary(ip);
       document.getElementById('status-ssid').textContent = ssid;
@@ -1745,6 +1787,8 @@
     function renderNodeOverview() {
       const system = systemState();
       const normal = system.mode !== 'recovery';
+      const currentIp = resolveCurrentIp();
+      const currentSsid = resolveCurrentSsid();
       setText('mode-chip', normal ? 'Mode normal' : 'Mode AP');
       setText('mode-summary', normal
         ? 'Le node reste client du Wi-Fi habituel.'
@@ -1753,8 +1797,8 @@
         ? 'Mode AP inactif. Wifi-Kit observe, prepare et affiche les plans sans mutation HTTP.'
         : 'AP, DHCP, DNS captive et UI locale sont temporaires et doivent revenir a NetworkManager au cleanup.');
       setText('node-hostname', system.hostname || 'inconnu');
-      setText('node-ip', system.ip || value(data.diagnose, 'current_ip'));
-      setText('node-wifi', system.wifi || value(data.diagnose, 'current_ssid_state'));
+      setText('node-ip', currentIp);
+      setText('node-wifi', currentSsid);
       setText('node-nm', system.networkmanager || 'inconnu');
       setText('node-uptime', system.uptime || 'inconnu');
       setText('node-temp', system.temperature || 'inconnu');
@@ -1851,43 +1895,43 @@
         } else {
           showNetworkActionResult(networkActionPlan(action));
         }
-        const payload = {};
+        const requestPayload = {};
         if (action === 'start-ap-mode') {
           const phrase = 'WIFI-KIT AP RECOVERY MANUAL TEST';
           if (!strongConfirm(phrase, 'Confirmation forte requise pour activer le mode AP reel.')) {
             showNetworkActionResult('Mode AP non lance: confirmation forte absente ou incorrecte.');
             return;
           }
-          payload.dangerous_real_apply = true;
-          payload.confirm = phrase;
+          requestPayload.dangerous_real_apply = true;
+          requestPayload.confirm = phrase;
         }
         const response = await fetch(`/${action}`, {
           cache: 'no-store',
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(requestPayload)
         });
-        const payload = await response.json();
+        const responsePayload = await response.json();
         if (action === 'reconnect-previous') {
-          showNetworkActionResult(payload.reconnect_started
-            ? `Retour lance vers le Wi-Fi par defaut (${payload.previous_connection || 'connexion inconnue'}). Cette page peut devenir inaccessible dans quelques secondes.`
-            : `Retour non lance: ${payload.error || payload.status}.`);
+          showNetworkActionResult(responsePayload.reconnect_started
+            ? `Retour lance vers le Wi-Fi par defaut (${responsePayload.previous_connection || 'connexion inconnue'}). Cette page peut devenir inaccessible dans quelques secondes.`
+            : `Retour non lance: ${responsePayload.error || responsePayload.status}.`);
           return;
         }
         if (action === 'start-ap-mode') {
-          showNetworkActionResult(payload.ap_started
-            ? `Mode AP en cours de demarrage: ${payload.ssid || 'Wifi-Kit-node'}. Cette page normale peut devenir inaccessible.`
-            : `Mode AP non lance: ${payload.error || payload.status}.`);
+          showNetworkActionResult(responsePayload.ap_started
+            ? `Mode AP en cours de demarrage: ${responsePayload.ssid || 'Wifi-Kit-node'}. Cette page normale peut devenir inaccessible.`
+            : `Mode AP non lance: ${responsePayload.error || responsePayload.status}.`);
           return;
         }
         if (action === 'return-default-network') {
-          showNetworkActionResult(payload.return_started
-            ? `Retour au reseau initial lance: ${payload.default_connection || 'connexion autorisee'}.`
-            : `Retour au reseau initial non lance: ${payload.error || payload.status}.`);
+          showNetworkActionResult(responsePayload.return_started
+            ? `Retour au reseau initial lance: ${responsePayload.default_connection || 'connexion autorisee'}.`
+            : `Retour au reseau initial non lance: ${responsePayload.error || responsePayload.status}.`);
           return;
         }
         if (!response.ok) return;
-        showNetworkActionResult(`${networkActionPlan(action)} Serveur: ${payload.mutation || payload.status}.`);
+        showNetworkActionResult(`${networkActionPlan(action)} Serveur: ${responsePayload.mutation || responsePayload.status}.`);
       } catch (error) {
         if (action === 'reconnect-previous') {
           showNetworkActionResult(`Connexion au portail perdue pendant le retour Wi-Fi. C'est attendu si le node quitte le mode AP. Detail: ${error.message}`);
@@ -2394,6 +2438,36 @@
       }
     }
 
+    async function bootstrapUiDataFromServer() {
+      if (window.location.protocol === 'file:') {
+        renderAll();
+        showPage('networks');
+        return;
+      }
+
+      const status = document.getElementById('scan-status');
+      const previousStatus = status.textContent;
+      try {
+        const responseUiData = await fetch('/api/ui-data', { cache: 'no-store' });
+        if (!responseUiData.ok) throw new Error(`HTTP ${responseUiData.status} sur /api/ui-data`);
+        data = await responseUiData.json();
+
+        const responseScan = await fetch('/wifi/scan', { cache: 'no-store' });
+        if (!responseScan.ok) {
+          throw new Error(`HTTP ${responseScan.status} sur /wifi/scan`);
+        }
+        data.scan = await responseScan.json();
+      } catch (error) {
+        status.textContent = `Chargement initial incomplet: ${error.message}`;
+      } finally {
+        if (status.textContent === previousStatus) {
+          status.textContent = describeScanStatus(data?.scan || {}, displayedScanNetworks(data?.scan || {}));
+        }
+      }
+      renderAll();
+      showPage('networks');
+    }
+
     document.getElementById('refresh').addEventListener('click', refreshScanFromServer);
     document.getElementById('config-save-password').addEventListener('click', () => {
       const field = document.getElementById('config-ap-password');
@@ -2419,8 +2493,7 @@
       document.querySelectorAll('.security-dropdown').forEach((dropdown) => dropdown.classList.remove('open'));
       document.querySelectorAll('.security-dropdown-menu').forEach((menu) => { menu.hidden = true; });
     });
-    renderAll();
-    showPage('networks');
+    bootstrapUiDataFromServer();
   </script>
 </body>
 </html>
