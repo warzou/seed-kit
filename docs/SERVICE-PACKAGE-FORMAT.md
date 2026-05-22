@@ -48,12 +48,20 @@ SYSTEM="docker tailscale cloudflared"
 MODULES=""
 SERVICES="caddy homepage"
 MANUAL_IDENTITIES="tailscale cloudflared"
+HUMAN_STEPS="review-secrets reconnect-identities review-hostname validate-ssh-trust dns-cutover"
+MANUAL_SECRETS="env machine-id ssh-host-keys tailscale-state cloudflare-credentials tokens-api-keys service-credentials"
+SECRETS_POLICY="manual-reconnect"
 ```
 
 - `SYSTEM` is for host packages/installations.
 - `MODULES` is only for internal Seed-Kit modules.
 - `SERVICES` is for application services carried by the package.
 - `MANUAL_IDENTITIES` documents logins/trust that remain manual.
+- `HUMAN_STEPS` lists operator-owned reconstruction steps that Seed-Kit must
+  show and guide, not automate silently.
+- `MANUAL_SECRETS` lists secret, key, token, identity, or credential classes
+  intentionally left outside the package.
+- `SECRETS_POLICY` summarizes how secrets are handled.
 
 Legacy `COMPONENTS` packages remain readable as a compatibility fallback.
 
@@ -86,6 +94,14 @@ profile-id: rpi-edge
 format-version: 1
 generated-by: seed-kit
 reconstruction-mode: manual
+human-steps:
+  - review-secrets
+  - reconnect-identities
+  - review-hostname
+manual-secrets:
+  - .env
+  - machine-id
+  - ssh-host-keys
 ```
 
 ## Verification philosophy

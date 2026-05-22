@@ -57,11 +57,20 @@ SYSTEM="docker tailscale cloudflared"
 MODULES=""
 SERVICES="caddy homepage"
 MANUAL_IDENTITIES="tailscale cloudflared"
+HUMAN_STEPS="review-secrets reconnect-identities review-hostname validate-ssh-trust dns-cutover"
+MANUAL_SECRETS="env machine-id ssh-host-keys tailscale-state cloudflare-credentials tokens-api-keys service-credentials"
+SECRETS_POLICY="manual-reconnect"
 ```
 
 System entries can be used by guided install-only steps. Services are never
 treated as installable Seed-Kit modules. Module entries are reserved for
-internal Seed-Kit modules.
+internal Seed-Kit modules. The core must only read the `MODULES` declaration and
+run the named module entrypoints; module-specific dependency and install details
+stay owned by the module.
+
+`HUMAN_STEPS` and `MANUAL_SECRETS` make the node profile explicit without
+turning secrets into package payload. They are guidance for the operator and for
+restore output.
 
 ## Ready model
 
@@ -82,6 +91,14 @@ Secrets are never restored automatically.
 Packages may document where identity, DNS, tunnel, token, or service credentials
 must be reconnected manually. The operator remains responsible for reviewing and
 reconnecting trust.
+
+Typical manual classes:
+
+- secrets and `.env` files
+- machine identity and SSH host keys
+- VPN/tailnet state
+- tunnel credentials
+- API tokens and service credentials
 
 ## Restore/replay modes
 

@@ -86,6 +86,8 @@ grep -q '^SYSTEM="docker tailscale cloudflared"$' "$staging_dir/seed-kit-package
 grep -q '^MODULES=""$' "$staging_dir/seed-kit-package.sh" || fail "missing descriptor modules"
 grep -q '^SERVICES="caddy homepage"$' "$staging_dir/seed-kit-package.sh" || fail "missing descriptor services"
 grep -q '^MANUAL_IDENTITIES="tailscale cloudflared"$' "$staging_dir/seed-kit-package.sh" || fail "missing descriptor manual identities"
+grep -q '^HUMAN_STEPS="review-secrets reconnect-identities review-hostname validate-ssh-trust dns-cutover"$' "$staging_dir/seed-kit-package.sh" || fail "missing descriptor human steps"
+grep -q '^MANUAL_SECRETS="env machine-id ssh-host-keys tailscale-state cloudflare-credentials tokens-api-keys service-credentials"$' "$staging_dir/seed-kit-package.sh" || fail "missing descriptor manual secrets"
 pass "descriptor content"
 
 grep -q '^service-name: rpi-edge-vps$' "$staging_dir/MANIFEST.txt" || fail "missing manifest service name"
@@ -93,6 +95,8 @@ grep -q '^package-id: rpi-edge-service$' "$staging_dir/MANIFEST.txt" || fail "mi
 grep -q '^profile-id: rpi-edge$' "$staging_dir/MANIFEST.txt" || fail "missing manifest profile id"
 grep -q '^format-version: 1$' "$staging_dir/MANIFEST.txt" || fail "missing manifest format version"
 grep -q '^reconstruction-mode: manual$' "$staging_dir/MANIFEST.txt" || fail "missing manifest reconstruction mode"
+grep -q '^human-steps:$' "$staging_dir/MANIFEST.txt" || fail "missing manifest human steps"
+grep -q '^manual-secrets:$' "$staging_dir/MANIFEST.txt" || fail "missing manifest manual secrets"
 pass "manifest content"
 
 grep -q 'MANIFEST.txt' "$staging_dir/SHA256SUMS" || fail "missing manifest checksum"

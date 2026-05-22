@@ -4043,6 +4043,8 @@ read_package_metadata() {
   PACKAGE_METADATA_MODULES=""
   PACKAGE_METADATA_SERVICES=""
   PACKAGE_METADATA_MANUAL_IDENTITIES=""
+  PACKAGE_METADATA_HUMAN_STEPS=""
+  PACKAGE_METADATA_MANUAL_SECRETS=""
   PACKAGE_METADATA_SECRETS_POLICY=""
 
   [ -n "$package_entries" ] || return 0
@@ -4066,6 +4068,8 @@ read_package_metadata() {
   PACKAGE_METADATA_MODULES=$(package_descriptor_list_value "$descriptor_content" "MODULES")
   PACKAGE_METADATA_SERVICES=$(package_descriptor_list_value "$descriptor_content" "SERVICES")
   PACKAGE_METADATA_MANUAL_IDENTITIES=$(package_descriptor_list_value "$descriptor_content" "MANUAL_IDENTITIES")
+  PACKAGE_METADATA_HUMAN_STEPS=$(package_descriptor_list_value "$descriptor_content" "HUMAN_STEPS")
+  PACKAGE_METADATA_MANUAL_SECRETS=$(package_descriptor_list_value "$descriptor_content" "MANUAL_SECRETS")
   if [ -z "$PACKAGE_METADATA_SYSTEM" ] && [ -n "$PACKAGE_METADATA_COMPONENTS" ]; then
     PACKAGE_METADATA_SYSTEM="$PACKAGE_METADATA_COMPONENTS"
   fi
@@ -4621,6 +4625,8 @@ inspect_stage_package() {
   module_items=$(package_descriptor_list_value "$descriptor_content" "MODULES")
   service_items=$(package_descriptor_list_value "$descriptor_content" "SERVICES")
   manual_identities=$(package_descriptor_list_value "$descriptor_content" "MANUAL_IDENTITIES")
+  human_steps=$(package_descriptor_list_value "$descriptor_content" "HUMAN_STEPS")
+  manual_secrets=$(package_descriptor_list_value "$descriptor_content" "MANUAL_SECRETS")
   if [ -z "$system_items" ] && [ -n "$components" ]; then
     system_items="$components"
   fi
@@ -4635,6 +4641,8 @@ inspect_stage_package() {
   package_print_list "Modules:" "$module_items"
   package_print_list "Services:" "$service_items"
   package_print_list "Manual identities:" "$manual_identities"
+  package_print_list "Human steps:" "$human_steps"
+  package_print_list "Manual secrets:" "$manual_secrets"
   ui_line "Secrets policy: ${secrets_policy:-unknown}"
   ui_line "Node role: ${node_role:-unknown}"
   ui_line "Reconstruction mode: ${reconstruction_mode:-unknown}"
@@ -4646,16 +4654,22 @@ inspect_stage_package() {
   stage_subdir_status "$package_root" "profiles"
 
   ui_section "Next manual steps"
-  ui_line "- verify identity"
-  ui_line "- tailscale up manual"
-  ui_line "- cloudflared login/tunnel manual"
-  ui_line "- review compose/configs"
+  if [ -n "$human_steps" ]; then
+    for human_step in $human_steps; do
+      ui_line "- $human_step"
+    done
+  else
+    ui_line "- verify identity"
+    ui_line "- reconnect identities manually"
+    ui_line "- review compose/configs"
+  fi
 
   ui_line "No restore, compose up, secrets, DNS/cutover, reboot, or network restart was attempted."
 }
 
 apply_guided_install_modules() {
   system_items=$1
+  module_items=${2:-}
 
   installable_modules=""
   installed_modules=""
@@ -4674,6 +4688,17 @@ apply_guided_install_modules() {
         ;;
       *)
         manual_modules="${manual_modules}${system_item} "
+        ;;
+    esac
+  done
+
+  for module_item in $module_items; do
+    case " $MODULES " in
+      *" $module_item "*)
+        installable_modules="${installable_modules}${module_item} "
+        ;;
+      *)
+        manual_modules="${manual_modules}${module_item} "
         ;;
     esac
   done
@@ -4717,6 +4742,7 @@ apply_guided_install_modules() {
       ui_line "  none"
     fi
     ui_line "Already present: ${installed_modules:-none}"
+    ui_line "Declared modules: ${module_items:-none}"
     ui_line "Missing: ${missing_modules:-none}"
     ui_line "Install-only candidates: ${installable_modules:-none}"
     ui_line "Manual/future: ${manual_modules:-none}"
@@ -6082,6 +6108,8 @@ apply_guided_package() {
   guided_modules=$(package_descriptor_list_value "$descriptor_content" "MODULES")
   guided_services=$(package_descriptor_list_value "$descriptor_content" "SERVICES")
   guided_manual_identities=$(package_descriptor_list_value "$descriptor_content" "MANUAL_IDENTITIES")
+  guided_human_steps=$(package_descriptor_list_value "$descriptor_content" "HUMAN_STEPS")
+  guided_manual_secrets=$(package_descriptor_list_value "$descriptor_content" "MANUAL_SECRETS")
 
   inspect_output=$(inspect_stage_package "$stage_dir") || {
     PACKAGE_OUTPUT_COMPACT=0
@@ -6110,6 +6138,16 @@ apply_guided_package() {
       done
     else
       ui_line "$(seed_msg future_reconnect_identities)"
+    fi
+    if [ -n "$guided_human_steps" ]; then
+      for human_step in $guided_human_steps; do
+        ui_line "- human step: $human_step"
+      done
+    fi
+    if [ -n "$guided_manual_secrets" ]; then
+      for manual_secret in $guided_manual_secrets; do
+        ui_line "- manual secret/credential: $manual_secret"
+      done
     fi
     if [ -n "$guided_services" ]; then
       ui_line "$(seed_msg future_validate_services)"
@@ -6148,7 +6186,7 @@ apply_guided_package() {
   fi
 
   if [ "$guided_step" = "install-modules" ]; then
-    if apply_guided_install_modules "$guided_system"; then
+    if apply_guided_install_modules "$guided_system" "$guided_modules"; then
       step_rc=0
     else
       step_rc=$?
@@ -6334,6 +6372,8 @@ show_package_plan() {
       package_print_list "Modules:" "$PACKAGE_METADATA_MODULES"
       package_print_list "Services:" "$PACKAGE_METADATA_SERVICES"
       package_print_list "Manual identities:" "$PACKAGE_METADATA_MANUAL_IDENTITIES"
+      package_print_list "Human steps:" "$PACKAGE_METADATA_HUMAN_STEPS"
+      package_print_list "Manual secrets:" "$PACKAGE_METADATA_MANUAL_SECRETS"
       ui_line "Secrets policy: ${PACKAGE_METADATA_SECRETS_POLICY:-unknown}"
       ;;
     missing)
@@ -6356,6 +6396,8 @@ show_package_plan() {
   else
     ui_line "System/modules/services: detected / unknown"
   fi
+  package_print_list "Human steps:" "$PACKAGE_METADATA_HUMAN_STEPS"
+  package_print_list "Manual secrets:" "$PACKAGE_METADATA_MANUAL_SECRETS"
   ui_line "Would verify manifest/checksums later"
   ui_line "Would install required system packages later"
   ui_line "Would stage safe files later"
@@ -6569,7 +6611,14 @@ run_apply_modules() {
         run_module_apply "$module"
         ;;
       *)
-        ui_line "unknown module: $module"
+        case " $MODULES " in
+          *" $module "*)
+            run_module_apply "$module"
+            ;;
+          *)
+            ui_line "unknown module: $module"
+            ;;
+        esac
         ;;
     esac
     apply_note_module "$module"

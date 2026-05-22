@@ -92,6 +92,20 @@ write_manifest() {
     echo "restore-supported: no"
     echo "cloud-upload: no"
     echo "secrets-included: no"
+    echo "human-steps:"
+    echo "  - review-secrets"
+    echo "  - reconnect-identities"
+    echo "  - review-hostname"
+    echo "  - validate-ssh-trust"
+    echo "  - dns-cutover"
+    echo "manual-secrets:"
+    echo "  - .env"
+    echo "  - machine-id"
+    echo "  - ssh-host-keys"
+    echo "  - tailscale-state"
+    echo "  - cloudflare-credentials"
+    echo "  - tokens-api-keys"
+    echo "  - service-credentials"
     echo
     echo "included-paths:"
     echo "  - seed-kit-package.sh"
@@ -125,6 +139,8 @@ write_package_descriptor() {
     echo 'MODULES=""'
     echo 'SERVICES="caddy homepage"'
     echo 'MANUAL_IDENTITIES="tailscale cloudflared"'
+    echo 'HUMAN_STEPS="review-secrets reconnect-identities review-hostname validate-ssh-trust dns-cutover"'
+    echo 'MANUAL_SECRETS="env machine-id ssh-host-keys tailscale-state cloudflare-credentials tokens-api-keys service-credentials"'
     echo 'SECRETS_POLICY="manual-reconnect"'
   } > "$descriptor"
 }
