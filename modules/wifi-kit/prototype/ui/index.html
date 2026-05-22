@@ -1004,6 +1004,17 @@
       flex: 0 0 auto;
     }
 
+    .runtime-select {
+      width: 100%;
+      min-height: 48px;
+      border: 1px solid rgba(221, 234, 255, 0.15);
+      border-radius: 17px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--ink);
+      outline: none;
+      padding: 11px 13px;
+    }
+
     .recovery-actions .button {
       min-width: 0;
       width: 100%;
@@ -1323,7 +1334,11 @@
         <div class="recovery-grid" aria-label="Etat du mode AP">
           <div class="metric"><span>SSID</span><strong id="recovery-ssid">...</strong></div>
           <div class="metric"><span>Mot de passe AP</span><strong id="recovery-ap-password">12345678</strong></div>
-          <div class="metric"><span>Wi-Fi par defaut</span><strong id="recovery-default-ssid">...</strong></div>
+          <div class="metric"><span>Wi-Fi original</span><strong id="recovery-original-ssid">...</strong></div>
+          <div class="metric"><span>Profil original</span><strong id="recovery-original-profile">...</strong></div>
+          <div class="metric"><span>Statut original</span><strong id="recovery-original-visible">...</strong></div>
+          <div class="metric"><span>Wi-Fi de retour</span><strong id="recovery-return-ssid">...</strong></div>
+          <div class="metric"><span>Profil retour</span><strong id="recovery-return-profile">...</strong></div>
           <div class="metric"><span>IP locale</span><strong id="recovery-ip">192.168.50.1</strong></div>
           <div class="metric"><span>Port captive</span><strong id="recovery-captive-port">80</strong></div>
           <div class="metric"><span>DHCP</span><strong id="recovery-dhcp">...</strong></div>
@@ -1341,11 +1356,23 @@
               <input id="recovery-ap-password-input" class="password-local" type="password" autocomplete="new-password" placeholder="Minimum 8 caracteres">
             </label>
             <label class="field-label">
-              Wi-Fi par defaut
-              <input id="recovery-default-ssid-input" class="password-local" type="text" autocomplete="off" placeholder="SSID ou profil NetworkManager">
+              Wi-Fi de retour
+              <select id="recovery-return-connection-select" class="runtime-select"></select>
             </label>
           </div>
-          <button id="recovery-save-config" class="button secondary" type="button">Enregistrer la configuration</button>
+          <div class="callout recovery-result" id="return-profile-details">
+            <strong>Details du profil selectionne</strong>
+            <p>SSID: <span id="return-detail-ssid">...</span></p>
+            <p>Profil NM: <span id="return-detail-profile">...</span></p>
+            <p>UUID: <span id="return-detail-uuid">...</span></p>
+            <p>Type: <span id="return-detail-type">...</span></p>
+            <p>Interface: <span id="return-detail-device">...</span></p>
+            <p>Autoconnect: <span id="return-detail-autoconnect">...</span></p>
+            <p>Actif: <span id="return-detail-active">...</span></p>
+            <p>Visible actuellement: <span id="return-detail-visible">...</span></p>
+          </div>
+          <button id="recovery-save-config" class="button secondary" type="button">Enregistrer comme Wi-Fi de retour</button>
+          <button id="forget-network-button" class="button secondary" type="button" disabled>Oublier ce reseau</button>
           <div id="recovery-config-result" class="callout recovery-result" hidden></div>
         </div>
       </section>
@@ -1382,12 +1409,12 @@
             </details>
           </div>
           <div class="action-card">
-            <strong>Retour au r&eacute;seau initial</strong>
-            <p>Reconnecte la cible persistante configuree, meme si elle n'est pas visible dans le scan.</p>
-            <button id="return-default-network-button" class="button secondary" type="button" data-network-action="return-default-network">Retour au r&eacute;seau initial</button>
+            <strong>Retour Wi-Fi configur&eacute;</strong>
+            <p>Reconnecte le profil de retour configure, meme si son SSID n'est pas visible dans le scan.</p>
+            <button id="return-default-network-button" class="button secondary" type="button" data-network-action="return-default-network">Retour Wi-Fi configur&eacute;</button>
             <details class="action-plan">
               <summary>Afficher le plan</summary>
-              <p>Demande &agrave; NetworkManager de reconnecter uniquement la connexion autoris&eacute;e netplan-wlan0-GL-MT6000-d53. L'acc&egrave;s r&eacute;seau peut couper quelques secondes.</p>
+              <p>Demande &agrave; NetworkManager de reconnecter uniquement le profil de retour enregistr&eacute;. L'acc&egrave;s r&eacute;seau peut couper quelques secondes.</p>
             </details>
           </div>
         </div>
@@ -1663,6 +1690,22 @@
       return data.runtime_config || {};
     }
 
+    function knownWifiConnections() {
+      return Array.isArray(data.known_wifi_connections) ? data.known_wifi_connections : [];
+    }
+
+    function connectionByProfile(profile) {
+      return knownWifiConnections().find((connection) => connection.profile === profile) || null;
+    }
+
+    function readableVisible(connection, ssid) {
+      const networks = Array.isArray(data.scan?.networks) ? data.scan.networks : [];
+      if (ssid && networks.some((network) => network.ssid === ssid)) return 'visible';
+      if (networks.length > 0) return 'non visible';
+      if (connection && connection.visible_known) return connection.visible ? 'visible' : 'non visible';
+      return 'inconnu';
+    }
+
     function setText(id, text) {
       const node = document.getElementById(id);
       if (node) node.textContent = String(text ?? 'inconnu');
@@ -1834,21 +1877,30 @@
       const active = Boolean(recovery.active);
       const apSsid = config.ap_ssid || recovery.ssid || 'Wifi-Kit-node';
       const apPassword = config.ap_password || recovery.ap_password_current || '12345678';
-      const defaultSsid = config.default_ssid || recovery.default_ssid || systemState().default_ssid || '';
+      const originalSsid = config.original_ssid || recovery.original_ssid || systemState().original_ssid || '';
+      const originalConnection = config.original_connection || recovery.original_connection || systemState().original_connection || originalSsid;
+      const returnSsid = config.return_ssid || recovery.return_ssid || systemState().return_ssid || originalSsid;
+      const returnConnection = config.return_connection || recovery.return_connection || systemState().return_connection || originalConnection;
+      const originalProfile = connectionByProfile(originalConnection);
       document.getElementById('recovery-chip').textContent = active ? 'Mode AP actif' : 'Mode AP inactif';
       document.getElementById('recovery-copy').textContent = active
         ? 'Connecte-toi au Wi-Fi Wifi-Kit puis ouvre cette page locale.'
         : 'Ce panneau prepare le mode AP temporaire; les actions reelles demandent une confirmation cote serveur.';
       document.getElementById('recovery-ssid').textContent = apSsid;
       document.getElementById('recovery-ap-password').textContent = apPassword;
-      document.getElementById('recovery-default-ssid').textContent = defaultSsid || 'non configure';
+      document.getElementById('recovery-original-ssid').textContent = originalSsid || 'non configure';
+      document.getElementById('recovery-original-profile').textContent = originalConnection || 'non configure';
+      document.getElementById('recovery-original-visible').textContent = readableVisible(originalProfile, originalSsid);
+      document.getElementById('recovery-return-ssid').textContent = returnSsid || 'non configure';
+      document.getElementById('recovery-return-profile').textContent = returnConnection || 'non configure';
       document.getElementById('recovery-ip').textContent = recovery.ip || '192.168.50.1';
       document.getElementById('recovery-dhcp').textContent = serviceLabel(recovery.dhcp);
       document.getElementById('recovery-dns').textContent = serviceLabel(recovery.dns);
       document.getElementById('recovery-ui').textContent = `${serviceLabel(recovery.ui)}:${recovery.ui_port || 80}`;
       setInputValue('recovery-ap-ssid-input', apSsid);
       setInputValue('recovery-ap-password-input', apPassword);
-      setInputValue('recovery-default-ssid-input', defaultSsid);
+      renderReturnConnectionSelect(returnConnection);
+      renderReturnConnectionDetails(returnConnection);
       updateRecoveryButtons();
     }
 
@@ -1947,9 +1999,56 @@
       const confirmed = Boolean(document.getElementById('ap-confirmed')?.checked);
       const startButton = document.getElementById('start-ap-mode-button');
       const returnButton = document.getElementById('return-default-network-button');
-      const defaultSsid = (runtimeConfig().default_ssid || recoveryState().default_ssid || '').trim();
+      const returnConnection = (runtimeConfig().return_connection || runtimeConfig().return_ssid || recoveryState().return_connection || '').trim();
       if (startButton) startButton.disabled = !confirmed;
-      if (returnButton) returnButton.disabled = !defaultSsid;
+      if (returnButton) returnButton.disabled = !returnConnection;
+    }
+
+    function renderReturnConnectionSelect(selectedProfile) {
+      const select = document.getElementById('recovery-return-connection-select');
+      if (!select || document.activeElement === select) return;
+      select.replaceChildren();
+      const connections = knownWifiConnections();
+      const selected = selectedProfile || runtimeConfig().return_connection || '';
+      if (connections.length === 0) {
+        const option = document.createElement('option');
+        option.value = selected;
+        option.dataset.ssid = runtimeConfig().return_ssid || selected;
+        option.textContent = selected || 'Aucun profil Wi-Fi connu';
+        select.appendChild(option);
+        select.disabled = !selected;
+        return;
+      }
+      connections.forEach((connection) => {
+        const option = document.createElement('option');
+        option.value = connection.profile;
+        option.dataset.ssid = connection.ssid || connection.profile;
+        option.textContent = connection.label || `${connection.ssid || connection.profile} - ${connection.profile}`;
+        if (connection.profile === selected) option.selected = true;
+        select.appendChild(option);
+      });
+      if (selected && !connections.some((connection) => connection.profile === selected)) {
+        const option = document.createElement('option');
+        option.value = selected;
+        option.dataset.ssid = runtimeConfig().return_ssid || selected;
+        option.textContent = `${runtimeConfig().return_ssid || selected} - ${selected}`;
+        option.selected = true;
+        select.appendChild(option);
+      }
+      select.disabled = false;
+    }
+
+    function renderReturnConnectionDetails(profile) {
+      const connection = connectionByProfile(profile);
+      const fallbackSsid = runtimeConfig().return_ssid || profile || 'non configure';
+      setText('return-detail-ssid', connection?.ssid || fallbackSsid);
+      setText('return-detail-profile', connection?.profile || profile || 'non configure');
+      setText('return-detail-uuid', connection?.uuid || 'inconnu');
+      setText('return-detail-type', connection?.type || 'inconnu');
+      setText('return-detail-device', connection?.device || 'non lie');
+      setText('return-detail-autoconnect', connection?.autoconnect || 'inconnu');
+      setText('return-detail-active', connection?.active_bool ? 'oui' : (connection ? 'non' : 'inconnu'));
+      setText('return-detail-visible', readableVisible(connection, connection?.ssid || fallbackSsid));
     }
 
     async function saveRuntimeConfig(partialConfig, resultTarget = 'recovery') {
@@ -1976,12 +2075,18 @@
       if (data.recovery) {
         data.recovery.ssid = payload.config.ap_ssid;
         data.recovery.ap_password_current = payload.config.ap_password;
-        data.recovery.default_ssid = payload.config.default_ssid;
+        data.recovery.original_ssid = payload.config.original_ssid;
+        data.recovery.original_connection = payload.config.original_connection;
+        data.recovery.return_ssid = payload.config.return_ssid;
+        data.recovery.return_connection = payload.config.return_connection;
       }
       if (data.system) {
         data.system.recovery_ssid = payload.config.ap_ssid;
         data.system.recovery_ap_password_current = payload.config.ap_password;
-        data.system.default_ssid = payload.config.default_ssid;
+        data.system.original_ssid = payload.config.original_ssid;
+        data.system.original_connection = payload.config.original_connection;
+        data.system.return_ssid = payload.config.return_ssid;
+        data.system.return_connection = payload.config.return_connection;
       }
       renderAll();
       const message = `Configuration enregistree dans ${payload.config.path}.`;
@@ -1992,7 +2097,10 @@
     async function saveRecoveryConfig() {
       const apSsid = document.getElementById('recovery-ap-ssid-input').value.trim();
       const apPassword = document.getElementById('recovery-ap-password-input').value;
-      const defaultSsid = document.getElementById('recovery-default-ssid-input').value.trim();
+      const returnSelect = document.getElementById('recovery-return-connection-select');
+      const selectedOption = returnSelect.options[returnSelect.selectedIndex];
+      const returnConnection = returnSelect.value.trim();
+      const returnSsid = (selectedOption?.dataset.ssid || returnConnection).trim();
       if (!apSsid) {
         showRecoveryConfigResult('SSID AP requis.');
         return;
@@ -2001,21 +2109,26 @@
         showRecoveryConfigResult('Mot de passe AP: minimum 8 caracteres.');
         return;
       }
-      if (!defaultSsid) {
-        showRecoveryConfigResult('Wi-Fi par defaut requis.');
+      if (!returnSsid) {
+        showRecoveryConfigResult('Wi-Fi de retour requis.');
         return;
       }
-      await saveRuntimeConfig({ ap_ssid: apSsid, ap_password: apPassword, default_ssid: defaultSsid });
+      if (!returnConnection) {
+        showRecoveryConfigResult('Profil NetworkManager requis.');
+        return;
+      }
+      await saveRuntimeConfig({ ap_ssid: apSsid, ap_password: apPassword, return_ssid: returnSsid, return_connection: returnConnection });
     }
 
     function networkActionPlan(action) {
       const config = runtimeConfig();
-      const defaultSsid = config.default_ssid || 'non configure';
+      const returnSsid = config.return_ssid || 'non configure';
+      const returnConnection = config.return_connection || returnSsid;
       const apSsid = config.ap_ssid || 'Wifi-Kit-node';
       const plans = {
         'reconnect-previous': "Wi-Fi par defaut: le mode AP, DHCP, DNS et cette UI vont s'arreter, puis wlan0 revient a NetworkManager. Le portail peut disparaitre pendant le retour.",
         'start-ap-mode': `Activer le mode AP: snapshot NetworkManager, passer wlan0 en AP-only, lancer ${apSsid}, dnsmasq DHCP/DNS captive et l'UI locale sur 192.168.50.1:80. Timeout prototype: 300 s.`,
-        'return-default-network': `Retour au reseau initial: demander a NetworkManager de reconnecter la cible persistante ${defaultSsid}. L'acces reseau peut couper quelques secondes.`
+        'return-default-network': `Retour Wi-Fi configure: demander a NetworkManager de reconnecter ${returnSsid} via le profil ${returnConnection}. L'acces reseau peut couper quelques secondes.`
       };
       return plans[action] || `Action ${action}: plan-only.`;
     }
@@ -2038,8 +2151,8 @@
           if (button) button.textContent = 'Activation du mode AP...';
           showNetworkActionResult("Activation du mode AP... l'acces reseau normal peut couper pendant le basculement.");
         } else if (action === 'return-default-network') {
-          if (button) button.textContent = 'Retour au reseau initial...';
-          showNetworkActionResult("Retour au reseau initial... l'acces reseau peut couper quelques secondes.");
+          if (button) button.textContent = 'Retour Wi-Fi configure...';
+          showNetworkActionResult("Retour Wi-Fi configure... l'acces reseau peut couper quelques secondes.");
         } else {
           showNetworkActionResult(networkActionPlan(action));
         }
@@ -2073,8 +2186,8 @@
         }
         if (action === 'return-default-network') {
           showNetworkActionResult(responsePayload.return_started
-            ? `Retour au reseau initial lance: ${responsePayload.default_connection || 'connexion autorisee'}.`
-            : `Retour au reseau initial non lance: ${responsePayload.error || responsePayload.status}.`);
+            ? `Retour Wi-Fi configure lance: ${responsePayload.return_connection || responsePayload.default_connection || 'connexion autorisee'}.`
+            : `Retour Wi-Fi configure non lance: ${responsePayload.error || responsePayload.status}.`);
           return;
         }
         if (!response.ok) return;
@@ -2618,6 +2731,9 @@
     document.getElementById('refresh').addEventListener('click', refreshScanFromServer);
     document.getElementById('ap-confirmed').addEventListener('change', updateRecoveryButtons);
     document.getElementById('recovery-save-config').addEventListener('click', saveRecoveryConfig);
+    document.getElementById('recovery-return-connection-select').addEventListener('change', (event) => {
+      renderReturnConnectionDetails(event.target.value);
+    });
     document.getElementById('config-save-password').addEventListener('click', () => {
       const field = document.getElementById('config-ap-password');
       const apPassword = field.value;

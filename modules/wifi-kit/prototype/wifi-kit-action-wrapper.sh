@@ -5,7 +5,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ap_setup_script="$script_dir/ap-setup-test.sh"
 log_file="/tmp/wifi-kit-action-wrapper.log"
 runtime_config="${WIFI_KIT_RUNTIME_CONFIG:-${HOME:-/tmp}/.config/wifi-kit/runtime.conf}"
-default_connection="netplan-wlan0-GL-MT6000-d53"
+return_connection="netplan-wlan0-GL-MT6000-d53"
 ap_test_psk="12345678"
 ap_ssid=""
 ap_timeout_seconds="300"
@@ -70,7 +70,7 @@ if [ "$#" -ne 1 ]; then
 fi
 
 action=$1
-default_connection="${WIFI_KIT_DEFAULT_SSID:-$(runtime_config_value default_ssid "$default_connection")}"
+return_connection="${WIFI_KIT_RETURN_CONNECTION:-$(runtime_config_value return_connection "$(runtime_config_value default_connection "$return_connection")")}"
 ap_test_psk="${WIFI_KIT_AP_PSK:-$(runtime_config_value ap_password "$ap_test_psk")}"
 ap_ssid="${WIFI_KIT_AP_SSID:-$(runtime_config_value ap_ssid "")}"
 
@@ -98,8 +98,8 @@ case "$action" in
     ;;
   return-default-network)
     require_root "$action"
-    log_event "$action" "started" "connection=$default_connection"
-    exec nmcli connection up "$default_connection"
+    log_event "$action" "started" "connection=$return_connection"
+    exec nmcli connection up "$return_connection"
     ;;
   *)
     log_event "$action" "refused" "action-not-allowed"
