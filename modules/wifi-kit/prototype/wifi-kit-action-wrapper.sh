@@ -4,8 +4,10 @@ set -eu
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ap_setup_script="$script_dir/ap-setup-test.sh"
 log_file="/tmp/wifi-kit-action-wrapper.log"
+runtime_config="${WIFI_KIT_RUNTIME_CONFIG:-${HOME:-/tmp}/.config/wifi-kit/runtime.conf}"
 default_connection="netplan-wlan0-GL-MT6000-d53"
 ap_test_psk="12345678"
+ap_ssid=""
 ap_timeout_seconds="300"
 
 timestamp() {
@@ -27,6 +29,19 @@ log_event() {
     fi
     printf '\n'
   } >> "$log_file" 2>/dev/null || true
+}
+
+runtime_config_value() {
+  key=$1
+  fallback=$2
+  if [ -r "$runtime_config" ]; then
+    value=$(sed -n "s/^$key=//p" "$runtime_config" 2>/dev/null | sed -n '1p' || true)
+    if [ -n "$value" ]; then
+      printf '%s\n' "$value"
+      return 0
+    fi
+  fi
+  printf '%s\n' "$fallback"
 }
 
 reply() {
@@ -55,6 +70,9 @@ if [ "$#" -ne 1 ]; then
 fi
 
 action=$1
+default_connection="${WIFI_KIT_DEFAULT_SSID:-$(runtime_config_value default_ssid "$default_connection")}"
+ap_test_psk="${WIFI_KIT_AP_PSK:-$(runtime_config_value ap_password "$ap_test_psk")}"
+ap_ssid="${WIFI_KIT_AP_SSID:-$(runtime_config_value ap_ssid "")}"
 
 case "$action" in
   start-ap-mode)
@@ -65,8 +83,14 @@ case "$action" in
       exit 1
     fi
     log_event "$action" "started" "timeout=$ap_timeout_seconds"
-    WIFI_KIT_AP_PSK=$ap_test_psk
-    export WIFI_KIT_AP_PSK
+    export WIFI_KIT_AP_PSK="$ap_test_psk"
+    if [ -n "$ap_ssid" ]; then
+      exec sh "$ap_setup_script" apply-ap-recovery-manual-test \
+        --dangerous-real-apply \
+        --confirm "WIFI-KIT AP RECOVERY MANUAL TEST" \
+        --ssid "$ap_ssid" \
+        --max-seconds "$ap_timeout_seconds"
+    fi
     exec sh "$ap_setup_script" apply-ap-recovery-manual-test \
       --dangerous-real-apply \
       --confirm "WIFI-KIT AP RECOVERY MANUAL TEST" \

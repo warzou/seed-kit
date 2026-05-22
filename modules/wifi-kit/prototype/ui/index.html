@@ -973,6 +973,37 @@
       gap: 9px;
     }
 
+    .recovery-settings {
+      display: grid;
+      gap: 10px;
+      border: 1px solid rgba(68, 212, 230, 0.16);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.035);
+      padding: 12px;
+    }
+
+    .recovery-settings-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .confirm-line {
+      display: flex;
+      gap: 9px;
+      align-items: flex-start;
+      color: var(--soft);
+      font-size: 0.84rem;
+      font-weight: 800;
+    }
+
+    .confirm-line input {
+      width: 18px;
+      height: 18px;
+      margin-top: 2px;
+      accent-color: var(--cyan);
+      flex: 0 0 auto;
+    }
+
     .recovery-actions .button {
       min-width: 0;
       width: 100%;
@@ -1292,11 +1323,30 @@
         <div class="recovery-grid" aria-label="Etat du mode AP">
           <div class="metric"><span>SSID</span><strong id="recovery-ssid">...</strong></div>
           <div class="metric"><span>Mot de passe AP</span><strong id="recovery-ap-password">12345678</strong></div>
+          <div class="metric"><span>Wi-Fi par defaut</span><strong id="recovery-default-ssid">...</strong></div>
           <div class="metric"><span>IP locale</span><strong id="recovery-ip">192.168.50.1</strong></div>
           <div class="metric"><span>Port captive</span><strong id="recovery-captive-port">80</strong></div>
           <div class="metric"><span>DHCP</span><strong id="recovery-dhcp">...</strong></div>
           <div class="metric"><span>DNS captive</span><strong id="recovery-dns">...</strong></div>
           <div class="metric"><span>UI</span><strong id="recovery-ui">...</strong></div>
+        </div>
+        <div class="recovery-settings" aria-label="Configuration recovery">
+          <div class="recovery-settings-grid">
+            <label class="field-label">
+              SSID AP recovery
+              <input id="recovery-ap-ssid-input" class="password-local" type="text" autocomplete="off" placeholder="Wifi-Kit-pocket-node">
+            </label>
+            <label class="field-label">
+              Mot de passe AP recovery
+              <input id="recovery-ap-password-input" class="password-local" type="password" autocomplete="new-password" placeholder="Minimum 8 caracteres">
+            </label>
+            <label class="field-label">
+              Wi-Fi par defaut
+              <input id="recovery-default-ssid-input" class="password-local" type="text" autocomplete="off" placeholder="SSID ou profil NetworkManager">
+            </label>
+          </div>
+          <button id="recovery-save-config" class="button secondary" type="button">Enregistrer la configuration</button>
+          <div id="recovery-config-result" class="callout recovery-result" hidden></div>
         </div>
       </section>
 
@@ -1321,7 +1371,11 @@
           <div class="action-card">
             <strong>Activer le mode AP</strong>
             <p>D&eacute;marre l'AP Wifi-Kit avec DHCP, DNS captive et UI locale sur le port 80.</p>
-            <button class="button" type="button" data-network-action="start-ap-mode">Activer le mode AP</button>
+            <label class="confirm-line">
+              <input id="ap-confirmed" type="checkbox">
+              Je comprends que le mode AP peut couper temporairement l'acces reseau.
+            </label>
+            <button id="start-ap-mode-button" class="button" type="button" data-network-action="start-ap-mode" disabled>Activer le mode AP</button>
             <details class="action-plan">
               <summary>Afficher le plan</summary>
               <p>Snapshot NetworkManager, bascule wlan0 en AP-only, lancement temporaire hostapd, dnsmasq DHCP/DNS captive et UI locale sur 192.168.50.1:80. Timeout prototype: 300 s.</p>
@@ -1329,8 +1383,8 @@
           </div>
           <div class="action-card">
             <strong>Retour au r&eacute;seau initial</strong>
-            <p>Reconnecte la connexion de test autoris&eacute;e: netplan-wlan0-GL-MT6000-d53.</p>
-            <button class="button secondary" type="button" data-network-action="return-default-network">Retour au r&eacute;seau initial</button>
+            <p>Reconnecte la cible persistante configuree, meme si elle n'est pas visible dans le scan.</p>
+            <button id="return-default-network-button" class="button secondary" type="button" data-network-action="return-default-network">Retour au r&eacute;seau initial</button>
             <details class="action-plan">
               <summary>Afficher le plan</summary>
               <p>Demande &agrave; NetworkManager de reconnecter uniquement la connexion autoris&eacute;e netplan-wlan0-GL-MT6000-d53. L'acc&egrave;s r&eacute;seau peut couper quelques secondes.</p>
@@ -1605,6 +1659,10 @@
       return data.system || {};
     }
 
+    function runtimeConfig() {
+      return data.runtime_config || {};
+    }
+
     function setText(id, text) {
       const node = document.getElementById(id);
       if (node) node.textContent = String(text ?? 'inconnu');
@@ -1772,16 +1830,26 @@
 
     function renderRecovery() {
       const recovery = recoveryState();
+      const config = runtimeConfig();
       const active = Boolean(recovery.active);
+      const apSsid = config.ap_ssid || recovery.ssid || 'Wifi-Kit-node';
+      const apPassword = config.ap_password || recovery.ap_password_current || '12345678';
+      const defaultSsid = config.default_ssid || recovery.default_ssid || systemState().default_ssid || '';
       document.getElementById('recovery-chip').textContent = active ? 'Mode AP actif' : 'Mode AP inactif';
       document.getElementById('recovery-copy').textContent = active
         ? 'Connecte-toi au Wi-Fi Wifi-Kit puis ouvre cette page locale.'
         : 'Ce panneau prepare le mode AP temporaire; les actions reelles demandent une confirmation cote serveur.';
-      document.getElementById('recovery-ssid').textContent = recovery.ssid || 'Wifi-Kit-node';
+      document.getElementById('recovery-ssid').textContent = apSsid;
+      document.getElementById('recovery-ap-password').textContent = apPassword;
+      document.getElementById('recovery-default-ssid').textContent = defaultSsid || 'non configure';
       document.getElementById('recovery-ip').textContent = recovery.ip || '192.168.50.1';
       document.getElementById('recovery-dhcp').textContent = serviceLabel(recovery.dhcp);
       document.getElementById('recovery-dns').textContent = serviceLabel(recovery.dns);
       document.getElementById('recovery-ui').textContent = `${serviceLabel(recovery.ui)}:${recovery.ui_port || 80}`;
+      setInputValue('recovery-ap-ssid-input', apSsid);
+      setInputValue('recovery-ap-password-input', apPassword);
+      setInputValue('recovery-default-ssid-input', defaultSsid);
+      updateRecoveryButtons();
     }
 
     function renderNodeOverview() {
@@ -1813,11 +1881,12 @@
     function renderConfiguration() {
       const system = systemState();
       const recovery = recoveryState();
+      const config = runtimeConfig();
       setText('config-normal-port', system.normal_ui_port || recovery.normal_ui_port || 18089);
       setText('config-recovery-port', system.recovery_ui_port || recovery.recovery_ui_port || 80);
-      setText('config-recovery-ssid', recovery.ssid || system.recovery_ssid || 'Wifi-Kit-node');
-      setText('config-ap-password-current', recovery.ap_password_current || system.recovery_ap_password_current || '12345678');
-      setText('config-ap-password-summary', recovery.ap_password_current || system.recovery_ap_password_current || '12345678');
+      setText('config-recovery-ssid', config.ap_ssid || recovery.ssid || system.recovery_ssid || 'Wifi-Kit-node');
+      setText('config-ap-password-current', config.ap_password || recovery.ap_password_current || system.recovery_ap_password_current || '12345678');
+      setText('config-ap-password-summary', config.ap_password || recovery.ap_password_current || system.recovery_ap_password_current || '12345678');
       setText('config-ap-password-policy', recovery.ap_password_policy || system.recovery_ap_password_policy || 'min-8-chars');
       setText('config-ui-access-password', recovery.ui_access_password || system.ui_access_password || 'future-not-configured');
     }
@@ -1863,11 +1932,90 @@
       target.hidden = false;
     }
 
+    function showRecoveryConfigResult(message) {
+      const target = document.getElementById('recovery-config-result');
+      target.textContent = message;
+      target.hidden = false;
+    }
+
+    function setInputValue(id, value) {
+      const node = document.getElementById(id);
+      if (node && document.activeElement !== node) node.value = value || '';
+    }
+
+    function updateRecoveryButtons() {
+      const confirmed = Boolean(document.getElementById('ap-confirmed')?.checked);
+      const startButton = document.getElementById('start-ap-mode-button');
+      const returnButton = document.getElementById('return-default-network-button');
+      const defaultSsid = (runtimeConfig().default_ssid || recoveryState().default_ssid || '').trim();
+      if (startButton) startButton.disabled = !confirmed;
+      if (returnButton) returnButton.disabled = !defaultSsid;
+    }
+
+    async function saveRuntimeConfig(partialConfig, resultTarget = 'recovery') {
+      if (window.location.protocol === 'file:') {
+        if (resultTarget === 'config') showConfigResult('Configuration non persistee depuis un fichier local.');
+        else showRecoveryConfigResult('Configuration non persistee depuis un fichier local.');
+        return;
+      }
+
+      const response = await fetch('/api/runtime-config', {
+        cache: 'no-store',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(partialConfig)
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        const message = `Configuration refusee: ${payload.error || payload.status}`;
+        if (resultTarget === 'config') showConfigResult(message);
+        else showRecoveryConfigResult(message);
+        return;
+      }
+      data.runtime_config = payload.config;
+      if (data.recovery) {
+        data.recovery.ssid = payload.config.ap_ssid;
+        data.recovery.ap_password_current = payload.config.ap_password;
+        data.recovery.default_ssid = payload.config.default_ssid;
+      }
+      if (data.system) {
+        data.system.recovery_ssid = payload.config.ap_ssid;
+        data.system.recovery_ap_password_current = payload.config.ap_password;
+        data.system.default_ssid = payload.config.default_ssid;
+      }
+      renderAll();
+      const message = `Configuration enregistree dans ${payload.config.path}.`;
+      if (resultTarget === 'config') showConfigResult(message);
+      else showRecoveryConfigResult(message);
+    }
+
+    async function saveRecoveryConfig() {
+      const apSsid = document.getElementById('recovery-ap-ssid-input').value.trim();
+      const apPassword = document.getElementById('recovery-ap-password-input').value;
+      const defaultSsid = document.getElementById('recovery-default-ssid-input').value.trim();
+      if (!apSsid) {
+        showRecoveryConfigResult('SSID AP requis.');
+        return;
+      }
+      if (apPassword.length < 8) {
+        showRecoveryConfigResult('Mot de passe AP: minimum 8 caracteres.');
+        return;
+      }
+      if (!defaultSsid) {
+        showRecoveryConfigResult('Wi-Fi par defaut requis.');
+        return;
+      }
+      await saveRuntimeConfig({ ap_ssid: apSsid, ap_password: apPassword, default_ssid: defaultSsid });
+    }
+
     function networkActionPlan(action) {
+      const config = runtimeConfig();
+      const defaultSsid = config.default_ssid || 'non configure';
+      const apSsid = config.ap_ssid || 'Wifi-Kit-node';
       const plans = {
         'reconnect-previous': "Wi-Fi par defaut: le mode AP, DHCP, DNS et cette UI vont s'arreter, puis wlan0 revient a NetworkManager. Le portail peut disparaitre pendant le retour.",
-        'start-ap-mode': "Activer le mode AP: snapshot NetworkManager, passer wlan0 en AP-only, lancer hostapd avec le mot de passe AP de test 12345678, dnsmasq DHCP/DNS captive et l'UI locale sur 192.168.50.1:80. Timeout prototype: 300 s.",
-        'return-default-network': "Retour au reseau initial: demander a NetworkManager de reconnecter uniquement la connexion autorisee netplan-wlan0-GL-MT6000-d53. L'acces reseau peut couper quelques secondes."
+        'start-ap-mode': `Activer le mode AP: snapshot NetworkManager, passer wlan0 en AP-only, lancer ${apSsid}, dnsmasq DHCP/DNS captive et l'UI locale sur 192.168.50.1:80. Timeout prototype: 300 s.`,
+        'return-default-network': `Retour au reseau initial: demander a NetworkManager de reconnecter la cible persistante ${defaultSsid}. L'acces reseau peut couper quelques secondes.`
       };
       return plans[action] || `Action ${action}: plan-only.`;
     }
@@ -1897,13 +2045,12 @@
         }
         const requestPayload = {};
         if (action === 'start-ap-mode') {
-          const phrase = 'WIFI-KIT AP RECOVERY MANUAL TEST';
-          if (!strongConfirm(phrase, 'Confirmation forte requise pour activer le mode AP reel.')) {
-            showNetworkActionResult('Mode AP non lance: confirmation forte absente ou incorrecte.');
+          if (!document.getElementById('ap-confirmed')?.checked) {
+            showNetworkActionResult('Mode AP non lance: coche la confirmation avant de continuer.');
             return;
           }
           requestPayload.dangerous_real_apply = true;
-          requestPayload.confirm = phrase;
+          requestPayload.ap_confirmed = true;
         }
         const response = await fetch(`/${action}`, {
           cache: 'no-store',
@@ -2469,13 +2616,17 @@
     }
 
     document.getElementById('refresh').addEventListener('click', refreshScanFromServer);
+    document.getElementById('ap-confirmed').addEventListener('change', updateRecoveryButtons);
+    document.getElementById('recovery-save-config').addEventListener('click', saveRecoveryConfig);
     document.getElementById('config-save-password').addEventListener('click', () => {
       const field = document.getElementById('config-ap-password');
-      const length = field.value.length;
+      const apPassword = field.value;
       field.value = '';
-      showConfigResult(length
-        ? 'Mot de passe AP recovery prepare en simulation. Il servira a rejoindre le Wi-Fi recovery, pas a proteger l interface captive. Rien n est persiste ni envoye.'
-        : 'Saisis un mot de passe AP recovery pour afficher le plan. La valeur de test reste 12345678 dans cette version.');
+      if (apPassword.length < 8) {
+        showConfigResult('Mot de passe AP: minimum 8 caracteres.');
+        return;
+      }
+      saveRuntimeConfig({ ap_password: apPassword }, 'config');
     });
     document.querySelectorAll('[data-network-action]').forEach((button) => {
       button.addEventListener('click', () => triggerNetworkAction(button.dataset.networkAction));

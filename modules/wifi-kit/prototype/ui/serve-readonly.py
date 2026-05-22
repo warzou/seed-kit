@@ -26,6 +26,9 @@ NORMAL_UI_PORT = 18089  # Prototype/dev local UI default; production/service tar
 RECOVERY_UI_PORT = 80
 RECOVERY_AP_TEST_PASSWORD = "12345678"
 AP_ONLY_NM_STATE = Path("/tmp/wifi-kit-ap-only-nm-state")
+RUNTIME_CONFIG_PATH = Path(
+    os.environ.get("WIFI_KIT_RUNTIME_CONFIG", str(Path.home() / ".config" / "wifi-kit" / "runtime.conf"))
+)
 RECONNECT_PREVIOUS_LOG = Path("/tmp/wifi-kit-reconnect-previous.log")
 CONNECT_TRANSACTION_LOG = Path("/tmp/wifi-kit-connect-transaction-ui.log")
 CONNECT_TRANSACTION_TIMEOUT_SECONDS = 180
@@ -36,6 +39,7 @@ AP_MODE_MAX_SECONDS = 300
 PRIVILEGED_ACTIONS_ENV = "WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS"
 AP_RECOVERY_CONFIRM = "WIFI-KIT AP RECOVERY MANUAL TEST"
 CONNECT_TRANSACTION_CONFIRM = "WIFI-KIT CONNECT SAFE TRANSACTION"
+RUNTIME_CONFIG_KEYS = {"default_ssid", "ap_ssid", "ap_password"}
 
 CAPTIVE_PATHS = {
     "/generate_204",
@@ -111,6 +115,118 @@ def run_text_command(args: list[str], timeout: float = 2.0) -> str:
     if result.returncode != 0:
         return ""
     return result.stdout.strip()
+
+
+def safe_label(value: str, *, fallback: str = "") -> str:
+    cleaned = " ".join(str(value or "").strip().split())
+    return cleaned or fallback
+
+
+def has_line_break(value: str) -> bool:
+    return "\n" in value or "\r" in value
+
+
+def default_runtime_config() -> dict[str, str]:
+    hostname = socket.gethostname() or "node"
+    return {
+        "default_ssid": DEFAULT_NETWORK_CONNECTION,
+        "ap_ssid": f"Wifi-Kit-{hostname}",
+        "ap_password": os.environ.get("WIFI_KIT_AP_PSK", RECOVERY_AP_TEST_PASSWORD),
+    }
+
+
+def read_runtime_config() -> dict[str, str]:
+    config = default_runtime_config()
+    try:
+        for line in RUNTIME_CONFIG_PATH.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            key, sep, value = stripped.partition("=")
+            if sep and key in RUNTIME_CONFIG_KEYS:
+                config[key] = value
+    except OSError:
+        pass
+    config["default_ssid"] = safe_label(config.get("default_ssid", ""), fallback=DEFAULT_NETWORK_CONNECTION)
+    config["ap_ssid"] = safe_label(config.get("ap_ssid", ""), fallback=default_runtime_config()["ap_ssid"])
+    config["ap_password"] = str(config.get("ap_password") or RECOVERY_AP_TEST_PASSWORD)
+    return config
+
+
+def public_runtime_config() -> dict[str, object]:
+    config = read_runtime_config()
+    return {
+        **config,
+        "path": str(RUNTIME_CONFIG_PATH),
+        "password_policy": "min-8-chars",
+        "secret_policy": "stores AP recovery password only; never stores client Wi-Fi passwords",
+    }
+
+
+def write_runtime_config(config: dict[str, str]) -> None:
+    RUNTIME_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(RUNTIME_CONFIG_PATH.parent, 0o700)
+    except OSError:
+        pass
+    tmp_path = RUNTIME_CONFIG_PATH.with_name(f".{RUNTIME_CONFIG_PATH.name}.{os.getpid()}.tmp")
+    lines = [
+        "# Wifi-Kit prototype runtime config",
+        "# Stores AP recovery password only; never stores client Wi-Fi passwords.",
+        f"default_ssid={config['default_ssid']}",
+        f"ap_ssid={config['ap_ssid']}",
+        f"ap_password={config['ap_password']}",
+    ]
+    fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write("\n".join(lines) + "\n")
+        os.replace(tmp_path, RUNTIME_CONFIG_PATH)
+        os.chmod(RUNTIME_CONFIG_PATH, 0o600)
+    finally:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+
+
+def update_runtime_config(payload: dict) -> tuple[dict, int]:
+    if payload.get("_error"):
+        return {"status": "failure", "error": payload["_error"]}, 400
+
+    config = read_runtime_config()
+    if "default_ssid" in payload:
+        raw_default_ssid = str(payload.get("default_ssid", ""))
+        if has_line_break(raw_default_ssid):
+            return {"status": "failure", "error": "default-ssid-invalid"}, 400
+        default_ssid = safe_label(raw_default_ssid)
+        if not default_ssid:
+            return {"status": "failure", "error": "default-ssid-required"}, 400
+        config["default_ssid"] = default_ssid
+    if "ap_ssid" in payload:
+        raw_ap_ssid = str(payload.get("ap_ssid", ""))
+        if has_line_break(raw_ap_ssid):
+            return {"status": "failure", "error": "ap-ssid-invalid"}, 400
+        ap_ssid = safe_label(raw_ap_ssid)
+        if not ap_ssid:
+            return {"status": "failure", "error": "ap-ssid-required"}, 400
+        if len(ap_ssid.encode("utf-8")) > 32:
+            return {"status": "failure", "error": "ap-ssid-too-long"}, 400
+        config["ap_ssid"] = ap_ssid
+    if "ap_password" in payload:
+        ap_password = str(payload.get("ap_password", ""))
+        if has_line_break(ap_password):
+            return {"status": "failure", "error": "ap-password-invalid"}, 400
+        if len(ap_password) < 8:
+            return {"status": "failure", "error": "ap-password-too-short"}, 400
+        config["ap_password"] = ap_password
+
+    write_runtime_config(config)
+    return {
+        "status": "saved",
+        "config": public_runtime_config(),
+        "secret_policy": "AP password stored in runtime config with 0600 permissions; client Wi-Fi passwords are not stored",
+    }, 200
 
 
 def find_tool(name: str) -> str:
@@ -234,9 +350,10 @@ def privileged_connect_transaction_command() -> tuple[list[str], str]:
 def start_ap_mode(payload: dict) -> tuple[dict, int]:
     dry_run = bool_payload(payload.get("dry_run"))
     dangerous_real_apply = bool_payload(payload.get("dangerous_real_apply"))
-    confirm = str(payload.get("confirm", ""))
+    ap_confirmed = bool_payload(payload.get("ap_confirmed")) or bool_payload(payload.get("confirm"))
     action = "start-ap-mode"
-    if dry_run or not privileged_actions_enabled() or not dangerous_real_apply or confirm != AP_RECOVERY_CONFIRM:
+    config = read_runtime_config()
+    if dry_run or not privileged_actions_enabled() or not dangerous_real_apply or not ap_confirmed:
         append_action_log(
             START_AP_MODE_LOG,
             action=action,
@@ -244,7 +361,8 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
             max_seconds=AP_MODE_MAX_SECONDS,
             privileged_actions_enabled=privileged_actions_enabled(),
             dangerous_real_apply=dangerous_real_apply,
-            confirm_ok=confirm == AP_RECOVERY_CONFIRM,
+            confirm_ok=ap_confirmed,
+            ap_ssid=config["ap_ssid"],
         )
         return {
             "status": "planned",
@@ -253,11 +371,12 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
             "dry_run": dry_run,
             "privileged_actions_enabled": privileged_actions_enabled(),
             "dangerous_real_apply": dangerous_real_apply,
-            "confirm_required": AP_RECOVERY_CONFIRM,
-            "confirm_ok": confirm == AP_RECOVERY_CONFIRM,
-            "ssid": f"Wifi-Kit-{socket.gethostname() or 'node'}",
+            "confirm_required": "ap_confirmed=true",
+            "confirm_ok": ap_confirmed,
+            "ssid": config["ap_ssid"],
             "timeout_seconds": AP_MODE_MAX_SECONDS,
             "log": str(START_AP_MODE_LOG),
+            "config": public_runtime_config(),
             "warning": "Real start can interrupt normal Wi-Fi access while AP mode starts.",
         }, 200
 
@@ -273,6 +392,9 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
         }, 403 if error == "privileged-action-not-authorized" else 500
 
     try:
+        env = os.environ.copy()
+        env["WIFI_KIT_AP_PSK"] = config["ap_password"]
+        env["WIFI_KIT_AP_SSID"] = config["ap_ssid"]
         subprocess.Popen(
             command,
             cwd=str(SCRIPT_DIR.parent),
@@ -280,6 +402,7 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
             stdin=subprocess.DEVNULL,
             stdout=open(START_AP_MODE_LOG, "a", encoding="utf-8"),
             stderr=subprocess.STDOUT,
+            env=env,
         )
     except OSError as exc:
         append_action_log(START_AP_MODE_LOG, action=action, status="failure", error=f"start-failed: {exc}")
@@ -291,15 +414,15 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
             "log": str(START_AP_MODE_LOG),
         }, 500
 
-    append_action_log(START_AP_MODE_LOG, action=action, status="started", max_seconds=AP_MODE_MAX_SECONDS)
+    append_action_log(START_AP_MODE_LOG, action=action, status="started", max_seconds=AP_MODE_MAX_SECONDS, ap_ssid=config["ap_ssid"])
     return {
         "status": "started",
         "action": action,
         "ap_started": True,
-        "ssid": f"Wifi-Kit-{socket.gethostname() or 'node'}",
+        "ssid": config["ap_ssid"],
         "timeout_seconds": AP_MODE_MAX_SECONDS,
         "expected_behavior": "normal-network-may-drop-ap-captive-ui-starts-on-port-80",
-        "secret_policy": "AP test password is supplied by fixed runtime config and not logged by this endpoint",
+        "secret_policy": "AP password is supplied from runtime config and not logged by this endpoint",
         "log": str(START_AP_MODE_LOG),
     }, 202
 
@@ -307,7 +430,15 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
 def return_default_network(payload: dict) -> tuple[dict, int]:
     dry_run = bool_payload(payload.get("dry_run"))
     action = "return-default-network"
-    connection = DEFAULT_NETWORK_CONNECTION
+    config = read_runtime_config()
+    connection = config["default_ssid"]
+    if not connection:
+        return {
+            "status": "failure",
+            "action": action,
+            "error": "default-ssid-not-configured",
+            "return_started": False,
+        }, 400
     if dry_run or not privileged_actions_enabled():
         append_action_log(
             RETURN_DEFAULT_NETWORK_LOG,
@@ -323,6 +454,7 @@ def return_default_network(payload: dict) -> tuple[dict, int]:
             "return_started": False,
             "dry_run": dry_run,
             "privileged_actions_enabled": privileged_actions_enabled(),
+            "config": public_runtime_config(),
             "log": str(RETURN_DEFAULT_NETWORK_LOG),
             "warning": "Real return can interrupt network access for a few seconds.",
         }, 200
@@ -339,6 +471,8 @@ def return_default_network(payload: dict) -> tuple[dict, int]:
         }, 403 if error == "privileged-action-not-authorized" else 500
 
     try:
+        env = os.environ.copy()
+        env["WIFI_KIT_DEFAULT_SSID"] = connection
         subprocess.Popen(
             command,
             cwd=str(SCRIPT_DIR.parent),
@@ -346,6 +480,7 @@ def return_default_network(payload: dict) -> tuple[dict, int]:
             stdin=subprocess.DEVNULL,
             stdout=open(RETURN_DEFAULT_NETWORK_LOG, "a", encoding="utf-8"),
             stderr=subprocess.STDOUT,
+            env=env,
         )
     except OSError as exc:
         append_action_log(RETURN_DEFAULT_NETWORK_LOG, action=action, status="failure", connection=connection, error=f"start-failed: {exc}")
@@ -788,9 +923,10 @@ def wlan_connection() -> str:
 
 def system_info(diagnose: dict, recovery: dict | None = None) -> dict:
     recovery = recovery or {}
+    config = read_runtime_config()
     recovery_active = bool(recovery.get("active"))
     hostname = socket.gethostname() or "unknown"
-    recovery_ssid = recovery.get("ssid") or f"Wifi-Kit-{hostname}"
+    recovery_ssid = config["ap_ssid"] or recovery.get("ssid") or f"Wifi-Kit-{hostname}"
     nm_owns_wlan0 = networkmanager_owns_wlan0()
     scan_backend = diagnose.get("backend") or "unknown"
     diagnose_wifi = diagnose.get("current_ssid_state") or ""
@@ -821,7 +957,9 @@ def system_info(diagnose: dict, recovery: dict | None = None) -> dict:
         "recovery_ui_port": RECOVERY_UI_PORT,
         "recovery_ap_password_policy": "min-8-chars",
         "recovery_ap_password_configurable": True,
-        "recovery_ap_password_current": RECOVERY_AP_TEST_PASSWORD,
+        "recovery_ap_password_current": config["ap_password"],
+        "default_ssid": config["default_ssid"],
+        "runtime_config_path": str(RUNTIME_CONFIG_PATH),
         "ui_access_password": "future-not-configured",
         "last_recovery_event": "recovery-captive-ui-validated" if recovery_active else "normal-client-mode",
     }
@@ -831,9 +969,36 @@ def ui_data(recovery: dict | None = None) -> dict:
     diagnose = safe_diagnose()
     snapshot = snapshot_preview()
     hostname = socket.gethostname() or "node"
+    config = read_runtime_config()
+    recovery_payload = {
+        "active": False,
+        "ssid": config["ap_ssid"] or f"Wifi-Kit-{hostname}",
+        "ip": "192.168.50.1",
+        "ui_port": 80,
+        "dhcp": "planned",
+        "dns": "planned",
+        "ui": "read-only",
+        "captive_portal": "planned",
+        "actions": "plan-only",
+        "normal_ui_port": NORMAL_UI_PORT,
+        "recovery_ui_port": RECOVERY_UI_PORT,
+        "ap_password_policy": "min-8-chars",
+        "ap_password_configurable": True,
+        "ap_password_current": config["ap_password"],
+        "default_ssid": config["default_ssid"],
+        "runtime_config_path": str(RUNTIME_CONFIG_PATH),
+        "ui_access_password": "future-not-configured",
+    }
+    if recovery:
+        recovery_payload.update(recovery)
+        recovery_payload["ssid"] = config["ap_ssid"] or recovery_payload.get("ssid") or f"Wifi-Kit-{hostname}"
+        recovery_payload["ap_password_current"] = config["ap_password"]
+        recovery_payload["default_ssid"] = config["default_ssid"]
+        recovery_payload["runtime_config_path"] = str(RUNTIME_CONFIG_PATH)
     return {
         "diagnose": diagnose,
         "snapshot": snapshot,
+        "runtime_config": public_runtime_config(),
         "runtime_state": {
             "source": "state-snapshot --simulate --json",
             "data": snapshot,
@@ -842,24 +1007,8 @@ def ui_data(recovery: dict | None = None) -> dict:
             "apply_endpoint": "not-implemented",
             "ap_services_started": bool(recovery and recovery.get("active")),
         },
-        "recovery": recovery or {
-            "active": False,
-            "ssid": f"Wifi-Kit-{hostname}",
-            "ip": "192.168.50.1",
-            "ui_port": 80,
-            "dhcp": "planned",
-            "dns": "planned",
-            "ui": "read-only",
-            "captive_portal": "planned",
-            "actions": "plan-only",
-            "normal_ui_port": NORMAL_UI_PORT,
-            "recovery_ui_port": RECOVERY_UI_PORT,
-            "ap_password_policy": "min-8-chars",
-            "ap_password_configurable": True,
-            "ap_password_current": RECOVERY_AP_TEST_PASSWORD,
-            "ui_access_password": "future-not-configured",
-        },
-        "system": system_info(diagnose, recovery),
+        "recovery": recovery_payload,
+        "system": system_info(diagnose, recovery_payload),
         "scan": wifi_scan(refresh=False),
     }
 
@@ -919,6 +1068,11 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/return-default-network":
             payload, status = return_default_network(parse_post_payload(self))
+            self.send_json(payload, status=status)
+            return
+
+        if parsed.path == "/api/runtime-config":
+            payload, status = update_runtime_config(parse_post_payload(self))
             self.send_json(payload, status=status)
             return
 
@@ -1031,6 +1185,10 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
             self.send_json(ui_data(self.recovery))
             return
 
+        if path == "/api/runtime-config":
+            self.send_json(public_runtime_config())
+            return
+
         self.send_json({"error": "not-found"}, status=404)
 
 
@@ -1047,10 +1205,11 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     hostname = socket.gethostname() or "node"
+    config = read_runtime_config()
     server = ThreadingHTTPServer((args.host, args.port), WifiKitReadOnlyHandler)
     server.wifi_kit_recovery = {
         "active": bool(args.recovery_mode),
-        "ssid": args.recovery_ssid or f"Wifi-Kit-{hostname}",
+        "ssid": args.recovery_ssid or config["ap_ssid"] or f"Wifi-Kit-{hostname}",
         "ip": args.recovery_ip,
         "ui_port": args.port,
         "dhcp": "active" if args.recovery_mode else "planned",
@@ -1062,7 +1221,9 @@ def main() -> None:
         "recovery_ui_port": RECOVERY_UI_PORT,
         "ap_password_policy": "min-8-chars",
         "ap_password_configurable": True,
-        "ap_password_current": RECOVERY_AP_TEST_PASSWORD,
+        "ap_password_current": config["ap_password"],
+        "default_ssid": config["default_ssid"],
+        "runtime_config_path": str(RUNTIME_CONFIG_PATH),
         "ui_access_password": "future-not-configured",
         "action_endpoints": sorted(ACTION_PATHS.keys()),
     }
