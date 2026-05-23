@@ -6,14 +6,26 @@ prototype on `pocket-node`.
 ## Validated state
 
 - Normal UI is available on port `54321`.
+- Normal UI is installed as `wifi-kit-ui.service`.
+- The service runs from `/opt/seed-kit/wifi-kit`.
+- The validated process shape is:
+  `/usr/bin/python3 ui/serve-readonly.py --host 0.0.0.0 --port 54321`.
+- Port `54321` listens on `0.0.0.0`.
 - Explicit AP recovery mode starts successfully.
 - Recovery UI is available on port `80` while AP mode is active.
 - `return-default-network` from the AP UI returns to the configured main Wi-Fi.
 - The sudoers rule and privileged wrapper work for the allowed Wifi-Kit actions.
 - `wifi-kit-boot-guard.service` is installed and enabled.
+- `runtime.conf` is owned by `warzy:warzy`.
+- `~/.config/wifi-kit` is mode `0700`.
+- `~/.config/wifi-kit/runtime.conf` is mode `0600`.
 - Runtime config persists the validated last-good Wi-Fi:
   - `last_good_connection=netplan-wlan0-GL-MT6000-d53`
   - `last_good_ssid=GL-MT6000-d53`
+- The `/opt` runtime validation was completed after
+  `afa3387 fix: install wifi-kit UI service from opt runtime`.
+- No AP start, Wi-Fi change, profile deletion, or reboot occurred during the
+  `/opt` service validation.
 
 ## Boot guard model
 
@@ -39,3 +51,16 @@ Seed-Kit install integration still needs to own the durable installation flow:
 
 The validated runtime behavior should be treated as the target behavior for
 that future installer work, not as a complete Seed-Kit apply implementation.
+
+## Known installer gaps / next integration steps
+
+- `install_user` is still targeted to `warzy` in the prototype path.
+- Systemd units should be generated dynamically by the future Seed-Kit install
+  flow instead of carrying pocket-node-specific values.
+- Upgrade and overwrite behavior must be designed explicitly before replacing
+  existing sudoers or systemd units.
+- The future target command should become:
+
+```sh
+seed-kit install wifi-kit
+```
