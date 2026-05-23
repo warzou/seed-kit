@@ -184,8 +184,20 @@ sh seed-kit.sh --apply --modules=wifi-kit
 ```
 
 Cette commande appelle `modules/wifi-kit/prototype/install-wifi-kit-runtime.sh`.
-Avant toute installation reelle, elle affiche `audit` et `plan`, puis demande
-une confirmation courte:
+Avant toute installation reelle, elle affiche un resume court puis demande une
+confirmation courte:
+
+```text
+[wifi-kit] summary
+  install user: warzy
+  target: /opt/seed-kit/wifi-kit
+  UI port: 54321
+  sudoers: yes
+  systemd units: ui=yes boot-guard=yes
+  runtime config: yes
+```
+
+Sur une premiere installation:
 
 ```text
 install wifi-kit runtime? [y/N]
@@ -195,6 +207,13 @@ Si Wifi-Kit est deja installe, elle affiche `already installed` puis demande:
 
 ```text
 reinstall? [y/N]
+```
+
+Pour afficher l'audit brut, le plan complet, le sudoers preview et les units
+systemd preview:
+
+```sh
+WIFI_KIT_VERBOSE=1 sh seed-kit.sh install wifi-kit
 ```
 
 Le chemin d'installation ne doit pas lancer AP mode, ne doit pas changer de

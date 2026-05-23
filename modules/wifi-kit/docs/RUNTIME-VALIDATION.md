@@ -67,6 +67,39 @@ Post-install validation:
 - `~/.config/wifi-kit/runtime.conf` was preserved as `warzy:warzy` mode `0600`.
 - No AP start, Wi-Fi change, Wi-Fi profile deletion, or reboot occurred.
 
+## Short install output validated
+
+After `fa316ca feat: simplify wifi-kit install output`, the default
+`sh seed-kit.sh install wifi-kit` output was validated on `pocket-node` with
+answer `n`.
+
+The default output now shows a short summary:
+
+- install user;
+- `/opt` target;
+- UI port `54321`;
+- sudoers presence;
+- systemd unit presence for UI and boot guard;
+- runtime config presence.
+
+For an already installed runtime, the command still shows:
+
+```text
+[wifi-kit] already installed
+reinstall? [y/N]
+```
+
+Answering `n` aborts cleanly before sudo or install. The verbose path was also
+validated:
+
+```sh
+WIFI_KIT_VERBOSE=1 sh seed-kit.sh install wifi-kit
+```
+
+Verbose mode prints the raw audit, plan, sudoers preview, and systemd unit
+previews. No sudo, install, AP start, Wi-Fi change, or reboot occurred during
+the short-output validation.
+
 ## Boot guard model
 
 The minimal boot guard uses this order:
