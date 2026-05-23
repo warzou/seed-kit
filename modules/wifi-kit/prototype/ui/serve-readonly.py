@@ -22,6 +22,10 @@ AP_SETUP_TEST_SH = SCRIPT_DIR.parent / "ap-setup-test.sh"
 CONNECT_TRANSACTION_SH = SCRIPT_DIR.parent / "wifi-kit-connect-transaction.sh"
 ACTION_WRAPPER_SH = SCRIPT_DIR.parent / "wifi-kit-action-wrapper.sh"
 INSTALLED_ACTION_WRAPPER_SH = Path(os.environ.get("WIFI_KIT_ACTION_WRAPPER", "/opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh"))
+INSTALLED_APP_DIR = INSTALLED_ACTION_WRAPPER_SH.parent
+SUDOERS_PATH = Path(os.environ.get("WIFI_KIT_SUDOERS_PATH", "/etc/sudoers.d/wifi-kit"))
+UI_SERVICE_NAME = os.environ.get("WIFI_KIT_UI_SERVICE", "wifi-kit-ui.service")
+BOOT_GUARD_SERVICE_NAME = os.environ.get("WIFI_KIT_BOOT_GUARD_SERVICE", "wifi-kit-boot-guard.service")
 INDEX_HTML = SCRIPT_DIR / "index.html"
 NORMAL_UI_PORT = 18089  # Prototype/dev local UI default; production/service target is 54321 in contract.
 RECOVERY_UI_PORT = 80
@@ -216,6 +220,17 @@ def read_runtime_config() -> dict[str, str]:
     return config
 
 
+def runtime_config_value(key: str) -> str:
+    try:
+        for line in RUNTIME_CONFIG_PATH.read_text(encoding="utf-8").splitlines():
+            name, sep, value = line.partition("=")
+            if sep and name == key:
+                return value
+    except OSError:
+        return ""
+    return ""
+
+
 def public_runtime_config() -> dict[str, object]:
     config = read_runtime_config()
     return {
@@ -339,6 +354,30 @@ def find_tool(name: str) -> str:
     return ""
 
 
+def command_is_success(args: list[str], timeout: float = 2.0) -> bool:
+    try:
+        result = subprocess.run(
+            args,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
+def systemd_is_enabled(service: str) -> bool:
+    systemctl = find_tool("systemctl")
+    return bool(systemctl) and command_is_success([systemctl, "is-enabled", service], timeout=2.0)
+
+
+def systemd_is_active(service: str) -> bool:
+    systemctl = find_tool("systemctl")
+    return bool(systemctl) and command_is_success([systemctl, "is-active", service], timeout=2.0)
+
+
 def read_ap_only_state_value(key: str) -> str:
     try:
         for line in AP_ONLY_NM_STATE.read_text(encoding="utf-8").splitlines():
@@ -425,8 +464,64 @@ def privileged_actions_enabled() -> bool:
     return os.environ.get(PRIVILEGED_ACTIONS_ENV) == "1"
 
 
+def is_root_process() -> bool:
+    return hasattr(os, "geteuid") and os.geteuid() == 0
+
+
 def action_wrapper_path() -> Path:
     return INSTALLED_ACTION_WRAPPER_SH if INSTALLED_ACTION_WRAPPER_SH.exists() else ACTION_WRAPPER_SH
+
+
+def backend_status(recovery: dict | None = None) -> dict[str, object]:
+    config = read_runtime_config()
+    diagnose = safe_diagnose()
+    recovery = recovery or {}
+    wrapper_path = action_wrapper_path()
+    app_dir_exists = INSTALLED_APP_DIR.exists()
+    wrapper_exists = wrapper_path.exists()
+    sudoers_exists = SUDOERS_PATH.exists()
+    privileged_ready = privileged_actions_enabled() and wrapper_exists and (is_root_process() or sudoers_exists)
+    notes: list[str] = []
+
+    if not privileged_actions_enabled():
+        notes.append(f"{PRIVILEGED_ACTIONS_ENV} is not enabled; real network actions return planned or refused responses.")
+    if not wrapper_exists:
+        notes.append("Wifi-Kit action wrapper is missing.")
+    if not sudoers_exists and not is_root_process():
+        notes.append("Wifi-Kit sudoers drop-in is missing or not readable from this process.")
+
+    return {
+        "ok": True,
+        "mode": "runtime" if app_dir_exists or privileged_actions_enabled() else "local",
+        "actions": {
+            "scan": bool(find_tool("nmcli") or find_tool("iw") or find_tool("wpa_cli")),
+            "connect_wifi": privileged_ready,
+            "start_ap_mode": privileged_ready,
+            "return_default_network": privileged_ready,
+        },
+        "runtime": {
+            "config_exists": RUNTIME_CONFIG_PATH.exists(),
+            "config_readable": os.access(RUNTIME_CONFIG_PATH, os.R_OK),
+            "ap_ssid_configured": bool(config.get("ap_ssid")),
+            "last_good_configured": bool(runtime_config_value("last_good_connection") or runtime_config_value("last_good_ssid")),
+        },
+        "install": {
+            "app_dir_exists": app_dir_exists,
+            "wrapper_exists": wrapper_exists,
+            "sudoers_exists": sudoers_exists,
+            "ui_service_enabled": systemd_is_enabled(UI_SERVICE_NAME),
+            "ui_service_active": systemd_is_active(UI_SERVICE_NAME),
+            "boot_guard_enabled": systemd_is_enabled(BOOT_GUARD_SERVICE_NAME),
+            "boot_guard_active": systemd_is_active(BOOT_GUARD_SERVICE_NAME),
+        },
+        "network": {
+            "current_ssid": system_info(diagnose, recovery).get("wifi", "unknown"),
+            "primary_ssid": config.get("return_ssid") or config.get("original_ssid") or "",
+            "ap_ssid": config.get("ap_ssid") or "",
+            "iface": diagnose.get("interface") or "wlan0",
+        },
+        "notes": notes,
+    }
 
 
 def privileged_action_command(action: str) -> tuple[list[str], str]:
@@ -434,7 +529,7 @@ def privileged_action_command(action: str) -> tuple[list[str], str]:
     if not wrapper_path.exists():
         return [], "wrapper-missing"
     wrapper_command = [str(wrapper_path), action]
-    if os.geteuid() == 0:
+    if is_root_process():
         return wrapper_command, ""
     sudo_bin = find_tool("sudo")
     if not sudo_bin:
@@ -455,7 +550,7 @@ def privileged_connect_transaction_command() -> tuple[list[str], str]:
     if not wrapper_path.exists():
         return [], "wrapper-missing"
     command = [str(wrapper_path), CONNECT_WRAPPER_ACTION]
-    if os.geteuid() == 0:
+    if is_root_process():
         return command, ""
     sudo_bin = find_tool("sudo")
     if not sudo_bin:
@@ -641,7 +736,7 @@ def return_default_network(payload: dict) -> tuple[dict, int]:
 
 def start_reconnect_previous() -> dict:
     previous_connection = read_ap_only_state_value("active_connection") or "unknown"
-    if os.geteuid() != 0:
+    if not is_root_process():
         append_reconnect_previous_log(
             previous_connection=previous_connection,
             recovery_mode_active=True,
@@ -1231,7 +1326,7 @@ def ui_data(recovery: dict | None = None) -> dict:
         "dns": "planned",
         "ui": "read-only",
         "captive_portal": "planned",
-        "actions": "plan-only",
+        "actions": "runtime-gated",
         "normal_ui_port": NORMAL_UI_PORT,
         "recovery_ui_port": RECOVERY_UI_PORT,
         "ap_password_policy": "min-8-chars",
@@ -1399,7 +1494,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
                     "recovery_ui_port": RECOVERY_UI_PORT,
                     "recovery_ap_password_policy": "min-8-chars",
                     "recovery_ap_password_configurable": True,
-                    "actions": "plan-only",
+                    "actions": "runtime-gated",
                 }
             )
             return
@@ -1444,6 +1539,10 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
             self.send_json(ui_data(self.recovery))
             return
 
+        if path == "/api/backend-status":
+            self.send_json(backend_status(self.recovery))
+            return
+
         if path == "/api/runtime-config":
             self.send_json(public_runtime_config())
             return
@@ -1475,7 +1574,7 @@ def main() -> None:
         "dns": "active" if args.recovery_mode else "planned",
         "ui": "active" if args.recovery_mode else "read-only",
         "captive_portal": "basic" if args.recovery_mode else "planned",
-        "actions": "plan-only",
+        "actions": "runtime-gated",
         "normal_ui_port": NORMAL_UI_PORT,
         "recovery_ui_port": RECOVERY_UI_PORT,
         "ap_password_policy": "min-8-chars",
