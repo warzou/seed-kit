@@ -24,19 +24,22 @@ WIFI_KIT_SUDOERS_WRAPPER_POLICY="root-owned-not-web-writable"
 WIFI_KIT_SUDOERS_ALLOWED_ACTIONS='
 start-ap-mode
 return-default-network
+connect-wifi
 '
 
 WIFI_KIT_SUDOERS_ALLOWED_COMMANDS='
 /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh start-ap-mode
 /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh return-default-network
+/opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh connect-wifi
 '
 
 WIFI_KIT_SUDOERS_ALLOWED_SUDO_COMMANDS='
 sudo -n /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh start-ap-mode
 sudo -n /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh return-default-network
+sudo -n /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh connect-wifi
 '
 
-WIFI_KIT_SUDOERS_PREVIEW_RULE='seed-kit-wifi ALL=(root) NOPASSWD: /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh start-ap-mode, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh return-default-network'
+WIFI_KIT_SUDOERS_PREVIEW_RULE='seed-kit-wifi ALL=(root) NOPASSWD: /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh start-ap-mode, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh return-default-network, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh connect-wifi'
 
 WIFI_KIT_SUDOERS_FORBIDDEN='
 no-sudo-sh

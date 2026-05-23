@@ -21,6 +21,7 @@ WIFI_KIT_SH = SCRIPT_DIR.parent / "wifi-kit.sh"
 AP_SETUP_TEST_SH = SCRIPT_DIR.parent / "ap-setup-test.sh"
 CONNECT_TRANSACTION_SH = SCRIPT_DIR.parent / "wifi-kit-connect-transaction.sh"
 ACTION_WRAPPER_SH = SCRIPT_DIR.parent / "wifi-kit-action-wrapper.sh"
+INSTALLED_ACTION_WRAPPER_SH = Path(os.environ.get("WIFI_KIT_ACTION_WRAPPER", "/opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh"))
 INDEX_HTML = SCRIPT_DIR / "index.html"
 NORMAL_UI_PORT = 18089  # Prototype/dev local UI default; production/service target is 54321 in contract.
 RECOVERY_UI_PORT = 80
@@ -32,6 +33,7 @@ RUNTIME_CONFIG_PATH = Path(
 RECONNECT_PREVIOUS_LOG = Path("/tmp/wifi-kit-reconnect-previous.log")
 CONNECT_TRANSACTION_LOG = Path("/tmp/wifi-kit-connect-transaction-ui.log")
 CONNECT_TRANSACTION_TIMEOUT_SECONDS = 180
+CONNECT_WRAPPER_ACTION = "connect-wifi"
 START_AP_MODE_LOG = Path("/tmp/wifi-kit-start-ap-mode.log")
 RETURN_DEFAULT_NETWORK_LOG = Path("/tmp/wifi-kit-return-default-network.log")
 DEFAULT_NETWORK_CONNECTION = "netplan-wlan0-GL-MT6000-d53"
@@ -39,6 +41,7 @@ AP_MODE_MAX_SECONDS = 300
 PRIVILEGED_ACTIONS_ENV = "WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS"
 AP_RECOVERY_CONFIRM = "WIFI-KIT AP RECOVERY MANUAL TEST"
 CONNECT_TRANSACTION_CONFIRM = "WIFI-KIT CONNECT SAFE TRANSACTION"
+SAVED_NM_SECRET_SENTINEL = "__WIFI_KIT_USE_SAVED_NM_SECRET__"
 RUNTIME_CONFIG_KEYS = {
     "original_ssid",
     "original_connection",
@@ -379,11 +382,15 @@ def privileged_actions_enabled() -> bool:
     return os.environ.get(PRIVILEGED_ACTIONS_ENV) == "1"
 
 
+def action_wrapper_path() -> Path:
+    return INSTALLED_ACTION_WRAPPER_SH if INSTALLED_ACTION_WRAPPER_SH.exists() else ACTION_WRAPPER_SH
+
+
 def privileged_action_command(action: str) -> tuple[list[str], str]:
-    if not ACTION_WRAPPER_SH.exists():
+    wrapper_path = action_wrapper_path()
+    if not wrapper_path.exists():
         return [], "wrapper-missing"
-    shell_bin = find_tool("sh") or "/bin/sh"
-    wrapper_command = [shell_bin, str(ACTION_WRAPPER_SH), action]
+    wrapper_command = [str(wrapper_path), action]
     if os.geteuid() == 0:
         return wrapper_command, ""
     sudo_bin = find_tool("sudo")
@@ -396,17 +403,15 @@ def privileged_action_command(action: str) -> tuple[list[str], str]:
         stderr=subprocess.DEVNULL,
     )
     if probe.returncode != 0:
-        return [], "privileged-action-not-authorized"
+        return [], "wifi-kit-network-rights-not-installed"
     return [sudo_bin, "-n", *wrapper_command], ""
 
 
 def privileged_connect_transaction_command() -> tuple[list[str], str]:
-    if not CONNECT_TRANSACTION_SH.exists():
-        return [], "connect-transaction-missing"
-    shell_bin = find_tool("sh")
-    if not shell_bin:
-        return [], "sh-not-found"
-    command = [shell_bin, str(CONNECT_TRANSACTION_SH)]
+    wrapper_path = action_wrapper_path()
+    if not wrapper_path.exists():
+        return [], "wrapper-missing"
+    command = [str(wrapper_path), CONNECT_WRAPPER_ACTION]
     if os.geteuid() == 0:
         return command, ""
     sudo_bin = find_tool("sudo")
@@ -419,8 +424,26 @@ def privileged_connect_transaction_command() -> tuple[list[str], str]:
         stderr=subprocess.DEVNULL,
     )
     if probe.returncode != 0:
-        return [], "privileged-connect-not-authorized"
+        return [], "wifi-kit-network-rights-not-installed"
     return [sudo_bin, "-n", *command], ""
+
+
+def privileged_error_response(action: str, error: str) -> dict[str, object]:
+    message = (
+        "Wifi-Kit n'est pas encore installe avec les droits reseau. "
+        "Installe le wrapper root-owned et la regle sudoers whitelist avant les actions reelles."
+    )
+    return {
+        "status": "failure",
+        "action": action,
+        "error": error,
+        "message": message if error == "wifi-kit-network-rights-not-installed" else error,
+        "operator_action": (
+            "installer modules/wifi-kit/prototype/sudoers/wifi-kit.sudoers avec visudo apres validation"
+            if error == "wifi-kit-network-rights-not-installed"
+            else "verifier les dependances Wifi-Kit"
+        ),
+    }
 
 
 def start_ap_mode(payload: dict) -> tuple[dict, int]:
@@ -459,13 +482,9 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
     command, error = privileged_action_command(action)
     if error:
         append_action_log(START_AP_MODE_LOG, action=action, status="failure", error=error)
-        return {
-            "status": "failure",
-            "action": action,
-            "error": error,
-            "ap_started": False,
-            "log": str(START_AP_MODE_LOG),
-        }, 403 if error == "privileged-action-not-authorized" else 500
+        payload = privileged_error_response(action, error)
+        payload.update({"ap_started": False, "log": str(START_AP_MODE_LOG)})
+        return payload, 403 if error == "wifi-kit-network-rights-not-installed" else 500
 
     try:
         env = os.environ.copy()
@@ -539,14 +558,15 @@ def return_default_network(payload: dict) -> tuple[dict, int]:
     command, error = privileged_action_command(action)
     if error:
         append_action_log(RETURN_DEFAULT_NETWORK_LOG, action=action, status="failure", connection=connection, error=error)
-        return {
-            "status": "failure",
-            "action": action,
-            "error": error,
-            "return_started": False,
-            "return_connection": connection,
-            "default_connection": connection,
-        }, 403 if error == "privileged-action-not-authorized" else 500
+        payload = privileged_error_response(action, error)
+        payload.update(
+            {
+                "return_started": False,
+                "return_connection": connection,
+                "default_connection": connection,
+            }
+        )
+        return payload, 403 if error == "wifi-kit-network-rights-not-installed" else 500
 
     try:
         env = os.environ.copy()
@@ -815,25 +835,59 @@ def security_requires_password(security: str) -> bool:
     return normalized not in {"", "open", "none", "--", "unknown", "inconnu"}
 
 
+def known_connection_for_ssid(ssid: str, requested_profile: str = "") -> dict[str, object] | None:
+    for connection in known_wifi_connections(None):
+        if str(connection.get("ssid", "")) != ssid:
+            continue
+        if requested_profile and str(connection.get("profile", "")) != requested_profile:
+            continue
+        return connection
+    return None
+
+
 def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[dict, int]:
     if payload.get("_error"):
         return {"status": "failure", "error": payload["_error"], "connect_started": False}, 400
 
     ssid = str(payload.get("ssid", "")).strip()
     password = str(payload.get("password", ""))
+    known_profile = str(payload.get("known_profile", "")).strip()
     security = str(payload.get("security", "")).strip()
     dangerous_real_apply = bool_payload(payload.get("dangerous_real_apply"))
     confirm = str(payload.get("confirm", ""))
+    use_saved_nm_secret = password == SAVED_NM_SECRET_SENTINEL
+    known_connection = known_connection_for_ssid(ssid, known_profile) if use_saved_nm_secret else None
+    existing_connection = str(known_connection.get("profile", "")) if known_connection else ""
     if not ssid:
         return {"status": "failure", "error": "missing-ssid", "connect_started": False}, 400
     if len(ssid.encode("utf-8")) > 32:
         return {"status": "failure", "error": "ssid-too-long", "connect_started": False}, 400
-    if security_requires_password(security) and not password:
+    if use_saved_nm_secret and not existing_connection:
+        return {"status": "failure", "error": "known-profile-not-found", "connect_started": False}, 400
+    if security_requires_password(security) and not password and not existing_connection:
         return {"status": "failure", "error": "missing-password", "connect_started": False}, 400
-    if password and len(password) < 8:
+    if password and not use_saved_nm_secret and len(password) < 8:
         return {"status": "failure", "error": "password-too-short", "connect_started": False}, 400
 
     backend = "raspberrypi-networkmanager" if networkmanager_owns_wlan0() else "unknown"
+    secret_policy = (
+        "saved NetworkManager profile requested by sentinel; no secret was read, returned, or logged"
+        if existing_connection
+        else "runtime-only; password was not logged or persisted"
+    )
+    connect_plan = [
+        "require AP recovery context",
+        "require WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS=1",
+        "require exact confirmation phrase",
+        (
+            f"use existing NetworkManager profile {existing_connection} without reading its secret"
+            if existing_connection
+            else "read password only from this runtime request"
+        ),
+        "run guarded NetworkManager transaction",
+        "rollback previous profile on failure",
+        "start AP recovery only if rollback fails",
+    ]
     if (
         not recovery_active
         or not privileged_actions_enabled()
@@ -853,44 +907,29 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
                 "dangerous_real_apply": dangerous_real_apply,
                 "confirm_required": CONNECT_TRANSACTION_CONFIRM,
                 "confirm_ok": confirm == CONNECT_TRANSACTION_CONFIRM,
-                "secret_policy": "runtime-only; password was not logged or persisted",
+                "secret_policy": secret_policy,
+                "existing_connection": existing_connection,
                 "warning_if_recovery_active": "Real Wi-Fi connect requires AP recovery context, privileged actions, and exact confirmation.",
-                "connect_plan": [
-                    "require AP recovery context",
-                    "require WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS=1",
-                    "require exact confirmation phrase",
-                    "read password only from this runtime request",
-                    "run guarded NetworkManager transaction",
-                    "rollback previous profile on failure",
-                    "start AP recovery only if rollback fails",
-                ],
+                "connect_plan": connect_plan,
             },
             409,
         )
 
     command, error = privileged_connect_transaction_command()
     if error:
-        return {
-            "status": "failure",
-            "error": error,
-            "requested_ssid": ssid,
-            "backend": backend,
-            "connect_started": False,
-        }, 403 if error == "privileged-connect-not-authorized" else 500
+        payload = privileged_error_response("wifi-connect-transaction", error)
+        payload.update(
+            {
+                "requested_ssid": ssid,
+                "backend": backend,
+                "connect_started": False,
+            }
+        )
+        return payload, 403 if error == "wifi-kit-network-rights-not-installed" else 500
 
     try:
         process = subprocess.Popen(
-            [
-                *command,
-                "apply",
-                "--ssid",
-                ssid,
-                "--dangerous-real-apply",
-                "--confirm",
-                CONNECT_TRANSACTION_CONFIRM,
-                "--timeout-seconds",
-                str(CONNECT_TRANSACTION_TIMEOUT_SECONDS),
-            ],
+            command,
             cwd=str(SCRIPT_DIR.parent),
             stdin=subprocess.PIPE,
             stdout=open(CONNECT_TRANSACTION_LOG, "a", encoding="utf-8"),
@@ -899,7 +938,14 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
             text=True,
         )
         assert process.stdin is not None
-        process.stdin.write(password + "\n")
+        process.stdin.write(f"ssid={ssid}\n")
+        process.stdin.write(f"confirm={CONNECT_TRANSACTION_CONFIRM}\n")
+        process.stdin.write("dangerous_real_apply=true\n")
+        process.stdin.write(f"timeout_seconds={CONNECT_TRANSACTION_TIMEOUT_SECONDS}\n")
+        if existing_connection:
+            process.stdin.write(f"existing_connection={existing_connection}\n")
+        else:
+            process.stdin.write(f"password={password}\n")
         process.stdin.close()
     except (OSError, BrokenPipeError) as exc:
         return {
@@ -917,14 +963,27 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
             "requested_ssid": ssid,
             "backend": backend,
             "connect_started": True,
+            "existing_connection": existing_connection,
             "timeout_seconds": CONNECT_TRANSACTION_TIMEOUT_SECONDS,
             "expected_behavior": "success-keeps-target-failure-rolls-back-rollback-failure-starts-ap-recovery",
-            "secret_policy": "runtime-only; password is passed on stdin and never returned or logged",
+            "secret_policy": (
+                "existing NetworkManager profile selected by sentinel; no secret was read, returned, or logged"
+                if existing_connection
+                else "runtime-only; password is passed on stdin and never returned or logged"
+            ),
             "log": str(CONNECT_TRANSACTION_LOG),
             "connect_plan": [
                 "snapshot active NetworkManager profile and SSID",
-                "create temporary Wifi-Kit NetworkManager profile",
-                "connect wlan0 to the requested SSID with runtime-only password",
+                (
+                    f"connect wlan0 using existing NetworkManager profile {existing_connection}"
+                    if existing_connection
+                    else "create temporary Wifi-Kit NetworkManager profile"
+                ),
+                (
+                    "reuse saved NetworkManager secret without exposing it"
+                    if existing_connection
+                    else "connect wlan0 to the requested SSID with runtime-only password"
+                ),
                 "validate stable connected state, target SSID, IPv4, gateway, internet ping, DNS, and sshd",
                 "on success: keep the new Wi-Fi",
                 "on failure: reconnect the previous NetworkManager profile",

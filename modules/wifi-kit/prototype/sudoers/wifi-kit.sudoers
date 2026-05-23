@@ -1,0 +1,20 @@
+# Wifi-Kit prototype sudoers example for pocket-node preview.
+#
+# Install only after explicit operator validation:
+#   sudo install -o root -g root -m 0755 modules/wifi-kit/prototype/wifi-kit-action-wrapper.sh /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh
+#   sudo install -o root -g root -m 0755 modules/wifi-kit/prototype/ap-setup-test.sh /opt/seed-kit/wifi-kit/ap-setup-test.sh
+#   sudo install -o root -g root -m 0755 modules/wifi-kit/prototype/wifi-kit-connect-transaction.sh /opt/seed-kit/wifi-kit/wifi-kit-connect-transaction.sh
+#   sudo install -o root -g root -m 0440 modules/wifi-kit/prototype/sudoers/wifi-kit.sudoers /etc/sudoers.d/wifi-kit
+#   sudo visudo -cf /etc/sudoers.d/wifi-kit
+#
+# Security shape:
+# - no broad shell, nmcli, systemctl, hostapd, dnsmasq, or reboot grant;
+# - no wildcard arguments;
+# - all dynamic validation stays inside the root-owned wrapper;
+# - client Wi-Fi passwords are stdin-only and never stored by sudoers.
+
+warzy ALL=(root) NOPASSWD: /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh start-ap-mode, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh return-default-network, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh connect-wifi
+
+# Future installed form, rendered by Seed-Kit install orchestration for a
+# dedicated service account:
+# seed-kit-wifi ALL=(root) NOPASSWD: /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh start-ap-mode, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh return-default-network, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh connect-wifi

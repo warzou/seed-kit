@@ -30,6 +30,7 @@ prototype/ui/serve-readonly.py|/opt/seed-kit/wifi-kit/ui/serve-readonly.py|root:
 prototype/ui/index.html|/opt/seed-kit/wifi-kit/ui/index.html|root:root|0644|normal-ui-static
 prototype/ap-setup-test.sh|/opt/seed-kit/wifi-kit/ap-setup-test.sh|root:root|0755|recovery-ap-helper
 prototype/wifi-kit-connect-recovery.sh|/opt/seed-kit/wifi-kit/wifi-kit-connect-recovery.sh|root:root|0755|recovery-connect-helper
+prototype/wifi-kit-connect-transaction.sh|/opt/seed-kit/wifi-kit/wifi-kit-connect-transaction.sh|root:root|0755|connect-transaction-helper
 prototype/wifi-kit-recovery-guard.sh|/opt/seed-kit/wifi-kit/wifi-kit-recovery-guard.sh|root:root|0755|recovery-cleanup-guard
 prototype/wifi-kit-action-wrapper.sh|/opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh|root:root|0755|privileged-action-wrapper
 '
@@ -87,4 +88,3 @@ if [ "${1-}" = "print" ]; then
   module_wifi_kit_install_files_manifest
   exit 0
 fi
-

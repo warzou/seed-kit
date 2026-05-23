@@ -3,12 +3,14 @@ set -eu
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ap_setup_script="$script_dir/ap-setup-test.sh"
+connect_transaction_script="$script_dir/wifi-kit-connect-transaction.sh"
 log_file="/tmp/wifi-kit-action-wrapper.log"
-runtime_config="${WIFI_KIT_RUNTIME_CONFIG:-${HOME:-/tmp}/.config/wifi-kit/runtime.conf}"
+runtime_config="${WIFI_KIT_RUNTIME_CONFIG:-}"
 return_connection="netplan-wlan0-GL-MT6000-d53"
 ap_test_psk="12345678"
 ap_ssid=""
 ap_timeout_seconds="300"
+connect_timeout_seconds="180"
 
 timestamp() {
   date -u +"%Y-%m-%dT%H:%M:%SZ"
@@ -44,6 +46,27 @@ runtime_config_value() {
   printf '%s\n' "$fallback"
 }
 
+default_runtime_config_path() {
+  if [ -n "$runtime_config" ]; then
+    printf '%s\n' "$runtime_config"
+    return 0
+  fi
+  if [ -r "/etc/seed-kit/wifi-kit/runtime.conf" ]; then
+    printf '%s\n' "/etc/seed-kit/wifi-kit/runtime.conf"
+    return 0
+  fi
+  if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+    sudo_home=$(getent passwd "$SUDO_USER" 2>/dev/null | awk -F: '{ print $6 }' | sed -n '1p')
+    if [ -n "$sudo_home" ]; then
+      printf '%s\n' "$sudo_home/.config/wifi-kit/runtime.conf"
+      return 0
+    fi
+  fi
+  printf '%s\n' "${HOME:-/tmp}/.config/wifi-kit/runtime.conf"
+}
+
+runtime_config=$(default_runtime_config_path)
+
 reply() {
   status=$1
   action=$2
@@ -53,6 +76,49 @@ reply() {
   if [ -n "$detail" ]; then
     printf 'detail=%s\n' "$detail"
   fi
+}
+
+safe_line_value() {
+  key=$1
+  value=$2
+  cr=$(printf '\r')
+  case "$value" in
+    *"$cr"*) reply "refused" "$key" "newline-not-allowed"; exit 2 ;;
+  esac
+}
+
+require_number() {
+  key=$1
+  value=$2
+  max=$3
+  case "$value" in
+    ''|*[!0-9]*) reply "refused" "$key" "number-required"; exit 2 ;;
+  esac
+  [ "$value" -le "$max" ] || { reply "refused" "$key" "number-too-large"; exit 2; }
+}
+
+read_connect_request() {
+  connect_ssid=""
+  connect_password=""
+  connect_existing_connection=""
+  connect_confirm=""
+  connect_dangerous_real_apply="false"
+  connect_timeout_seconds="180"
+  while IFS= read -r line; do
+    key=${line%%=*}
+    value=${line#*=}
+    [ "$key" != "$line" ] || continue
+    safe_line_value "$key" "$value"
+    case "$key" in
+      ssid) connect_ssid=$value ;;
+      password) connect_password=$value ;;
+      existing_connection) connect_existing_connection=$value ;;
+      confirm) connect_confirm=$value ;;
+      dangerous_real_apply) connect_dangerous_real_apply=$value ;;
+      timeout_seconds) connect_timeout_seconds=$value ;;
+      *) ;;
+    esac
+  done
 }
 
 require_root() {
@@ -65,7 +131,7 @@ require_root() {
 
 if [ "$#" -ne 1 ]; then
   log_event "unknown" "refused" "usage"
-  reply "refused" "unknown" "usage: wifi-kit-action-wrapper.sh start-ap-mode|return-default-network"
+  reply "refused" "unknown" "usage: wifi-kit-action-wrapper.sh start-ap-mode|return-default-network|connect-wifi"
   exit 2
 fi
 
@@ -100,6 +166,38 @@ case "$action" in
     require_root "$action"
     log_event "$action" "started" "connection=$return_connection"
     exec nmcli connection up "$return_connection"
+    ;;
+  connect-wifi)
+    require_root "$action"
+    read_connect_request
+    [ -n "$connect_ssid" ] || { reply "refused" "$action" "missing-ssid"; exit 2; }
+    ssid_bytes=$(printf '%s' "$connect_ssid" | wc -c | tr -d ' ')
+    [ "$ssid_bytes" -le 32 ] || { reply "refused" "$action" "ssid-too-long"; exit 2; }
+    [ "$connect_confirm" = "WIFI-KIT CONNECT SAFE TRANSACTION" ] || { reply "refused" "$action" "confirm-phrase-mismatch"; exit 2; }
+    [ "$connect_dangerous_real_apply" = "true" ] || [ "$connect_dangerous_real_apply" = "1" ] ||
+      { reply "refused" "$action" "dangerous-real-apply-required"; exit 2; }
+    require_number "timeout_seconds" "$connect_timeout_seconds" "600"
+    [ -f "$connect_transaction_script" ] || { reply "failure" "$action" "connect-transaction-missing"; exit 1; }
+    log_event "$action" "started" "ssid=$connect_ssid existing_connection=${connect_existing_connection:-none}"
+    export WIFI_KIT_AP_PSK="$ap_test_psk"
+    if [ -n "$ap_ssid" ]; then
+      export WIFI_KIT_AP_SSID="$ap_ssid"
+    fi
+    if [ -n "$connect_existing_connection" ]; then
+      exec sh "$connect_transaction_script" apply \
+        --ssid "$connect_ssid" \
+        --existing-connection "$connect_existing_connection" \
+        --dangerous-real-apply \
+        --confirm "WIFI-KIT CONNECT SAFE TRANSACTION" \
+        --timeout-seconds "$connect_timeout_seconds"
+    fi
+    [ -n "$connect_password" ] || { reply "refused" "$action" "missing-password"; exit 2; }
+    [ "${#connect_password}" -ge 8 ] || { reply "refused" "$action" "password-too-short"; exit 2; }
+    printf '%s\n' "$connect_password" | sh "$connect_transaction_script" apply \
+      --ssid "$connect_ssid" \
+      --dangerous-real-apply \
+      --confirm "WIFI-KIT CONNECT SAFE TRANSACTION" \
+      --timeout-seconds "$connect_timeout_seconds"
     ;;
   *)
     log_event "$action" "refused" "action-not-allowed"

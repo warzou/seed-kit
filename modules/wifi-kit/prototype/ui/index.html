@@ -288,13 +288,33 @@
       color: #7eb9ff;
     }
 
-    .status-mini:nth-child(3) .status-icon {
+    .status-mini:nth-child(3) .status-icon,
+    .status-mini.wifi-status-normal .status-icon {
+      color: var(--cyan);
+    }
+
+    .status-mini:nth-child(3),
+    .status-mini.wifi-status-normal {
+      border-color: rgba(68, 212, 230, 0.22);
+      background: rgba(68, 212, 230, 0.06);
+    }
+
+    .status-mini.wifi-status-ap {
+      border-color: rgba(83, 220, 98, 0.24);
+      background: rgba(83, 220, 98, 0.07);
+    }
+
+    .status-mini.wifi-status-ap .status-icon {
       color: var(--green);
     }
 
-    .status-mini:nth-child(3) {
-      border-color: rgba(83, 220, 98, 0.2);
-      background: rgba(83, 220, 98, 0.06);
+    .status-mini.wifi-status-transition {
+      border-color: rgba(255, 177, 61, 0.28);
+      background: rgba(255, 177, 61, 0.08);
+    }
+
+    .status-mini.wifi-status-transition .status-icon {
+      color: var(--orange);
     }
 
     .status-mini:nth-child(4) .status-icon {
@@ -827,6 +847,11 @@
 
     .field-hint { color: var(--muted); font-weight: 500; }
 
+    .field-hint.saved-secret {
+      color: #9fd8ff;
+      font-weight: 750;
+    }
+
     .password-local {
       width: 100%;
       min-height: 48px;
@@ -959,6 +984,11 @@
     .recovery-panel {
       display: grid;
       gap: 12px;
+      order: 2;
+    }
+
+    .network-actions-panel {
+      order: 1;
     }
 
     .recovery-grid {
@@ -980,6 +1010,23 @@
       border-radius: 18px;
       background: rgba(255, 255, 255, 0.035);
       padding: 12px;
+    }
+
+    .recovery-settings-section {
+      display: grid;
+      gap: 10px;
+    }
+
+    .recovery-settings-section + .recovery-settings-section {
+      border-top: 1px solid rgba(213, 229, 255, 0.1);
+      padding-top: 12px;
+    }
+
+    .settings-title {
+      margin: 0;
+      color: var(--soft);
+      font-size: 0.92rem;
+      font-weight: 950;
     }
 
     .recovery-settings-grid {
@@ -1004,15 +1051,246 @@
       flex: 0 0 auto;
     }
 
-    .runtime-select {
+    .return-dropdown {
+      position: relative;
+      width: 100%;
+    }
+
+    .return-dropdown-button {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
       width: 100%;
       min-height: 48px;
       border: 1px solid rgba(221, 234, 255, 0.15);
       border-radius: 17px;
       background: rgba(255, 255, 255, 0.06);
       color: var(--ink);
-      outline: none;
       padding: 11px 13px;
+      text-align: left;
+      font-size: 0.88rem;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .return-dropdown-button::after {
+      content: "";
+      width: 0.66rem;
+      height: 0.66rem;
+      border-right: 2px solid #c8f7ff;
+      border-bottom: 2px solid #c8f7ff;
+      transform: rotate(45deg);
+      transition: transform 160ms ease;
+      flex: 0 0 auto;
+    }
+
+    .return-dropdown.open .return-dropdown-button::after {
+      transform: rotate(225deg);
+    }
+
+    .return-dropdown-button:focus {
+      outline: none;
+      border-color: rgba(68, 212, 230, 0.72);
+      box-shadow: 0 0 0 4px rgba(68, 212, 230, 0.12);
+    }
+
+    .return-dropdown-button:disabled {
+      color: var(--dim);
+      cursor: not-allowed;
+      opacity: 0.72;
+    }
+
+    .return-dropdown-menu {
+      position: absolute;
+      z-index: 8;
+      top: calc(100% + 6px);
+      right: 0;
+      left: 0;
+      display: grid;
+      overflow: hidden;
+      border: 1px solid rgba(68, 212, 230, 0.22);
+      border-radius: 16px;
+      background: #101c2b;
+      box-shadow: 0 18px 36px rgba(0, 0, 0, 0.36);
+    }
+
+    .return-dropdown-menu[hidden] {
+      display: none;
+    }
+
+    .return-dropdown-option {
+      min-height: 42px;
+      border: 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      background: #101c2b;
+      color: #eef6ff;
+      padding: 9px 12px;
+      text-align: left;
+      font-size: 0.86rem;
+      font-weight: 850;
+      cursor: pointer;
+    }
+
+    .return-dropdown-option:last-child {
+      border-bottom: 0;
+    }
+
+    .return-dropdown-option:hover,
+    .return-dropdown-option.active {
+      background: rgba(68, 212, 230, 0.13);
+      color: #c8f7ff;
+    }
+
+    .return-dropdown-option .option-note {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 800;
+    }
+
+    .security-dropdown-button,
+    .return-dropdown-button {
+      position: relative;
+      min-height: 48px;
+      border-color: rgba(68, 212, 230, 0.38);
+      background: linear-gradient(180deg, rgba(13, 35, 52, 0.88), rgba(11, 24, 38, 0.78));
+      color: var(--ink);
+      padding-right: 52px;
+      box-shadow: inset 0 0 0 1px rgba(68, 212, 230, 0.07);
+      transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+    }
+
+    .security-dropdown-button:hover,
+    .return-dropdown-button:hover,
+    .security-dropdown-button:focus,
+    .return-dropdown-button:focus {
+      border-color: rgba(68, 212, 230, 0.72);
+      background: linear-gradient(180deg, rgba(17, 46, 67, 0.94), rgba(12, 29, 46, 0.86));
+      box-shadow: 0 0 0 4px rgba(68, 212, 230, 0.12);
+      color: #f7fbff;
+    }
+
+    .security-dropdown-button::after,
+    .return-dropdown-button::after {
+      position: absolute;
+      top: 50%;
+      right: 10px;
+      width: 28px;
+      height: 28px;
+      border: 1px solid rgba(68, 212, 230, 0.34);
+      border-radius: 999px;
+      background: rgba(68, 212, 230, 0.08);
+      transform: translateY(-50%);
+    }
+
+    .security-dropdown-button::before,
+    .return-dropdown-button::before {
+      content: "";
+      position: absolute;
+      z-index: 1;
+      top: 50%;
+      right: 20px;
+      width: 0.48rem;
+      height: 0.48rem;
+      border-right: 2px solid #c8f7ff;
+      border-bottom: 2px solid #c8f7ff;
+      transform: translateY(-50%) rotate(45deg);
+      transition: transform 160ms ease;
+    }
+
+    .security-dropdown.open .security-dropdown-button::before,
+    .return-dropdown.open .return-dropdown-button::before {
+      transform: translateY(-50%) rotate(225deg);
+    }
+
+    .security-dropdown.open .security-dropdown-button::after,
+    .return-dropdown.open .return-dropdown-button::after {
+      transform: translateY(-50%);
+    }
+
+    .button.danger {
+      border-color: rgba(255, 85, 77, 0.34);
+      background: rgba(255, 85, 77, 0.1);
+      color: #ffd8d5;
+      box-shadow: none;
+    }
+
+    .button.danger:disabled {
+      opacity: 0.64;
+      cursor: not-allowed;
+    }
+
+    .danger-note {
+      margin: -2px 0 0;
+      color: #ffb0aa;
+      font-size: 0.78rem;
+      font-weight: 750;
+    }
+
+    .return-profile-details-panel {
+      border: 1px solid rgba(213, 229, 255, 0.1);
+      border-radius: 16px;
+      overflow: hidden;
+      background: rgba(5, 13, 22, 0.34);
+    }
+
+    .return-profile-details-panel summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 42px;
+      padding: 10px 12px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 850;
+      cursor: pointer;
+      list-style: none;
+    }
+
+    .return-profile-details-panel summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .return-profile-details-panel summary::after {
+      content: "";
+      width: 0.72rem;
+      height: 0.72rem;
+      border-right: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      transform: rotate(45deg);
+      transition: transform 160ms ease;
+      opacity: 0.85;
+    }
+
+    .return-profile-details-panel[open] summary::after {
+      transform: rotate(225deg);
+    }
+
+    .return-profile-details-panel .detail-grid {
+      margin: 0;
+      border-top: 1px solid rgba(213, 229, 255, 0.08);
+      padding: 8px 12px 12px;
+      display: grid;
+      grid-template-columns: minmax(0, 36%) 1fr;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .return-profile-details-panel dt {
+      color: var(--soft);
+      font-weight: 850;
+      font-size: 0.79rem;
+      margin: 0;
+    }
+
+    .return-profile-details-panel dd {
+      margin: 0;
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
 
     .recovery-actions .button {
@@ -1296,7 +1574,7 @@
       <div class="overview-grid" aria-label="Etat actuel du node">
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Hostname</span><strong id="status-hostname">...</strong></div></div>
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-location"></use></svg></span><div><span>Adresse IP</span><strong id="status-ip">...</strong></div></div>
-        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-wifi"></use></svg></span><div><span>Wi-Fi actuel</span><strong id="status-ssid">...</strong></div></div>
+        <div id="status-wifi-card" class="status-mini wifi-status-normal"><span class="status-icon"><svg class="icon-svg"><use href="#icon-wifi"></use></svg></span><div><span id="status-wifi-label">Wi-Fi (normal)</span><strong id="status-ssid">...</strong></div></div>
       </div>
     </section>
 
@@ -1326,19 +1604,14 @@
       <section class="panel recovery-panel" id="recovery-panel" aria-labelledby="recovery-title">
         <div class="section-head">
           <div>
-            <h2 id="recovery-title">Mode AP</h2>
-            <p class="section-copy" id="recovery-copy">AP temporaire avec DHCP, DNS local et UI captive sur le node.</p>
+            <h2 id="recovery-title">Configuration de récupération</h2>
+            <p class="section-copy" id="recovery-copy">Wi-Fi de secours temporaire et retour au Wi-Fi principal.</p>
           </div>
           <span class="chip" id="recovery-chip">Plan-only</span>
         </div>
-        <div class="recovery-grid" aria-label="Etat du mode AP">
-          <div class="metric"><span>SSID</span><strong id="recovery-ssid">...</strong></div>
-          <div class="metric"><span>Mot de passe AP</span><strong id="recovery-ap-password">12345678</strong></div>
-          <div class="metric"><span>Wi-Fi original</span><strong id="recovery-original-ssid">...</strong></div>
-          <div class="metric"><span>Profil original</span><strong id="recovery-original-profile">...</strong></div>
-          <div class="metric"><span>Statut original</span><strong id="recovery-original-visible">...</strong></div>
-          <div class="metric"><span>Wi-Fi de retour</span><strong id="recovery-return-ssid">...</strong></div>
-          <div class="metric"><span>Profil retour</span><strong id="recovery-return-profile">...</strong></div>
+        <div class="recovery-grid" aria-label="Etat recovery">
+          <div class="metric"><span>Wi-Fi AP</span><strong id="recovery-ssid">...</strong></div>
+          <div class="metric"><span>Wi-Fi principal</span><strong id="recovery-return-ssid">...</strong></div>
           <div class="metric"><span>IP locale</span><strong id="recovery-ip">192.168.50.1</strong></div>
           <div class="metric"><span>Port captive</span><strong id="recovery-captive-port">80</strong></div>
           <div class="metric"><span>DHCP</span><strong id="recovery-dhcp">...</strong></div>
@@ -1346,33 +1619,57 @@
           <div class="metric"><span>UI</span><strong id="recovery-ui">...</strong></div>
         </div>
         <div class="recovery-settings" aria-label="Configuration recovery">
-          <div class="recovery-settings-grid">
-            <label class="field-label">
-              SSID AP recovery
-              <input id="recovery-ap-ssid-input" class="password-local" type="text" autocomplete="off" placeholder="Wifi-Kit-pocket-node">
-            </label>
-            <label class="field-label">
-              Mot de passe AP recovery
-              <input id="recovery-ap-password-input" class="password-local" type="password" autocomplete="new-password" placeholder="Minimum 8 caracteres">
-            </label>
-            <label class="field-label">
-              Wi-Fi de retour
-              <select id="recovery-return-connection-select" class="runtime-select"></select>
-            </label>
+          <div class="recovery-settings-section">
+            <h3 class="settings-title">Réglages AP</h3>
+            <div class="recovery-settings-grid">
+              <label class="field-label">
+                Nom du Wi-Fi AP
+                <input id="recovery-ap-ssid-input" class="password-local" type="text" autocomplete="off" placeholder="Wifi-Kit-pocket-node">
+              </label>
+              <label class="field-label">
+                Mot de passe AP
+                <input id="recovery-ap-password-input" class="password-local" type="password" autocomplete="new-password" placeholder="Minimum 8 caracteres">
+              </label>
+            </div>
           </div>
-          <div class="callout recovery-result" id="return-profile-details">
-            <strong>Details du profil selectionne</strong>
-            <p>SSID: <span id="return-detail-ssid">...</span></p>
-            <p>Profil NM: <span id="return-detail-profile">...</span></p>
-            <p>UUID: <span id="return-detail-uuid">...</span></p>
-            <p>Type: <span id="return-detail-type">...</span></p>
-            <p>Interface: <span id="return-detail-device">...</span></p>
-            <p>Autoconnect: <span id="return-detail-autoconnect">...</span></p>
-            <p>Actif: <span id="return-detail-active">...</span></p>
-            <p>Visible actuellement: <span id="return-detail-visible">...</span></p>
+          <div class="recovery-settings-section">
+            <h3 class="settings-title">Sélectionner le Wi-Fi principal</h3>
+            <div class="recovery-settings-grid">
+              <div class="field-label">
+                <input id="recovery-return-connection-select" type="hidden">
+                <div class="return-dropdown" id="recovery-return-dropdown">
+                  <button id="recovery-return-dropdown-button" class="return-dropdown-button" type="button">Aucun profil Wi-Fi connu</button>
+                  <div id="recovery-return-dropdown-menu" class="return-dropdown-menu" hidden></div>
+                </div>
+              </div>
+            </div>
+            <details class="return-profile-details-panel" id="return-profile-details">
+              <summary>Détails techniques</summary>
+              <dl class="detail-grid">
+                <dt>SSID</dt><dd><span id="return-detail-ssid">...</span></dd>
+                <dt>Profil NM</dt><dd><span id="return-detail-profile">...</span></dd>
+                <dt>UUID</dt><dd><span id="return-detail-uuid">...</span></dd>
+                <dt>Type</dt><dd><span id="return-detail-type">...</span></dd>
+                <dt>Interface</dt><dd><span id="return-detail-device">...</span></dd>
+                <dt>Autoconnect</dt><dd><span id="return-detail-autoconnect">...</span></dd>
+                <dt>Actif</dt><dd><span id="return-detail-active">...</span></dd>
+                <dt>Visible actuellement</dt><dd><span id="return-detail-visible">...</span></dd>
+              </dl>
+            </details>
           </div>
-          <button id="recovery-save-config" class="button secondary" type="button">Enregistrer comme Wi-Fi de retour</button>
-          <button id="forget-network-button" class="button secondary" type="button" disabled>Oublier ce reseau</button>
+          <details class="return-profile-details-panel profile-networkmanager-panel">
+            <summary>Profil NetworkManager</summary>
+            <dl class="detail-grid">
+              <dt>Wi-Fi protégé</dt><dd><span id="recovery-original-ssid">...</span></dd>
+              <dt>Profil protégé</dt><dd><span id="recovery-original-profile">...</span></dd>
+              <dt>Statut</dt><dd><span id="recovery-original-visible">...</span></dd>
+              <dt>Profil principal</dt><dd><span id="recovery-return-profile">...</span></dd>
+              <dt>Mot de passe AP</dt><dd><span id="recovery-ap-password">12345678</span></dd>
+            </dl>
+          </details>
+          <button id="recovery-save-config" class="button secondary" type="button">Enregistrer ce Wi-Fi comme principal</button>
+          <button id="forget-network-button" class="button danger" type="button" disabled>⚠ Oublier ce réseau</button>
+          <p class="danger-note">Supprimera le profil Wi-Fi connu après confirmation.</p>
           <div id="recovery-config-result" class="callout recovery-result" hidden></div>
         </div>
       </section>
@@ -1380,24 +1677,16 @@
       <section class="panel network-actions-panel" aria-labelledby="network-actions-title">
         <div class="section-head">
           <div>
-            <h2 id="network-actions-title">Actions de test</h2>
-            <p class="section-copy">Ces actions peuvent couper l'acc&egrave;s r&eacute;seau pendant quelques secondes.</p>
+            <h2 id="network-actions-title">Actions réseau</h2>
+            <p class="section-copy">Ces actions peuvent modifier temporairement l'accès réseau.</p>
           </div>
           <span class="chip">SAFE</span>
         </div>
         <div class="recovery-actions">
           <div class="action-card">
-            <strong>Wi-Fi par d&eacute;faut</strong>
-            <p>Arr&ecirc;te le mode AP et reconnecte le Wi-Fi pr&eacute;c&eacute;dent.</p>
-            <button class="button" type="button" data-network-action="reconnect-previous">Wi-Fi par d&eacute;faut</button>
-            <details class="action-plan">
-              <summary>Afficher le plan</summary>
-              <p>Le mode AP, DHCP, DNS et cette UI s'arr&ecirc;tent, puis wlan0 revient &agrave; NetworkManager. Le portail peut dispara&icirc;tre pendant le retour.</p>
-            </details>
-          </div>
-          <div class="action-card">
+            <span class="chip">Mode AP</span>
             <strong>Activer le mode AP</strong>
-            <p>D&eacute;marre l'AP Wifi-Kit avec DHCP, DNS captive et UI locale sur le port 80.</p>
+            <p>Le node créera son propre Wi-Fi temporaire avec l'interface sur le port 80.</p>
             <label class="confirm-line">
               <input id="ap-confirmed" type="checkbox">
               Je comprends que le mode AP peut couper temporairement l'acces reseau.
@@ -1409,12 +1698,12 @@
             </details>
           </div>
           <div class="action-card">
-            <strong>Retour Wi-Fi configur&eacute;</strong>
-            <p>Reconnecte le profil de retour configure, meme si son SSID n'est pas visible dans le scan.</p>
-            <button id="return-default-network-button" class="button secondary" type="button" data-network-action="return-default-network">Retour Wi-Fi configur&eacute;</button>
+            <strong>Retour au Wi-Fi principal</strong>
+            <p>Le retour utilise le Wi-Fi principal choisi plus bas.</p>
+            <button id="return-default-network-button" class="button secondary" type="button" data-network-action="return-default-network">Retour Wi-Fi principal</button>
             <details class="action-plan">
               <summary>Afficher le plan</summary>
-              <p>Demande &agrave; NetworkManager de reconnecter uniquement le profil de retour enregistr&eacute;. L'acc&egrave;s r&eacute;seau peut couper quelques secondes.</p>
+              <p>Demande &agrave; NetworkManager de reconnecter uniquement le profil principal enregistré. L'accès réseau peut couper quelques secondes.</p>
             </details>
           </div>
         </div>
@@ -1698,6 +1987,10 @@
       return knownWifiConnections().find((connection) => connection.profile === profile) || null;
     }
 
+    function connectionBySsid(ssid) {
+      return knownWifiConnections().find((connection) => connection.ssid === ssid) || null;
+    }
+
     function readableVisible(connection, ssid) {
       const networks = Array.isArray(data.scan?.networks) ? data.scan.networks : [];
       if (ssid && networks.some((network) => network.ssid === ssid)) return 'visible';
@@ -1723,16 +2016,38 @@
 
     function describeConnection() {
       const system = systemState();
+      const recovery = recoveryState();
       const ip = resolveCurrentIp();
       const hostname = pickValue(
         system.hostname,
         data?.runtime_state?.data?.hostname,
         (data?.system?.hostname ?? data?.snapshot?.hostname),
       );
-      const ssid = resolveCurrentSsid();
+      const activeAp = Boolean(system.recovery_active || recovery.active);
+      const transitionText = [
+        system.ap_state,
+        system.dhcp_state,
+        system.ui_state,
+        system.last_recovery_event,
+        recovery.last_event,
+      ].join(' ').toLowerCase();
+      const transitioning = !activeAp && /(transition|connecting|reconnecting|starting|stopping|cleanup|rollback)/.test(transitionText);
+      const ssid = transitioning
+        ? '...'
+        : activeAp
+        ? (runtimeConfig().ap_ssid || recovery.ssid || system.recovery_ssid || 'Wifi-Kit-pocket-node')
+        : resolveCurrentSsid();
+      const wifiCard = document.getElementById('status-wifi-card');
+      const wifiLabel = document.getElementById('status-wifi-label');
       document.getElementById('status-hostname').textContent = hostname;
       document.getElementById('status-ip').textContent = formatIpSummary(ip);
       document.getElementById('status-ssid').textContent = ssid;
+      if (wifiLabel) wifiLabel.textContent = transitioning ? 'Wi-Fi (transition)' : activeAp ? 'Wi-Fi (AP)' : 'Wi-Fi (normal)';
+      if (wifiCard) {
+        wifiCard.classList.toggle('wifi-status-normal', !activeAp && !transitioning);
+        wifiCard.classList.toggle('wifi-status-ap', activeAp);
+        wifiCard.classList.toggle('wifi-status-transition', transitioning);
+      }
     }
 
     function describeScanBackend(scan) {
@@ -1871,6 +2186,11 @@
       return network?.ssid_hidden ? 'Reseau masque' : (network?.ssid || 'Reseau masque');
     }
 
+    function securityRequiresPassword(security) {
+      const normalized = String(security || '').trim().toLowerCase();
+      return !['', 'open', 'none', '--', 'unknown', 'inconnu'].includes(normalized);
+    }
+
     function renderRecovery() {
       const recovery = recoveryState();
       const config = runtimeConfig();
@@ -1885,7 +2205,7 @@
       document.getElementById('recovery-chip').textContent = active ? 'Mode AP actif' : 'Mode AP inactif';
       document.getElementById('recovery-copy').textContent = active
         ? 'Connecte-toi au Wi-Fi Wifi-Kit puis ouvre cette page locale.'
-        : 'Ce panneau prepare le mode AP temporaire; les actions reelles demandent une confirmation cote serveur.';
+        : 'Prépare le Wi-Fi AP et le Wi-Fi principal avant un test réel.';
       document.getElementById('recovery-ssid').textContent = apSsid;
       document.getElementById('recovery-ap-password').textContent = apPassword;
       document.getElementById('recovery-original-ssid').textContent = originalSsid || 'non configure';
@@ -2004,38 +2324,98 @@
       if (returnButton) returnButton.disabled = !returnConnection;
     }
 
+    function returnConnectionLabel(connection, fallbackProfile = '') {
+      const profile = connection?.profile || fallbackProfile || 'non configure';
+      const ssid = connection?.ssid || runtimeConfig().return_ssid || profile;
+      return `${ssid} — ${profile}`;
+    }
+
+    function returnConnectionNeedsReview(connection) {
+      if (!connection) return false;
+      const profile = String(connection.profile || '');
+      const ssid = String(connection.ssid || '');
+      return Boolean(profile && ssid && profile === ssid && !connection.active_bool);
+    }
+
+    function appendReturnConnectionOption(menu, connection, selected, onSelect) {
+      const option = document.createElement('button');
+      const needsReview = returnConnectionNeedsReview(connection);
+      option.type = 'button';
+      option.className = `return-dropdown-option${connection.profile === selected ? ' active' : ''}`;
+      option.dataset.profile = connection.profile;
+      option.dataset.ssid = connection.ssid || connection.profile;
+      option.textContent = returnConnectionLabel(connection);
+      if (needsReview) {
+        const note = document.createElement('span');
+        note.className = 'option-note';
+        note.textContent = 'à vérifier: profil non lié';
+        option.appendChild(note);
+      }
+      option.addEventListener('click', (event) => {
+        event.stopPropagation();
+        menu.querySelectorAll('.return-dropdown-option').forEach((item) => item.classList.remove('active'));
+        option.classList.add('active');
+        onSelect(option);
+      });
+      menu.appendChild(option);
+      return option;
+    }
+
+    function setReturnConnectionSelection(profile, ssid, label) {
+      const input = document.getElementById('recovery-return-connection-select');
+      const button = document.getElementById('recovery-return-dropdown-button');
+      if (input) {
+        input.value = profile || '';
+        input.dataset.ssid = ssid || profile || '';
+      }
+      if (button) button.textContent = label || profile || 'Aucun profil Wi-Fi connu';
+    }
+
     function renderReturnConnectionSelect(selectedProfile) {
-      const select = document.getElementById('recovery-return-connection-select');
-      if (!select || document.activeElement === select) return;
-      select.replaceChildren();
+      const dropdown = document.getElementById('recovery-return-dropdown');
+      const button = document.getElementById('recovery-return-dropdown-button');
+      const menu = document.getElementById('recovery-return-dropdown-menu');
+      if (!dropdown || !button || !menu) return;
+      menu.replaceChildren();
       const connections = knownWifiConnections();
       const selected = selectedProfile || runtimeConfig().return_connection || '';
       if (connections.length === 0) {
-        const option = document.createElement('option');
-        option.value = selected;
-        option.dataset.ssid = runtimeConfig().return_ssid || selected;
-        option.textContent = selected || 'Aucun profil Wi-Fi connu';
-        select.appendChild(option);
-        select.disabled = !selected;
+        setReturnConnectionSelection(selected, runtimeConfig().return_ssid || selected, selected || 'Aucun profil Wi-Fi connu');
+        button.disabled = !selected;
+        menu.hidden = true;
+        dropdown.classList.remove('open');
         return;
       }
-      connections.forEach((connection) => {
-        const option = document.createElement('option');
-        option.value = connection.profile;
-        option.dataset.ssid = connection.ssid || connection.profile;
-        option.textContent = connection.label || `${connection.ssid || connection.profile} - ${connection.profile}`;
-        if (connection.profile === selected) option.selected = true;
-        select.appendChild(option);
+
+      let selectedConnection = connections.find((connection) => connection.profile === selected) || null;
+      const sortedConnections = [...connections].sort((left, right) => {
+        const leftReview = returnConnectionNeedsReview(left) ? 1 : 0;
+        const rightReview = returnConnectionNeedsReview(right) ? 1 : 0;
+        return leftReview - rightReview;
+      });
+      sortedConnections.forEach((connection) => {
+        appendReturnConnectionOption(menu, connection, selected, (option) => {
+          setReturnConnectionSelection(connection.profile, connection.ssid || connection.profile, option.childNodes[0]?.textContent || option.textContent);
+          renderReturnConnectionDetails(connection.profile);
+          menu.hidden = true;
+          dropdown.classList.remove('open');
+        });
       });
       if (selected && !connections.some((connection) => connection.profile === selected)) {
-        const option = document.createElement('option');
-        option.value = selected;
-        option.dataset.ssid = runtimeConfig().return_ssid || selected;
-        option.textContent = `${runtimeConfig().return_ssid || selected} - ${selected}`;
-        option.selected = true;
-        select.appendChild(option);
+        selectedConnection = { profile: selected, ssid: runtimeConfig().return_ssid || selected };
+        appendReturnConnectionOption(menu, selectedConnection, selected, (option) => {
+          setReturnConnectionSelection(selected, runtimeConfig().return_ssid || selected, option.textContent);
+          renderReturnConnectionDetails(selected);
+          menu.hidden = true;
+          dropdown.classList.remove('open');
+        });
       }
-      select.disabled = false;
+      setReturnConnectionSelection(
+        selected,
+        selectedConnection?.ssid || runtimeConfig().return_ssid || selected,
+        selectedConnection ? returnConnectionLabel(selectedConnection, selected) : 'Aucun profil Wi-Fi connu'
+      );
+      button.disabled = false;
     }
 
     function renderReturnConnectionDetails(profile) {
@@ -2097,10 +2477,9 @@
     async function saveRecoveryConfig() {
       const apSsid = document.getElementById('recovery-ap-ssid-input').value.trim();
       const apPassword = document.getElementById('recovery-ap-password-input').value;
-      const returnSelect = document.getElementById('recovery-return-connection-select');
-      const selectedOption = returnSelect.options[returnSelect.selectedIndex];
-      const returnConnection = returnSelect.value.trim();
-      const returnSsid = (selectedOption?.dataset.ssid || returnConnection).trim();
+      const returnInput = document.getElementById('recovery-return-connection-select');
+      const returnConnection = returnInput.value.trim();
+      const returnSsid = (returnInput.dataset.ssid || returnConnection).trim();
       if (!apSsid) {
         showRecoveryConfigResult('SSID AP requis.');
         return;
@@ -2110,7 +2489,7 @@
         return;
       }
       if (!returnSsid) {
-        showRecoveryConfigResult('Wi-Fi de retour requis.');
+        showRecoveryConfigResult('Wi-Fi principal requis.');
         return;
       }
       if (!returnConnection) {
@@ -2126,9 +2505,9 @@
       const returnConnection = config.return_connection || returnSsid;
       const apSsid = config.ap_ssid || 'Wifi-Kit-node';
       const plans = {
-        'reconnect-previous': "Wi-Fi par defaut: le mode AP, DHCP, DNS et cette UI vont s'arreter, puis wlan0 revient a NetworkManager. Le portail peut disparaitre pendant le retour.",
+        'reconnect-previous': "Retour au Wi-Fi precedent: le mode AP, DHCP, DNS et cette UI vont s'arreter, puis wlan0 revient a NetworkManager. Le portail peut disparaitre pendant le retour.",
         'start-ap-mode': `Activer le mode AP: snapshot NetworkManager, passer wlan0 en AP-only, lancer ${apSsid}, dnsmasq DHCP/DNS captive et l'UI locale sur 192.168.50.1:80. Timeout prototype: 300 s.`,
-        'return-default-network': `Retour Wi-Fi configure: demander a NetworkManager de reconnecter ${returnSsid} via le profil ${returnConnection}. L'acces reseau peut couper quelques secondes.`
+        'return-default-network': `Retour Wi-Fi principal: demander a NetworkManager de reconnecter ${returnSsid} via le profil ${returnConnection}. L'acces reseau peut couper quelques secondes.`
       };
       return plans[action] || `Action ${action}: plan-only.`;
     }
@@ -2151,8 +2530,8 @@
           if (button) button.textContent = 'Activation du mode AP...';
           showNetworkActionResult("Activation du mode AP... l'acces reseau normal peut couper pendant le basculement.");
         } else if (action === 'return-default-network') {
-          if (button) button.textContent = 'Retour Wi-Fi configure...';
-          showNetworkActionResult("Retour Wi-Fi configure... l'acces reseau peut couper quelques secondes.");
+          if (button) button.textContent = 'Retour Wi-Fi principal...';
+          showNetworkActionResult("Retour Wi-Fi principal... l'acces reseau peut couper quelques secondes.");
         } else {
           showNetworkActionResult(networkActionPlan(action));
         }
@@ -2174,20 +2553,20 @@
         const responsePayload = await response.json();
         if (action === 'reconnect-previous') {
           showNetworkActionResult(responsePayload.reconnect_started
-            ? `Retour lance vers le Wi-Fi par defaut (${responsePayload.previous_connection || 'connexion inconnue'}). Cette page peut devenir inaccessible dans quelques secondes.`
+            ? `Retour lance vers le Wi-Fi precedent (${responsePayload.previous_connection || 'connexion inconnue'}). Cette page peut devenir inaccessible dans quelques secondes.`
             : `Retour non lance: ${responsePayload.error || responsePayload.status}.`);
           return;
         }
         if (action === 'start-ap-mode') {
           showNetworkActionResult(responsePayload.ap_started
             ? `Mode AP en cours de demarrage: ${responsePayload.ssid || 'Wifi-Kit-node'}. Cette page normale peut devenir inaccessible.`
-            : `Mode AP non lance: ${responsePayload.error || responsePayload.status}.`);
+            : `Mode AP non lance: ${responsePayload.message || responsePayload.error || responsePayload.status}.`);
           return;
         }
         if (action === 'return-default-network') {
           showNetworkActionResult(responsePayload.return_started
-            ? `Retour Wi-Fi configure lance: ${responsePayload.return_connection || responsePayload.default_connection || 'connexion autorisee'}.`
-            : `Retour Wi-Fi configure non lance: ${responsePayload.error || responsePayload.status}.`);
+            ? `Retour Wi-Fi principal lance: ${responsePayload.return_connection || responsePayload.default_connection || 'connexion autorisee'}.`
+            : `Retour Wi-Fi principal non lance: ${responsePayload.message || responsePayload.error || responsePayload.status}.`);
           return;
         }
         if (!response.ok) return;
@@ -2232,15 +2611,29 @@
     function buildPrepPanel(network) {
       const prep = document.createElement('div');
       prep.className = 'network-prep';
+      const ssid = displaySsid(network);
+      const knownConnection = connectionBySsid(ssid);
+      const knownProfileHasSecret = Boolean(knownConnection && securityRequiresPassword(network.security || ''));
 
       const passwordLabel = document.createElement('label');
       passwordLabel.className = 'field-label';
-      passwordLabel.innerHTML = 'Mot de passe Wi-Fi <span class="field-hint">Runtime-only: non journalise, non persiste.</span>';
+      passwordLabel.append('Mot de passe Wi-Fi');
+      const passwordHint = document.createElement('span');
+      passwordHint.className = `field-hint${knownProfileHasSecret ? ' saved-secret' : ''}`;
+      passwordHint.textContent = knownProfileHasSecret
+        ? 'Mot de passe déjà enregistré.'
+        : 'Runtime-only: non journalise, non persiste.';
+      passwordLabel.appendChild(passwordHint);
       const password = document.createElement('input');
       password.className = 'password-local';
       password.type = 'password';
       password.autocomplete = 'new-password';
       password.placeholder = 'Mot de passe';
+      if (knownProfileHasSecret) {
+        password.value = '********';
+        password.dataset.savedSecretIndicator = 'true';
+        password.dataset.knownProfile = knownConnection.profile;
+      }
       passwordLabel.appendChild(password);
 
       const button = document.createElement('button');
@@ -2250,7 +2643,9 @@
 
       const summary = document.createElement('p');
       summary.className = 'prep-summary';
-      summary.textContent = "Action reelle uniquement depuis le mode AP. Aucun mot de passe deja valide n'est persiste dans ce prototype; le champ reste donc vide.";
+      summary.textContent = knownProfileHasSecret
+        ? `Profil NetworkManager connu: ${knownConnection.profile}. Laisse les astérisques pour réutiliser ce profil.`
+        : "Action reelle uniquement depuis le mode AP. Aucun mot de passe deja valide n'est persiste dans ce prototype; le champ reste donc vide.";
 
       const planDetails = document.createElement('details');
       planDetails.className = 'inline-plan';
@@ -2272,6 +2667,28 @@
         triggerWifiConnect(network, password, plan, button);
       });
       password.addEventListener('click', (event) => event.stopPropagation());
+      password.addEventListener('focus', () => {
+        if (password.dataset.savedSecretIndicator === 'true') {
+          password.value = '';
+          password.dataset.savedSecretEditing = 'true';
+          passwordHint.classList.remove('saved-secret');
+          passwordHint.textContent = 'Nouveau mot de passe runtime-only, non journalise.';
+        }
+      });
+      password.addEventListener('blur', () => {
+        if (knownProfileHasSecret && password.dataset.savedSecretEditing === 'true' && password.value === '') {
+          password.value = '********';
+          password.dataset.savedSecretIndicator = 'true';
+          delete password.dataset.savedSecretEditing;
+          passwordHint.classList.add('saved-secret');
+          passwordHint.textContent = 'Mot de passe déjà enregistré.';
+        }
+      });
+      password.addEventListener('input', () => {
+        if (password.dataset.savedSecretEditing === 'true' && password.value !== '') {
+          password.dataset.savedSecretIndicator = 'false';
+        }
+      });
       password.addEventListener('keydown', (event) => event.stopPropagation());
 
       prep.append(passwordLabel, button, summary, planDetails);
@@ -2428,7 +2845,7 @@
         ? `Connexion en cours: ${payload.requested_ssid || 'SSID inconnu'}`
         : payload.status === 'planned'
         ? `Connexion planifiee: ${payload.requested_ssid || 'SSID inconnu'}`
-        : `Connexion refusee: ${payload.error || payload.status}`;
+        : `Connexion refusee: ${payload.message || payload.error || payload.status}`;
       const list = document.createElement('ul');
       list.className = 'safe-lines';
       const lines = payload.connect_plan || [
@@ -2449,7 +2866,7 @@
       note.className = 'field-hint';
       note.textContent = payload.connect_started
         ? "Tentative de connexion en cours... si la connexion réussit, le portail disparaîtra. En cas d'echec, le mode recovery revient pour une nouvelle tentative."
-        : payload.secret_policy || payload.warning_if_recovery_active || 'Connexion non validée, le mode recovery reste actif.';
+        : payload.message || payload.secret_policy || payload.warning_if_recovery_active || 'Connexion non validée, le mode recovery reste actif.';
       plan.append(title, list, note);
       plan.hidden = false;
     }
@@ -2481,6 +2898,11 @@
       }
       button.disabled = true;
       button.textContent = 'Connexion en cours...';
+      const savedSecretUnchanged = passwordField.dataset.savedSecretIndicator === 'true'
+        && passwordField.value === '********';
+      const passwordPayload = savedSecretUnchanged
+        ? '__WIFI_KIT_USE_SAVED_NM_SECRET__'
+        : passwordField.value;
       try {
         const response = await fetch('/wifi/connect', {
           cache: 'no-store',
@@ -2489,13 +2911,14 @@
           body: JSON.stringify({
             ssid,
             security: network.security || '',
-            password: passwordField.value,
+            password: passwordPayload,
+            known_profile: savedSecretUnchanged ? passwordField.dataset.knownProfile || '' : '',
             dangerous_real_apply: true,
             confirm: phrase,
           })
         });
         const payload = await response.json();
-        passwordField.value = '';
+        passwordField.value = savedSecretUnchanged ? '********' : '';
         renderConnectResponse(payload, plan);
         if (!response.ok) {
           button.textContent = 'Connecter un Wi-Fi';
@@ -2731,8 +3154,15 @@
     document.getElementById('refresh').addEventListener('click', refreshScanFromServer);
     document.getElementById('ap-confirmed').addEventListener('change', updateRecoveryButtons);
     document.getElementById('recovery-save-config').addEventListener('click', saveRecoveryConfig);
-    document.getElementById('recovery-return-connection-select').addEventListener('change', (event) => {
-      renderReturnConnectionDetails(event.target.value);
+    document.getElementById('recovery-return-dropdown-button').addEventListener('click', (event) => {
+      event.stopPropagation();
+      const dropdown = document.getElementById('recovery-return-dropdown');
+      const menu = document.getElementById('recovery-return-dropdown-menu');
+      const open = menu.hidden;
+      document.querySelectorAll('.return-dropdown').forEach((item) => item.classList.remove('open'));
+      document.querySelectorAll('.return-dropdown-menu').forEach((item) => { item.hidden = true; });
+      menu.hidden = !open;
+      dropdown.classList.toggle('open', open);
     });
     document.getElementById('config-save-password').addEventListener('click', () => {
       const field = document.getElementById('config-ap-password');
@@ -2759,6 +3189,8 @@
     document.addEventListener('click', () => {
       document.querySelectorAll('.security-dropdown').forEach((dropdown) => dropdown.classList.remove('open'));
       document.querySelectorAll('.security-dropdown-menu').forEach((menu) => { menu.hidden = true; });
+      document.querySelectorAll('.return-dropdown').forEach((dropdown) => dropdown.classList.remove('open'));
+      document.querySelectorAll('.return-dropdown-menu').forEach((menu) => { menu.hidden = true; });
     });
     bootstrapUiDataFromServer();
   </script>

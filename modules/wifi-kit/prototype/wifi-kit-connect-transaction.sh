@@ -8,6 +8,7 @@ set -eu
 mode=""
 iface="wlan0"
 target_ssid=""
+existing_connection=""
 confirm_phrase=""
 dangerous_real_apply="0"
 tx_timeout_seconds="180"
@@ -33,6 +34,11 @@ Usage:
   printf '%s\n' "$RUNTIME_PASSWORD" | \
     sudo sh modules/wifi-kit/prototype/wifi-kit-connect-transaction.sh apply \
       --ssid "<SSID>" \
+      --dangerous-real-apply \
+      --confirm "WIFI-KIT CONNECT SAFE TRANSACTION"
+  sudo sh modules/wifi-kit/prototype/wifi-kit-connect-transaction.sh apply \
+      --ssid "<SSID>" \
+      --existing-connection "<NetworkManager profile>" \
       --dangerous-real-apply \
       --confirm "WIFI-KIT CONNECT SAFE TRANSACTION"
 EOF
@@ -313,14 +319,15 @@ cmd_plan() {
   kv "mode" "plan-readonly"
   kv "network_writes" "false"
   kv "target_ssid" "$target_ssid"
-  kv "password_source" "stdin-only-during-apply"
+  kv "password_source" "$([ -n "$existing_connection" ] && printf 'existing-networkmanager-profile' || printf 'stdin-only-during-apply')"
   kv "log_file" "/tmp/wifi-kit-connect-transaction-<txid>.log"
   kv "state_file" "/tmp/wifi-kit-connect-transaction-<txid>.state"
-  kv "temporary_profile" "wifi-kit-tx-<txid>"
+  kv "existing_connection" "${existing_connection:-none}"
+  kv "temporary_profile" "$([ -n "$existing_connection" ] && printf 'none' || printf 'wifi-kit-tx-<txid>')"
   section "transaction"
   kv "01.snapshot" "current wlan0 NetworkManager connection, SSID, IP, gateway"
-  kv "02.create_temp_profile" "wifi-kit-tx-<txid>, autoconnect=no, save=no"
-  kv "03.connect_target" "nmcli connection up temporary profile"
+  kv "02.prepare_target" "$([ -n "$existing_connection" ] && printf 'use existing NetworkManager profile without reading secrets' || printf 'create wifi-kit-tx-<txid>, autoconnect=no, save=no')"
+  kv "03.connect_target" "$([ -n "$existing_connection" ] && printf 'nmcli connection up existing profile' || printf 'nmcli connection up temporary profile')"
   kv "04.validate_target" "IPv4, default gateway, gateway ping, ping $internet_probe, DNS $dns_probe, sshd active"
   kv "05.success" "stay connected to target SSID"
   kv "06.failure" "rollback previous active NetworkManager profile"
@@ -347,7 +354,9 @@ cmd_apply() {
   require_number "--rollback-timeout-seconds" "$rollback_timeout_seconds"
 
   IFS= read -r runtime_password || runtime_password=""
-  [ -n "$runtime_password" ] || fail "missing-password"
+  if [ -z "$existing_connection" ]; then
+    [ -n "$runtime_password" ] || fail "missing-password"
+  fi
 
   nmcli=$(nmcli_bin)
   [ -n "$nmcli" ] || fail "nmcli-required"
@@ -361,9 +370,10 @@ cmd_apply() {
   state_init
   state_set "tx_id" "$tx"
   state_set "target_ssid" "$target_ssid"
-  state_set "temporary_connection" "$temp_connection"
+  state_set "existing_connection" "${existing_connection:-}"
+  state_set "temporary_connection" "$([ -n "$existing_connection" ] && printf '' || printf '%s' "$temp_connection")"
   state_set "status" "started"
-  log_event "started" "tx_id=$(quote "$tx") temporary_connection=$(quote "$temp_connection") secret_policy=$(quote "stdin-only-not-logged")"
+  log_event "started" "tx_id=$(quote "$tx") temporary_connection=$(quote "$temp_connection") existing_connection=$(quote "${existing_connection:-}") secret_policy=$(quote "stdin-or-existing-profile-not-logged")"
 
   previous_connection=$(active_connection || true)
   previous_ssid=$(active_ssid || true)
@@ -383,17 +393,25 @@ cmd_apply() {
   }
   trap cleanup EXIT INT TERM HUP
 
-  "$nmcli" connection add type wifi ifname "$iface" con-name "$temp_connection" ssid "$target_ssid" save no >>"$log_file" 2>&1 ||
-    fail "temporary-profile-create-failed"
-  "$nmcli" connection modify "$temp_connection" connection.autoconnect no >>"$log_file" 2>&1 || true
-  "$nmcli" connection modify "$temp_connection" 802-11-wireless-security.key-mgmt wpa-psk >>"$log_file" 2>&1 ||
-    fail "temporary-profile-security-failed"
-  "$nmcli" connection modify "$temp_connection" 802-11-wireless-security.psk "$runtime_password" >/dev/null 2>&1 ||
-    fail "temporary-profile-secret-attach-failed"
-  unset runtime_password
+  if [ -n "$existing_connection" ]; then
+    temp_connection=""
+    unset runtime_password
+    log_event "connect-starting" "existing_connection=$(quote "$existing_connection")"
+    connect_target=$existing_connection
+  else
+    "$nmcli" connection add type wifi ifname "$iface" con-name "$temp_connection" ssid "$target_ssid" save no >>"$log_file" 2>&1 ||
+      fail "temporary-profile-create-failed"
+    "$nmcli" connection modify "$temp_connection" connection.autoconnect no >>"$log_file" 2>&1 || true
+    "$nmcli" connection modify "$temp_connection" 802-11-wireless-security.key-mgmt wpa-psk >>"$log_file" 2>&1 ||
+      fail "temporary-profile-security-failed"
+    "$nmcli" connection modify "$temp_connection" 802-11-wireless-security.psk "$runtime_password" >/dev/null 2>&1 ||
+      fail "temporary-profile-secret-attach-failed"
+    unset runtime_password
+    log_event "connect-starting" "temporary_connection=$(quote "$temp_connection")"
+    connect_target=$temp_connection
+  fi
 
-  log_event "connect-starting" "temporary_connection=$(quote "$temp_connection")"
-  if "$nmcli" --wait 45 connection up "$temp_connection" ifname "$iface" >>"$log_file" 2>&1; then
+  if "$nmcli" --wait 45 connection up "$connect_target" ifname "$iface" >>"$log_file" 2>&1; then
     reason=$(wait_validate "$target_ssid" "yes" "$tx_timeout_seconds" || true)
     if [ "$reason" = "validated" ]; then
       state_set "status" "success"
@@ -438,6 +456,11 @@ while [ "$#" -gt 0 ]; do
     --ssid)
       [ "$#" -ge 2 ] || fail "--ssid requires a value"
       target_ssid=$2
+      shift 2
+      ;;
+    --existing-connection)
+      [ "$#" -ge 2 ] || fail "--existing-connection requires a value"
+      existing_connection=$2
       shift 2
       ;;
     --confirm)
