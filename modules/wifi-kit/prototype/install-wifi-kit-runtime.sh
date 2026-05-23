@@ -1,0 +1,361 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+module_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
+
+install_user_source="default"
+if [ -n "${WIFI_KIT_INSTALL_USER:-}" ]; then
+  install_user="$WIFI_KIT_INSTALL_USER"
+  install_user_source="env"
+elif [ -n "${SUDO_USER:-}" ]; then
+  install_user="$SUDO_USER"
+  install_user_source="sudo"
+else
+  install_user="${USER:-warzy}"
+  install_user_source="default"
+fi
+app_dir="${WIFI_KIT_INSTALL_APP_DIR:-/opt/seed-kit/wifi-kit}"
+ui_dir="$app_dir/ui"
+sudoers_path="${WIFI_KIT_SUDOERS_PATH:-/etc/sudoers.d/wifi-kit}"
+normal_unit_path="${WIFI_KIT_UI_UNIT_PATH:-/etc/systemd/system/wifi-kit-ui.service}"
+boot_guard_unit_path="${WIFI_KIT_BOOT_GUARD_UNIT_PATH:-/etc/systemd/system/wifi-kit-boot-guard.service}"
+ui_port="${WIFI_KIT_UI_PORT:-54321}"
+iface="${WIFI_KIT_BOOT_GUARD_IFACE:-wlan0}"
+internet_probe="${WIFI_KIT_BOOT_GUARD_PROBE:-1.1.1.1}"
+confirm_phrase="INSTALL WIFI-KIT RUNTIME"
+
+usage() {
+  cat <<'EOF'
+wifi-kit runtime installer prototype
+
+Usage:
+  sh modules/wifi-kit/prototype/install-wifi-kit-runtime.sh audit
+  sh modules/wifi-kit/prototype/install-wifi-kit-runtime.sh plan
+  sudo sh modules/wifi-kit/prototype/install-wifi-kit-runtime.sh install --confirm "INSTALL WIFI-KIT RUNTIME"
+
+Modes:
+  audit    Check inputs and show resolved paths. No mutation.
+  plan     Print the install actions. No mutation.
+  install  Install /opt files, sudoers, systemd units, runtime config skeleton,
+           enable/start normal UI, and enable boot guard. It does not reboot,
+           start AP mode, or intentionally change Wi-Fi.
+EOF
+}
+
+kv() {
+  printf '%s=%s\n' "$1" "$2"
+}
+
+section() {
+  printf '\n[%s]\n' "$1"
+}
+
+find_tool() {
+  command -v "$1" 2>/dev/null || true
+}
+
+user_home() {
+  getent passwd "$install_user" 2>/dev/null | awk -F: '{ print $6 }' | sed -n '1p'
+}
+
+runtime_config_path() {
+  home=$(user_home)
+  if [ -n "$home" ]; then
+    printf '%s\n' "$home/.config/wifi-kit/runtime.conf"
+  else
+    printf '%s\n' "/home/$install_user/.config/wifi-kit/runtime.conf"
+  fi
+}
+
+runtime_config=$(runtime_config_path)
+runtime_config_dir=$(dirname -- "$runtime_config")
+
+require_root() {
+  if [ "$(id -u)" != "0" ]; then
+    kv "status" "refused"
+    kv "reason" "root-required"
+    exit 1
+  fi
+}
+
+require_confirm() {
+  confirm=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --confirm)
+        [ "$#" -gt 1 ] || { kv "status" "refused"; kv "reason" "missing-confirm-value"; exit 2; }
+        confirm=$2
+        shift
+        ;;
+      *)
+        kv "status" "refused"
+        kv "reason" "unknown-argument:$1"
+        exit 2
+        ;;
+    esac
+    shift
+  done
+  if [ "$confirm" != "$confirm_phrase" ]; then
+    kv "status" "refused"
+    kv "reason" "confirm-phrase-mismatch"
+    kv "required_confirm" "$confirm_phrase"
+    exit 2
+  fi
+}
+
+source_file() {
+  rel=$1
+  printf '%s\n' "$module_dir/$rel"
+}
+
+check_source() {
+  rel=$1
+  path=$(source_file "$rel")
+  [ -f "$path" ] && kv "source_ok" "$rel" || kv "source_missing" "$rel"
+}
+
+required_sources() {
+  cat <<'EOF'
+prototype/wifi-kit-action-wrapper.sh
+prototype/ap-setup-test.sh
+prototype/wifi-kit-connect-transaction.sh
+prototype/wifi-kit-boot-guard.sh
+prototype/ui/serve-readonly.py
+prototype/ui/index.html
+EOF
+}
+
+target_state() {
+  label=$1
+  path=$2
+  if [ -e "$path" ]; then
+    kv "${label}_exists" "yes"
+  else
+    kv "${label}_exists" "no"
+  fi
+}
+
+require_sources() {
+  missing="0"
+  required_sources | while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    if [ ! -f "$(source_file "$rel")" ]; then
+      kv "source_missing" "$rel"
+      missing="1"
+    fi
+    if [ "$missing" = "1" ]; then
+      exit 1
+    fi
+  done
+}
+
+require_install_preflight() {
+  require_sources || { kv "status" "refused"; kv "reason" "missing-source"; exit 1; }
+  if [ "$install_user" = "root" ] && [ "$install_user_source" != "env" ]; then
+    kv "status" "refused"
+    kv "reason" "implicit-root-install-user"
+    kv "hint" "set WIFI_KIT_INSTALL_USER to the target non-root UI user"
+    exit 2
+  fi
+  if ! command -v visudo >/dev/null 2>&1; then
+    kv "status" "refused"
+    kv "reason" "visudo-required"
+    exit 1
+  fi
+  for target in "$sudoers_path" "$normal_unit_path" "$boot_guard_unit_path"; do
+    if [ -e "$target" ]; then
+      kv "status" "refused"
+      kv "reason" "target-exists"
+      kv "target" "$target"
+      exit 1
+    fi
+  done
+}
+
+copy_file() {
+  rel=$1
+  target=$2
+  mode=$3
+  install -o root -g root -m "$mode" "$(source_file "$rel")" "$target"
+}
+
+render_sudoers() {
+  cat <<EOF
+# Wifi-Kit runtime sudoers.
+# Managed by prototype/install-wifi-kit-runtime.sh.
+# No shell, wildcard, nmcli, systemctl, hostapd, dnsmasq, or reboot grant.
+$install_user ALL=(root) NOPASSWD: $app_dir/wifi-kit-action-wrapper.sh start-ap-mode, $app_dir/wifi-kit-action-wrapper.sh return-default-network, $app_dir/wifi-kit-action-wrapper.sh connect-wifi
+EOF
+}
+
+render_ui_unit() {
+  cat <<EOF
+[Unit]
+Description=Wifi-Kit normal UI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=$install_user
+Environment=WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS=1
+Environment=WIFI_KIT_RUNTIME_CONFIG=$runtime_config
+Environment=WIFI_KIT_UI_PORT=$ui_port
+ExecStart=/usr/bin/python3 $app_dir/ui/serve-readonly.py --host 0.0.0.0 --port \${WIFI_KIT_UI_PORT}
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+render_boot_guard_unit() {
+  cat <<EOF
+[Unit]
+Description=Wifi-Kit minimal boot guard
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+Environment=WIFI_KIT_RUNTIME_CONFIG=$runtime_config
+Environment=WIFI_KIT_BOOT_GUARD_IFACE=$iface
+Environment=WIFI_KIT_BOOT_GUARD_PROBE=$internet_probe
+Environment=WIFI_KIT_BOOT_GUARD_CONNECT_WAIT=25
+Environment=WIFI_KIT_BOOT_GUARD_PING_WAIT=3
+ExecStart=$app_dir/wifi-kit-boot-guard.sh run
+TimeoutStartSec=120
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+ensure_runtime_config() {
+  install -d -o "$install_user" -g "$install_user" -m 0700 "$runtime_config_dir"
+  if [ ! -f "$runtime_config" ]; then
+    {
+      printf '# Wifi-Kit runtime config\n'
+      printf '# Stores AP recovery password only; never stores client Wi-Fi passwords.\n'
+      printf 'ap_ssid=Wifi-Kit-%s\n' "$(hostname 2>/dev/null || printf node)"
+      printf 'ap_password=12345678\n'
+    } > "$runtime_config"
+  fi
+  chown "$install_user:$install_user" "$runtime_config"
+  chmod 0600 "$runtime_config"
+}
+
+cmd_audit() {
+  section "wifi-kit-install-audit"
+  kv "mode" "audit"
+  kv "mutations" "false"
+  kv "install_user" "$install_user"
+  kv "install_user_source" "$install_user_source"
+  kv "install_user_home" "$(user_home)"
+  kv "app_dir" "$app_dir"
+  kv "ui_dir" "$ui_dir"
+  kv "runtime_config" "$runtime_config"
+  kv "sudoers_path" "$sudoers_path"
+  kv "normal_unit_path" "$normal_unit_path"
+  kv "boot_guard_unit_path" "$boot_guard_unit_path"
+  kv "ui_port" "$ui_port"
+  kv "iface" "$iface"
+  kv "internet_probe" "$internet_probe"
+  kv "install" "$(find_tool install)"
+  kv "systemctl" "$(find_tool systemctl)"
+  kv "visudo" "$(find_tool visudo)"
+  required_sources | while IFS= read -r rel; do
+    [ -n "$rel" ] && check_source "$rel"
+  done
+  target_state "sudoers_target" "$sudoers_path"
+  target_state "ui_unit_target" "$normal_unit_path"
+  target_state "boot_guard_unit_target" "$boot_guard_unit_path"
+  if [ "$install_user" = "root" ] && [ "$install_user_source" != "env" ]; then
+    kv "install_user_warning" "implicit-root-refused-by-install"
+  fi
+}
+
+cmd_plan() {
+  cmd_audit
+  section "wifi-kit-install-plan"
+  kv "01.create_dirs" "$app_dir and $ui_dir root:root 0755"
+  kv "02.copy_runtime_files" "wrapper, AP helper, connect transaction, boot guard, UI backend, UI index"
+  kv "03.runtime_config" "$runtime_config_dir 0700 and $runtime_config 0600 owned by $install_user"
+  kv "04.sudoers" "$sudoers_path exact wrapper actions only; validate with visudo when available"
+  kv "05.systemd_units" "$normal_unit_path and $boot_guard_unit_path"
+  kv "overwrite_policy" "install refuses when sudoers or target units already exist"
+  kv "visudo_policy" "install refuses if visudo is unavailable"
+  kv "06.daemon_reload" "systemctl daemon-reload"
+  kv "07.enable_start_ui" "enable and start wifi-kit-ui.service on port $ui_port"
+  kv "08.enable_boot_guard" "enable wifi-kit-boot-guard.service; do not start AP"
+  kv "non_actions" "no reboot, no AP start, no Wi-Fi profile deletion, no client Wi-Fi password storage"
+  section "sudoers-preview"
+  render_sudoers
+  section "wifi-kit-ui.service-preview"
+  render_ui_unit
+  section "wifi-kit-boot-guard.service-preview"
+  render_boot_guard_unit
+}
+
+cmd_install() {
+  require_root
+  require_confirm "$@"
+  require_install_preflight
+
+  section "wifi-kit-install"
+  kv "status" "starting"
+  install -d -o root -g root -m 0755 "$app_dir" "$ui_dir"
+  copy_file "prototype/wifi-kit-action-wrapper.sh" "$app_dir/wifi-kit-action-wrapper.sh" 0755
+  copy_file "prototype/ap-setup-test.sh" "$app_dir/ap-setup-test.sh" 0755
+  copy_file "prototype/wifi-kit-connect-transaction.sh" "$app_dir/wifi-kit-connect-transaction.sh" 0755
+  copy_file "prototype/wifi-kit-boot-guard.sh" "$app_dir/wifi-kit-boot-guard.sh" 0755
+  copy_file "prototype/ui/serve-readonly.py" "$ui_dir/serve-readonly.py" 0755
+  copy_file "prototype/ui/index.html" "$ui_dir/index.html" 0644
+  kv "files" "installed"
+
+  ensure_runtime_config
+  kv "runtime_config" "prepared"
+
+  tmp_sudoers=$(mktemp)
+  render_sudoers > "$tmp_sudoers"
+  if command -v visudo >/dev/null 2>&1; then
+    visudo -cf "$tmp_sudoers" >/dev/null
+  fi
+  install -o root -g root -m 0440 "$tmp_sudoers" "$sudoers_path"
+  rm -f "$tmp_sudoers"
+  kv "sudoers" "installed"
+
+  tmp_unit=$(mktemp)
+  render_ui_unit > "$tmp_unit"
+  install -o root -g root -m 0644 "$tmp_unit" "$normal_unit_path"
+  render_boot_guard_unit > "$tmp_unit"
+  install -o root -g root -m 0644 "$tmp_unit" "$boot_guard_unit_path"
+  rm -f "$tmp_unit"
+  kv "systemd_units" "installed"
+
+  systemctl daemon-reload
+  systemctl enable --now wifi-kit-ui.service
+  systemctl enable wifi-kit-boot-guard.service
+  kv "wifi-kit-ui" "enabled-started"
+  kv "wifi-kit-boot-guard" "enabled"
+  kv "status" "done"
+}
+
+if [ "$#" -lt 1 ]; then
+  usage
+  exit 2
+fi
+
+mode=$1
+shift
+
+case "$mode" in
+  audit) [ "$#" -eq 0 ] || { usage; exit 2; }; cmd_audit ;;
+  plan) [ "$#" -eq 0 ] || { usage; exit 2; }; cmd_plan ;;
+  install) cmd_install "$@" ;;
+  -h|--help|help) usage ;;
+  *) usage; exit 2 ;;
+esac
