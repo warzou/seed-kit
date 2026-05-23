@@ -199,10 +199,12 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=$install_user
+Group=$install_user
+WorkingDirectory=$app_dir
 Environment=WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS=1
 Environment=WIFI_KIT_RUNTIME_CONFIG=$runtime_config
 Environment=WIFI_KIT_UI_PORT=$ui_port
-ExecStart=/usr/bin/python3 $app_dir/ui/serve-readonly.py --host 0.0.0.0 --port \${WIFI_KIT_UI_PORT}
+ExecStart=/usr/bin/python3 ui/serve-readonly.py --host 0.0.0.0 --port \${WIFI_KIT_UI_PORT}
 Restart=on-failure
 RestartSec=3
 

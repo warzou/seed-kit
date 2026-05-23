@@ -5,13 +5,15 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/seed-kit-wifi-kit-preview
+User=warzy
+Group=warzy
+WorkingDirectory=/opt/seed-kit/wifi-kit
 Environment=WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS=1
-Environment=WIFI_KIT_RUNTIME_CONFIG=%h/.config/wifi-kit/runtime.conf
+Environment=WIFI_KIT_RUNTIME_CONFIG=/home/warzy/.config/wifi-kit/runtime.conf
 Environment=WIFI_KIT_UI_PORT=54321
-ExecStart=/usr/bin/python3 modules/wifi-kit/prototype/ui/serve-readonly.py --host 0.0.0.0 --port ${WIFI_KIT_UI_PORT}
+ExecStart=/usr/bin/python3 ui/serve-readonly.py --host 0.0.0.0 --port ${WIFI_KIT_UI_PORT}
 Restart=on-failure
 RestartSec=3
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
