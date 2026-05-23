@@ -206,8 +206,28 @@ try_connection() {
     return 1
   fi
 
-  kv "${label}_internet" "not-required"
-  log_event "success-$label" "lan-profile-connected"
+  if internet_ok; then
+    kv "${label}_internet" "ok"
+    last_good_ssid=$(connection_ssid "$connection")
+    if [ -z "$last_good_ssid" ] && [ "$label" = "return" ]; then
+      last_good_ssid=$(runtime_value return_ssid "$(runtime_value default_ssid "")")
+    fi
+    save_last_good "$connection" "$last_good_ssid"
+    if [ "$label" = "return" ]; then
+      kv "return_last_good_persisted" "yes"
+    else
+      kv "${label}_last_good_persisted" "yes"
+    fi
+    log_event "success-$label" "internet-ok-last-good-saved"
+  else
+    kv "${label}_internet" "failed"
+    if [ "$label" = "return" ]; then
+      kv "return_last_good_persisted" "no"
+    else
+      kv "${label}_last_good_persisted" "no"
+    fi
+    log_event "success-$label" "lan-profile-connected-internet-failed"
+  fi
   return 0
 }
 
@@ -239,7 +259,7 @@ cmd_plan() {
   section "boot-guard-plan"
   kv "01.try_last_good" "nmcli --wait $connect_wait_seconds connection up <last_good_connection> if present; validate default route plus ping $internet_probe"
   kv "02.persist_last_good" "after Internet success only: write last_good_connection and last_good_ssid"
-  kv "03.try_return_connection" "if last_good missing/failed, nmcli --wait $connect_wait_seconds connection up <return_connection>; Internet not required"
+  kv "03.try_return_connection" "if last_good missing/failed, nmcli --wait $connect_wait_seconds connection up <return_connection>; Internet not required, but saved as last_good when route plus ping $internet_probe succeed"
   kv "04.start_ap_mode" "if both Wi-Fi attempts fail, run existing wrapper start-ap-mode"
   kv "05.ap_policy" "AP remains active until explicit return-default-network"
   kv "forbidden" "delete profiles, store client Wi-Fi passwords, reboot, loop forever"
