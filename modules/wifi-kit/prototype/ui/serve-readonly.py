@@ -30,12 +30,26 @@ AP_ONLY_NM_STATE = Path("/tmp/wifi-kit-ap-only-nm-state")
 RUNTIME_CONFIG_PATH = Path(
     os.environ.get("WIFI_KIT_RUNTIME_CONFIG", str(Path.home() / ".config" / "wifi-kit" / "runtime.conf"))
 )
-RECONNECT_PREVIOUS_LOG = Path("/tmp/wifi-kit-reconnect-previous.log")
-CONNECT_TRANSACTION_LOG = Path("/tmp/wifi-kit-connect-transaction-ui.log")
+ACTION_LOG_DIR = Path(os.environ.get("WIFI_KIT_ACTION_LOG_DIR", "/tmp/wifi-kit-actions"))
+
+
+def action_log_identity() -> str:
+    try:
+        return str(os.getuid())
+    except AttributeError:
+        return os.environ.get("USERNAME", "unknown")
+
+
+def action_log_path(action: str) -> Path:
+    return ACTION_LOG_DIR / f"{action}-{action_log_identity()}.log"
+
+
+RECONNECT_PREVIOUS_LOG = action_log_path("reconnect-previous")
+CONNECT_TRANSACTION_LOG = action_log_path("connect-transaction-ui")
 CONNECT_TRANSACTION_TIMEOUT_SECONDS = 180
 CONNECT_WRAPPER_ACTION = "connect-wifi"
-START_AP_MODE_LOG = Path("/tmp/wifi-kit-start-ap-mode.log")
-RETURN_DEFAULT_NETWORK_LOG = Path("/tmp/wifi-kit-return-default-network.log")
+START_AP_MODE_LOG = action_log_path("start-ap-mode")
+RETURN_DEFAULT_NETWORK_LOG = action_log_path("return-default-network")
 DEFAULT_NETWORK_CONNECTION = "netplan-wlan0-GL-MT6000-d53"
 AP_MODE_MAX_SECONDS = 300
 PRIVILEGED_ACTIONS_ENV = "WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS"
@@ -298,6 +312,12 @@ def update_runtime_config(payload: dict) -> tuple[dict, int]:
             return {"status": "failure", "error": "ap-password-invalid"}, 400
         if len(ap_password) < 8:
             return {"status": "failure", "error": "ap-password-too-short"}, 400
+        if looks_like_test_ap_password(ap_password) and not bool_payload(payload.get("allow_test_ap_password")):
+            return {
+                "status": "failure",
+                "error": "ap-password-looks-like-test-value",
+                "message": "Mot de passe AP refuse: valeur de test/factice sans validation explicite.",
+            }, 400
         config["ap_password"] = ap_password
 
     write_runtime_config(config)
@@ -350,10 +370,25 @@ def append_reconnect_previous_log(
     if error:
         fields.append(f"error={json.dumps(error)}")
     try:
+        ensure_action_log_parent(RECONNECT_PREVIOUS_LOG)
         with RECONNECT_PREVIOUS_LOG.open("a", encoding="utf-8") as handle:
             handle.write(" ".join(fields) + "\n")
     except OSError:
         pass
+
+
+def ensure_action_log_parent(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.parent == ACTION_LOG_DIR:
+        try:
+            path.parent.chmod(0o1777)
+        except OSError:
+            pass
+
+
+def open_action_log(path: Path):
+    ensure_action_log_parent(path)
+    return path.open("a", encoding="utf-8")
 
 
 def append_action_log(path: Path, *, action: str, status: str, **fields: object) -> None:
@@ -366,7 +401,7 @@ def append_action_log(path: Path, *, action: str, status: str, **fields: object)
     for key, value in fields.items():
         parts.append(f"{key}={json.dumps(str(value))}")
     try:
-        with path.open("a", encoding="utf-8") as handle:
+        with open_action_log(path) as handle:
             handle.write(" ".join(parts) + "\n")
     except OSError:
         pass
@@ -376,6 +411,14 @@ def bool_payload(value: object) -> bool:
     if isinstance(value, bool):
         return value
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def looks_like_test_ap_password(value: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized == RECOVERY_AP_TEST_PASSWORD:
+        return False
+    markers = ("test", "demo", "fixture", "fake", "example", "password")
+    return any(marker in normalized for marker in markers)
 
 
 def privileged_actions_enabled() -> bool:
@@ -495,7 +538,7 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
             cwd=str(SCRIPT_DIR.parent),
             start_new_session=True,
             stdin=subprocess.DEVNULL,
-            stdout=open(START_AP_MODE_LOG, "a", encoding="utf-8"),
+            stdout=open_action_log(START_AP_MODE_LOG),
             stderr=subprocess.STDOUT,
             env=env,
         )
@@ -576,7 +619,7 @@ def return_default_network(payload: dict) -> tuple[dict, int]:
             cwd=str(SCRIPT_DIR.parent),
             start_new_session=True,
             stdin=subprocess.DEVNULL,
-            stdout=open(RETURN_DEFAULT_NETWORK_LOG, "a", encoding="utf-8"),
+            stdout=open_action_log(RETURN_DEFAULT_NETWORK_LOG),
             stderr=subprocess.STDOUT,
             env=env,
         )
@@ -614,6 +657,7 @@ def start_reconnect_previous() -> dict:
         }
 
     try:
+        ensure_action_log_parent(RECONNECT_PREVIOUS_LOG)
         subprocess.Popen(
             [
                 "sh",
@@ -932,7 +976,7 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
             command,
             cwd=str(SCRIPT_DIR.parent),
             stdin=subprocess.PIPE,
-            stdout=open(CONNECT_TRANSACTION_LOG, "a", encoding="utf-8"),
+            stdout=open_action_log(CONNECT_TRANSACTION_LOG),
             stderr=subprocess.STDOUT,
             start_new_session=True,
             text=True,

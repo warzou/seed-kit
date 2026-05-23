@@ -66,6 +66,7 @@ default_runtime_config_path() {
 }
 
 runtime_config=$(default_runtime_config_path)
+export WIFI_KIT_RUNTIME_CONFIG="$runtime_config"
 
 reply() {
   status=$1
@@ -155,16 +156,21 @@ case "$action" in
         --dangerous-real-apply \
         --confirm "WIFI-KIT AP RECOVERY MANUAL TEST" \
         --ssid "$ap_ssid" \
+        --stay-up-until-stop \
         --max-seconds "$ap_timeout_seconds"
     fi
     exec sh "$ap_setup_script" apply-ap-recovery-manual-test \
       --dangerous-real-apply \
       --confirm "WIFI-KIT AP RECOVERY MANUAL TEST" \
+      --stay-up-until-stop \
       --max-seconds "$ap_timeout_seconds"
     ;;
   return-default-network)
     require_root "$action"
     log_event "$action" "started" "connection=$return_connection"
+    if [ -f "$ap_setup_script" ]; then
+      sh "$ap_setup_script" stop >> "$log_file" 2>&1 || true
+    fi
     exec nmcli connection up "$return_connection"
     ;;
   connect-wifi)

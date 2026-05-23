@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 mode=""
 iface="wlan0"
 ap_iface="wlan0_ap"
@@ -9,6 +10,8 @@ ap_channel=""
 ap_duration_seconds="30"
 ap_max_seconds="300"
 ap_max_seconds_set="0"
+ap_stay_up_until_stop="0"
+runtime_user="${SUDO_USER:-${USER:-root}}"
 temporary_hostapd_conf="/tmp/wifi-kit-hostapd-test.conf"
 temporary_hostapd_conf_public="/tmp/wifi-kit-hostapd-test.conf.redacted"
 temporary_hostapd_log="/tmp/wifi-kit-hostapd-test.log"
@@ -24,8 +27,9 @@ temporary_dnsmasq_conf="/tmp/wifi-kit-dnsmasq-recovery.conf"
 temporary_dnsmasq_conf_public="/tmp/wifi-kit-dnsmasq-recovery.conf.redacted"
 temporary_dnsmasq_log="/tmp/wifi-kit-dnsmasq-recovery.log"
 temporary_dnsmasq_pid="/tmp/wifi-kit-dnsmasq-recovery.pid"
-temporary_ui_log="/tmp/wifi-kit-ui-recovery.log"
+temporary_ui_log="/tmp/wifi-kit-ui-recovery-${runtime_user}.log"
 temporary_ui_pid="/tmp/wifi-kit-ui-recovery.pid"
+recovery_ui_script="$script_dir/ui/serve-readonly.py"
 ui_port="80"
 confirm_phrase=""
 dangerous_real_apply="0"
@@ -67,6 +71,8 @@ Options:
   --duration-seconds <n>   Future short AP test duration. Default: 30
   --max-seconds <n>        Future manual AP max duration. Default: 300
                             AP+STA dedicated-interface default: 600
+  --stay-up-until-stop     For explicit AP recovery activation, leave AP,
+                           dnsmasq, and recovery UI running until stop.
   --ui-port <n>            Recovery UI port. Default: 80
   --confirm <phrase>       Required for apply-short-test: WIFI-KIT AP SHORT TEST
                             Required for apply-manual-test: WIFI-KIT AP MANUAL TEST
@@ -514,6 +520,7 @@ cmd_plan_ap_recovery() {
   kv "dhcp_lease" "$ap_recovery_dhcp_lease"
   kv "ui_bind" "$ap_recovery_ip:$ui_port"
   kv "max_seconds" "$ap_max_seconds"
+  kv "stay_up_until_stop" "$ap_stay_up_until_stop"
   kv "hostapd_conf" "$temporary_hostapd_conf"
   kv "hostapd_log" "$temporary_hostapd_log"
   kv "hostapd_pidfile" "$temporary_hostapd_pid"
@@ -571,11 +578,11 @@ cmd_plan_ap_recovery() {
   kv "06.start_hostapd" "sudo hostapd -d $(shell_quote "$temporary_hostapd_conf") > $(shell_quote "$temporary_hostapd_log") 2>&1"
   kv "07.write_dnsmasq" "create $(shell_quote "$temporary_dnsmasq_conf")"
   kv "08.start_dnsmasq" "sudo dnsmasq --no-daemon --conf-file=$(shell_quote "$temporary_dnsmasq_conf") > $(shell_quote "$temporary_dnsmasq_log") 2>&1"
-  kv "09.start_ui" "sudo python3 modules/wifi-kit/prototype/ui/serve-readonly.py --host $ap_recovery_ip --port $ui_port --recovery-mode --recovery-ssid $ssid"
+  kv "09.start_ui" "sudo python3 $(shell_quote "$recovery_ui_script") --host $ap_recovery_ip --port $ui_port --recovery-mode --recovery-ssid $ssid"
   kv "10.captive_portal" "basic endpoints redirect or serve local recovery UI"
-  kv "11.stop" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
-  kv "12.cleanup" "stop UI/dnsmasq/hostapd; delete temp configs with secrets; keep logs/redacted hostapd config"
-  kv "13.restore_nm" "sudo nmcli device set $iface managed yes; sudo nmcli connection up <previous> ifname $iface || sudo nmcli device connect $iface"
+  kv "11.explicit_stop" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
+  kv "12.cleanup" "stop UI/dnsmasq/hostapd only on explicit stop or startup failure"
+  kv "13.restore_nm" "only on explicit stop: sudo nmcli device set $iface managed yes; sudo nmcli connection up <previous> ifname $iface || sudo nmcli device connect $iface"
 
   section "guards"
   kv "real_execution" "requires --dangerous-real-apply and exact confirmation"
@@ -588,7 +595,7 @@ cmd_plan_ap_recovery() {
   kv "persistent_system_files" "none"
   kv "save_config" "not-called"
   kv "reboot" "not-used"
-  kv "rollback" "planned-through-AP-only-NetworkManager-restore"
+  kv "rollback" "none-for-voluntary-ap-start; restore only through explicit stop/return action"
 }
 
 cmd_apply_ap_recovery_manual_test() {
@@ -693,6 +700,7 @@ cmd_apply_ap_recovery_manual_test() {
   kv "ap_ip" "$ap_recovery_ip/$ap_recovery_cidr"
   kv "dhcp_range" "$ap_recovery_dhcp_start-$ap_recovery_dhcp_end"
   kv "max_seconds" "$ap_max_seconds"
+  kv "stay_up_until_stop" "$ap_stay_up_until_stop"
   kv "hostapd_log" "$temporary_hostapd_log"
   kv "hostapd_pidfile" "$temporary_hostapd_pid"
   kv "dnsmasq_log" "$temporary_dnsmasq_log"
@@ -725,7 +733,7 @@ cmd_apply_ap_recovery_manual_test() {
   dnsmasq_pid=$!
   printf '%s\n' "$dnsmasq_pid" >"$temporary_dnsmasq_pid"
   kv "dnsmasq_pid" "$dnsmasq_pid"
-  "$python3_bin" modules/wifi-kit/prototype/ui/serve-readonly.py \
+  WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS=1 "$python3_bin" "$recovery_ui_script" \
     --host "$ap_recovery_ip" \
     --port "$ui_port" \
     --recovery-mode \
@@ -753,6 +761,20 @@ cmd_apply_ap_recovery_manual_test() {
     kv "final_nm_active_connection" "$(active_connection || true)"
     kv "apply_status" "startup-failed"
     return 1
+  fi
+
+  if [ "$ap_stay_up_until_stop" = "1" ]; then
+    trap - EXIT INT TERM HUP
+    section "ready"
+    kv "apply_status" "running-until-explicit-stop"
+    kv "hostapd_pid" "$hostapd_pid"
+    kv "dnsmasq_pid" "$dnsmasq_pid"
+    kv "ui_pid" "$ui_pid"
+    kv "ui_url" "http://$ap_recovery_ip:$ui_port/"
+    kv "stop_command" "sudo sh modules/wifi-kit/prototype/ap-setup-test.sh stop"
+    kv "auto_stop" "disabled"
+    kv "networkmanager_restore" "not-attempted"
+    return 0
   fi
 
   elapsed=0
@@ -1736,6 +1758,9 @@ while [ "$#" -gt 0 ]; do
       ap_max_seconds="$2"
       ap_max_seconds_set="1"
       shift
+      ;;
+    --stay-up-until-stop)
+      ap_stay_up_until_stop="1"
       ;;
     --ui-port)
       [ "$#" -gt 1 ] || fail "--ui-port requires a value"
