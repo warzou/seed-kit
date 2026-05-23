@@ -1240,6 +1240,16 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
         return payload, 403 if error == "wifi-kit-network-rights-not-installed" else 500
 
     try:
+        append_action_log(
+            CONNECT_TRANSACTION_LOG,
+            action="wifi-connect-transaction",
+            status="starting",
+            ssid=ssid,
+            existing_connection=existing_connection or "none",
+            secret_policy=secret_policy,
+        )
+        env = os.environ.copy()
+        env["WIFI_KIT_CONNECT_UI_LOG"] = str(CONNECT_TRANSACTION_LOG)
         process = subprocess.Popen(
             command,
             cwd=str(SCRIPT_DIR.parent),
@@ -1248,6 +1258,7 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
             stderr=subprocess.STDOUT,
             start_new_session=True,
             text=True,
+            env=env,
         )
         assert process.stdin is not None
         process.stdin.write(f"ssid={ssid}\n")

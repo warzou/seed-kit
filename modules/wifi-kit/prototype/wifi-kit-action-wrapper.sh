@@ -5,6 +5,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ap_setup_script="$script_dir/ap-setup-test.sh"
 connect_transaction_script="$script_dir/wifi-kit-connect-transaction.sh"
 log_file="/tmp/wifi-kit-action-wrapper.log"
+ui_connect_log="${WIFI_KIT_CONNECT_UI_LOG:-}"
 runtime_config="${WIFI_KIT_RUNTIME_CONFIG:-}"
 return_connection="netplan-wlan0-GL-MT6000-d53"
 ap_test_psk="12345678"
@@ -24,13 +25,17 @@ log_event() {
   action=$1
   status=$2
   detail=${3:-}
-  {
+  line=$(
     printf 'timestamp="%s" action=%s status="%s"' "$(timestamp)" "$action" "$status"
     if [ -n "$detail" ]; then
       printf ' detail="%s"' "$(json_escape "$detail")"
     fi
     printf '\n'
-  } >> "$log_file" 2>/dev/null || true
+  )
+  printf '%s\n' "$line" >> "$log_file" 2>/dev/null || true
+  if [ "$action" = "connect-wifi" ] && [ -n "$ui_connect_log" ]; then
+    printf '%s\n' "$line" >> "$ui_connect_log" 2>/dev/null || true
+  fi
 }
 
 runtime_config_value() {

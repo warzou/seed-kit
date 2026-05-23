@@ -17,6 +17,7 @@ internet_probe="1.1.1.1"
 dns_probe="example.com"
 log_file=""
 state_file=""
+ui_log_file="${WIFI_KIT_CONNECT_UI_LOG:-}"
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ap_setup_script="$script_dir/ap-setup-test.sh"
 
@@ -65,10 +66,9 @@ tx_id() {
 }
 
 log_event() {
-  [ -n "$log_file" ] || return 0
   status=$1
   detail=${2:-}
-  {
+  line=$(
     printf 'timestamp=%s action=connect-transaction status=%s ssid=%s' \
       "$(quote "$(timestamp)")" \
       "$(quote "$status")" \
@@ -77,7 +77,13 @@ log_event() {
       printf ' %s' "$detail"
     fi
     printf '\n'
-  } >>"$log_file" 2>/dev/null || true
+  )
+  if [ -n "$log_file" ]; then
+    printf '%s\n' "$line" >>"$log_file" 2>/dev/null || true
+  fi
+  if [ -n "$ui_log_file" ]; then
+    printf '%s\n' "$line" >>"$ui_log_file" 2>/dev/null || true
+  fi
 }
 
 state_init() {
