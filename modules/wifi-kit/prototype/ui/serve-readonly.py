@@ -279,8 +279,7 @@ def runtime_config_value(key: str) -> str:
     return ""
 
 
-def public_runtime_config() -> dict[str, object]:
-    config = read_runtime_config()
+def redact_runtime_config(config: dict[str, str]) -> dict[str, object]:
     return {
         "original_ssid": config["original_ssid"],
         "original_connection": config["original_connection"],
@@ -292,6 +291,30 @@ def public_runtime_config() -> dict[str, object]:
         "password_policy": "min-8-chars",
         "secret_policy": "stores AP recovery password only; never stores client Wi-Fi passwords",
     }
+
+
+def redact_public_payload(value):
+    if isinstance(value, dict):
+        redacted = {}
+        for key, item in value.items():
+            if key == "ap_password":
+                redacted["ap_password_set"] = bool(item)
+                continue
+            if key == "ap_password_current":
+                redacted["ap_password_set"] = bool(item)
+                continue
+            if key == "recovery_ap_password_current":
+                redacted["recovery_ap_password_set"] = bool(item)
+                continue
+            redacted[key] = redact_public_payload(item)
+        return redacted
+    if isinstance(value, list):
+        return [redact_public_payload(item) for item in value]
+    return value
+
+
+def public_runtime_config() -> dict[str, object]:
+    return redact_runtime_config(read_runtime_config())
 
 
 def write_runtime_config(config: dict[str, str]) -> None:
@@ -1491,6 +1514,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def send_json(self, payload: dict, status: int = 200) -> None:
+        payload = redact_public_payload(payload)
         body = json.dumps(payload, indent=2).encode("utf-8") + b"\n"
         self.send_bytes(status, "application/json; charset=utf-8", body)
 
