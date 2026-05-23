@@ -108,6 +108,7 @@ def public_recovery_status(recovery: dict | None) -> dict:
         "recovery_ui_port",
         "ap_password_policy",
         "ap_password_configurable",
+        "ap_password_set",
         "original_ssid",
         "original_connection",
         "return_ssid",
@@ -286,7 +287,7 @@ def public_runtime_config() -> dict[str, object]:
         "return_ssid": config["return_ssid"],
         "return_connection": config["return_connection"],
         "ap_ssid": config["ap_ssid"],
-        "ap_password": config["ap_password"],
+        "ap_password_set": bool(config["ap_password"]),
         "path": str(RUNTIME_CONFIG_PATH),
         "password_policy": "min-8-chars",
         "secret_policy": "stores AP recovery password only; never stores client Wi-Fi passwords",
@@ -1395,7 +1396,7 @@ def system_info(diagnose: dict, recovery: dict | None = None) -> dict:
         "recovery_ui_port": RECOVERY_UI_PORT,
         "recovery_ap_password_policy": "min-8-chars",
         "recovery_ap_password_configurable": True,
-        "recovery_ap_password_current": config["ap_password"],
+        "recovery_ap_password_set": bool(config["ap_password"]),
         "original_ssid": config["original_ssid"],
         "original_connection": config["original_connection"],
         "return_ssid": config["return_ssid"],
@@ -1427,7 +1428,7 @@ def ui_data(recovery: dict | None = None) -> dict:
         "recovery_ui_port": RECOVERY_UI_PORT,
         "ap_password_policy": "min-8-chars",
         "ap_password_configurable": True,
-        "ap_password_current": config["ap_password"],
+        "ap_password_set": bool(config["ap_password"]),
         "original_ssid": config["original_ssid"],
         "original_connection": config["original_connection"],
         "return_ssid": config["return_ssid"],
@@ -1438,7 +1439,8 @@ def ui_data(recovery: dict | None = None) -> dict:
     if recovery:
         recovery_payload.update(recovery)
         recovery_payload["ssid"] = config["ap_ssid"] or recovery_payload.get("ssid") or f"Wifi-Kit-{hostname}"
-        recovery_payload["ap_password_current"] = config["ap_password"]
+        recovery_payload.pop("ap_password_current", None)
+        recovery_payload["ap_password_set"] = bool(config["ap_password"])
         recovery_payload["original_ssid"] = config["original_ssid"]
         recovery_payload["original_connection"] = config["original_connection"]
         recovery_payload["return_ssid"] = config["return_ssid"]
@@ -1688,7 +1690,7 @@ def main() -> None:
         "recovery_ui_port": RECOVERY_UI_PORT,
         "ap_password_policy": "min-8-chars",
         "ap_password_configurable": True,
-        "ap_password_current": config["ap_password"],
+        "ap_password_set": bool(config["ap_password"]),
         "original_ssid": config["original_ssid"],
         "original_connection": config["original_connection"],
         "return_ssid": config["return_ssid"],
