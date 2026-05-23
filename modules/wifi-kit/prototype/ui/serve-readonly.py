@@ -48,6 +48,13 @@ def action_log_path(action: str) -> Path:
     return ACTION_LOG_DIR / f"{action}-{action_log_identity()}.log"
 
 
+def is_action_log_path(path: Path) -> bool:
+    try:
+        return path.resolve().parent == ACTION_LOG_DIR.resolve()
+    except OSError:
+        return False
+
+
 RECONNECT_PREVIOUS_LOG = action_log_path("reconnect-previous")
 CONNECT_TRANSACTION_LOG = action_log_path("connect-transaction-ui")
 CONNECT_TRANSACTION_TIMEOUT_SECONDS = 180
@@ -547,7 +554,13 @@ def ensure_action_log_parent(path: Path) -> None:
 
 def open_action_log(path: Path):
     ensure_action_log_parent(path)
-    return path.open("a", encoding="utf-8")
+    handle = path.open("a", encoding="utf-8")
+    if is_action_log_path(path):
+        try:
+            path.chmod(0o666)
+        except OSError:
+            pass
+    return handle
 
 
 def append_action_log(path: Path, *, action: str, status: str, **fields: object) -> None:
