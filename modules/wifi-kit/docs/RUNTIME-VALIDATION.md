@@ -137,6 +137,56 @@ The public JSON redaction check confirmed that none of these endpoints exposed:
 state OK, and runtime config readable. No AP start, Wi-Fi change, profile
 deletion, or reboot occurred during this validation.
 
+## POST action JSON contract validated
+
+After `c7e52e1 fix: normalize wifi-kit POST action responses`, the real
+systemd service from `/opt/seed-kit/wifi-kit` was validated on `pocket-node`.
+The temporary repo-launched server was stopped before the test.
+
+Non-destructive POST error cases returned the common action response shape:
+
+```json
+{
+  "ok": false,
+  "action": "wifi-connect-transaction",
+  "status": "refused",
+  "message": "missing-ssid",
+  "error": "missing-ssid",
+  "log": ""
+}
+```
+
+for:
+
+```sh
+POST /wifi/connect
+{}
+```
+
+and:
+
+```json
+{
+  "ok": false,
+  "action": "runtime-config",
+  "status": "refused",
+  "message": "ap-password-too-short",
+  "error": "ap-password-too-short",
+  "log": ""
+}
+```
+
+for:
+
+```sh
+POST /api/runtime-config
+{"ap_password":"short"}
+```
+
+`wifi-kit-ui.service` remained active and port `54321` remained listening.
+No AP start, Wi-Fi change, profile deletion, or reboot occurred during this
+validation.
+
 ## Boot guard model
 
 The minimal boot guard uses this order:
