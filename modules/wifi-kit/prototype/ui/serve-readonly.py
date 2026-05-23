@@ -91,7 +91,41 @@ ACTION_PATHS = {
 }
 
 
+def public_recovery_status(recovery: dict | None) -> dict:
+    if not recovery:
+        return {}
+    allowed_keys = {
+        "active",
+        "ssid",
+        "ip",
+        "ui_port",
+        "dhcp",
+        "dns",
+        "ui",
+        "captive_portal",
+        "actions",
+        "normal_ui_port",
+        "recovery_ui_port",
+        "ap_password_policy",
+        "ap_password_configurable",
+        "original_ssid",
+        "original_connection",
+        "return_ssid",
+        "return_connection",
+        "runtime_config_path",
+        "ui_access_password",
+        "action_endpoints",
+    }
+    return {key: value for key, value in recovery.items() if key in allowed_keys}
+
+
 def run_json_command(args: list[str]) -> dict:
+    if not WIFI_KIT_SH.exists():
+        return {
+            "status": "unavailable",
+            "command": " ".join(args),
+            "error": "legacy-wifi-kit-sh-not-installed",
+        }
     shell_bin = find_tool("sh")
     if not shell_bin:
         return {
@@ -800,11 +834,48 @@ def start_reconnect_previous() -> dict:
     }
 
 
+def current_ip_for_iface(iface: str) -> str:
+    output = run_text_command(["ip", "-o", "-4", "addr", "show", "dev", iface])
+    for line in output.splitlines():
+        parts = line.split()
+        if "inet" in parts:
+            index = parts.index("inet")
+            if index + 1 < len(parts):
+                return parts[index + 1]
+    return ""
+
+
 def safe_diagnose() -> dict:
-    return run_json_command(["safe-diagnose", "--json"])
+    iface = "wlan0"
+    current_ip = current_ip_for_iface(iface)
+    current_ssid = wlan_ssid()
+    backend = "raspberrypi-networkmanager" if networkmanager_owns_wlan0() else "runtime-readonly"
+    scan_status = "available" if (find_tool("nmcli") or find_tool("iw") or find_tool("wpa_cli")) else "unavailable"
+    return {
+        "mode": "safe-diagnose",
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "backend": backend,
+        "interface": iface,
+        "current_ssid_state": current_ssid if current_ssid != "unknown" else "unknown",
+        "current_ip": current_ip or "unknown",
+        "ssh_route_interface": "unknown",
+        "network_writes": False,
+        "scan_status": scan_status,
+        "source": "serve-readonly.py",
+    }
 
 
 def scan(refresh: bool = False) -> dict:
+    if not WIFI_KIT_SH.exists() or not find_tool("sh"):
+        reason = "legacy-wifi-kit-sh-not-installed" if not WIFI_KIT_SH.exists() else "shell-not-available"
+        return {
+            "status": "unavailable",
+            "backend": "runtime-readonly",
+            "reason": reason,
+            "refresh_attempted": refresh,
+            "refresh_status": "unavailable",
+            "networks": [],
+        }
     args = ["scan-real", "--json"]
     if refresh:
         args.insert(1, "--refresh")
@@ -1134,7 +1205,19 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
     )
 
 def snapshot_preview() -> dict:
-    return run_json_command(["state-snapshot", "--simulate", "--json"])
+    diagnose = safe_diagnose()
+    return {
+        "mode": "state-snapshot",
+        "simulated": True,
+        "source": "serve-readonly.py",
+        "backend": diagnose.get("backend", "runtime-readonly"),
+        "interface": diagnose.get("interface", "wlan0"),
+        "current_ssid_state": diagnose.get("current_ssid_state", "unknown"),
+        "current_ip": diagnose.get("current_ip", "unknown"),
+        "ssh_route_interface": diagnose.get("ssh_route_interface", "unknown"),
+        "network_writes": False,
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
 
 
 def uptime_label() -> str:
@@ -1354,11 +1437,12 @@ def ui_data(recovery: dict | None = None) -> dict:
         "runtime_config": public_runtime_config(),
         "known_wifi_connections": wifi_connections,
         "runtime_state": {
-            "source": "state-snapshot --simulate --json",
+            "source": "serve-readonly.py state snapshot",
             "data": snapshot,
         },
         "connect_options": {
-            "apply_endpoint": "not-implemented",
+            "apply_endpoint": "/wifi/connect",
+            "actions": "runtime-gated",
             "ap_services_started": bool(recovery and recovery.get("active")),
         },
         "recovery": recovery_payload,
@@ -1484,29 +1568,37 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/status":
+            status_backend = backend_status(self.recovery)
+            status_system = status_backend["network"] | {
+                "hostname": socket.gethostname() or "unknown",
+                "mode": "recovery" if self.recovery.get("active") else "runtime",
+            }
             self.send_json(
                 {
                     "status": "ok",
-                    "mode": "recovery" if self.recovery.get("active") else "readonly",
-                    "recovery": self.recovery,
-                    "system": ui_data(self.recovery)["system"],
+                    "mode": "recovery" if self.recovery.get("active") else "runtime",
+                    "recovery": public_recovery_status(self.recovery),
+                    "system": status_system,
+                    "backend": status_backend,
                     "normal_ui_port": NORMAL_UI_PORT,
                     "recovery_ui_port": RECOVERY_UI_PORT,
                     "recovery_ap_password_policy": "min-8-chars",
                     "recovery_ap_password_configurable": True,
-                    "actions": "runtime-gated",
+                    "actions": status_backend["actions"],
                 }
             )
             return
 
         if path in ACTION_PATHS:
+            action = ACTION_PATHS[path]
+            runtime_actions = {"reconnect-previous", "start-ap-mode", "return-default-network"}
             self.send_json(
                 {
-                    "status": "planned",
-                    "action": ACTION_PATHS[path],
-                    "mutation": "not-implemented",
-                    "safety": "visible in UI only; no network mutation from HTTP V1",
-                    "recovery": self.recovery,
+                    "status": "runtime-gated" if action in runtime_actions else "unavailable",
+                    "action": action,
+                    "mutation": "post-required" if action in runtime_actions else "not-wired",
+                    "safety": "GET is read-only; use the matching POST endpoint for gated runtime actions.",
+                    "recovery": public_recovery_status(self.recovery),
                 }
             )
             return
