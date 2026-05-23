@@ -287,7 +287,7 @@ cmd_plan() {
   kv "overwrite_policy" "install refuses when sudoers or target units already exist unless --reinstall is used"
   kv "visudo_policy" "install refuses if visudo is unavailable"
   kv "06.daemon_reload" "systemctl daemon-reload"
-  kv "07.enable_start_ui" "enable and start wifi-kit-ui.service on port $ui_port"
+  kv "07.enable_restart_ui" "enable and restart wifi-kit-ui.service on port $ui_port so installed backend code is reloaded"
   kv "08.enable_boot_guard" "enable wifi-kit-boot-guard.service; do not start AP"
   kv "non_actions" "no reboot, no AP start, no Wi-Fi profile deletion, no client Wi-Fi password storage"
   section "sudoers-preview"
@@ -336,9 +336,10 @@ cmd_install() {
   kv "systemd_units" "installed"
 
   systemctl daemon-reload
-  systemctl enable --now wifi-kit-ui.service
+  systemctl enable wifi-kit-ui.service
+  systemctl restart wifi-kit-ui.service
   systemctl enable wifi-kit-boot-guard.service
-  kv "wifi-kit-ui" "enabled-started"
+  kv "wifi-kit-ui" "enabled-restarted"
   kv "wifi-kit-boot-guard" "enabled"
   kv "status" "done"
 }
