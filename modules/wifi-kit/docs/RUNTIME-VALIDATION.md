@@ -100,6 +100,43 @@ Verbose mode prints the raw audit, plan, sudoers preview, and systemd unit
 previews. No sudo, install, AP start, Wi-Fi change, or reboot occurred during
 the short-output validation.
 
+## Backend status and public JSON redaction validated
+
+After `6743521 fix: restart wifi-kit UI after runtime install`, the runtime was
+redeployed on `pocket-node` with:
+
+```sh
+sh seed-kit.sh install wifi-kit
+```
+
+The reinstall completed with:
+
+```text
+wifi-kit-ui=enabled-restarted
+wifi-kit-boot-guard=enabled
+[OK] wifi-kit
+```
+
+The UI restart reloaded the installed backend from `/opt/seed-kit/wifi-kit`.
+The following endpoints were validated:
+
+- `/status`
+- `/api/ui-data`
+- `/api/runtime-config`
+- `/api/backend-status`
+
+The public JSON redaction check confirmed that none of these endpoints exposed:
+
+- `12345678`
+- `TestAP9876`
+- `ap_password_current`
+- `recovery_ap_password_current`
+- `"ap_password":`
+
+`/api/backend-status` returned runtime mode with actions available, install
+state OK, and runtime config readable. No AP start, Wi-Fi change, profile
+deletion, or reboot occurred during this validation.
+
 ## Boot guard model
 
 The minimal boot guard uses this order:
