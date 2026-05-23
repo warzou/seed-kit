@@ -27,6 +27,46 @@ prototype on `pocket-node`.
 - No AP start, Wi-Fi change, profile deletion, or reboot occurred during the
   `/opt` service validation.
 
+## Seed-Kit install/reinstall flow validated
+
+The Seed-Kit install entrypoint was validated on `pocket-node` after:
+
+- `e9fabb9 feat: add wifi-kit reinstall flow`
+
+Validated command:
+
+```sh
+sh seed-kit.sh install wifi-kit
+```
+
+The command detected the existing runtime install and prompted:
+
+```text
+[wifi-kit] already installed
+reinstall? [y/N]
+```
+
+Answering `y` completed the reinstall flow:
+
+```text
+status=done
+apply module completed
+[OK] wifi-kit
+```
+
+Post-install validation:
+
+- `wifi-kit-ui.service` is `enabled` and `active`.
+- `wifi-kit-boot-guard.service` is `enabled` and `inactive`, which is normal
+  for this oneshot outside boot/start.
+- Port `54321` listens on `0.0.0.0`.
+- Local UI check returned `UI_LOCAL_OK`.
+- LAN UI check returned `UI_LAN_OK`.
+- `/etc/sudoers.d/wifi-kit` parsed OK with `visudo`.
+- `/opt/seed-kit/wifi-kit` was updated by the reinstall.
+- `~/.config/wifi-kit/runtime.conf` was preserved as `warzy:warzy` mode `0600`.
+- No AP start, Wi-Fi change, Wi-Fi profile deletion, or reboot occurred.
+
 ## Boot guard model
 
 The minimal boot guard uses this order:
