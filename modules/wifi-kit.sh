@@ -14,7 +14,7 @@ module_wifi_kit_plan() {
   echo "- command: sh seed-kit.sh install wifi-kit"
   echo "- alternate: sh seed-kit.sh --apply --modules=wifi-kit"
   echo "- installs: /opt runtime, strict sudoers, normal UI service, boot guard service"
-  echo "- safety: explicit confirmation required before real install"
+  echo "- safety: install/reinstall prompt before real install"
   echo "- safety: no AP start, no Wi-Fi change, no profile deletion, no reboot"
   echo "- safety: no client Wi-Fi password storage"
   if [ -f modules/wifi-kit/prototype/install-wifi-kit-runtime.sh ]; then
@@ -25,7 +25,7 @@ module_wifi_kit_plan() {
 
 module_wifi_kit_apply() {
   installer="modules/wifi-kit/prototype/install-wifi-kit-runtime.sh"
-  confirm_phrase="INSTALL WIFI-KIT RUNTIME"
+  installed=0
 
   echo "[wifi-kit] runtime install"
   echo "[wifi-kit] installs /opt runtime, sudoers, wifi-kit-ui.service, and wifi-kit-boot-guard.service"
@@ -47,14 +47,22 @@ module_wifi_kit_apply() {
   sh "$installer" plan
 
   echo ""
-  echo "[wifi-kit] To continue, type exactly:"
-  echo "$confirm_phrase"
-  printf "confirm wifi-kit runtime install: "
+  if [ -d /opt/seed-kit/wifi-kit ] || [ -e /etc/sudoers.d/wifi-kit ] || [ -e /etc/systemd/system/wifi-kit-ui.service ] || [ -e /etc/systemd/system/wifi-kit-boot-guard.service ]; then
+    installed=1
+    echo "[wifi-kit] already installed"
+    printf "reinstall? [y/N] "
+  else
+    printf "install wifi-kit runtime? [y/N] "
+  fi
   IFS= read -r answer || answer=
-  if [ "$answer" != "$confirm_phrase" ]; then
+  case "$answer" in
+    y|Y)
+      ;;
+    *)
     echo "[wifi-kit] aborted"
     return 2
-  fi
+      ;;
+  esac
 
   if ! require_sudo_for_system_action "wifi-kit runtime install"; then
     return 2
@@ -66,5 +74,9 @@ module_wifi_kit_apply() {
     SUDO=sudo
   fi
 
-  $SUDO sh "$installer" install --confirm "$confirm_phrase"
+  if [ "$installed" -eq 1 ]; then
+    $SUDO sh "$installer" install --reinstall
+  else
+    $SUDO sh "$installer" install
+  fi
 }

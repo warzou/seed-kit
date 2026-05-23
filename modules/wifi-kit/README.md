@@ -184,11 +184,17 @@ sh seed-kit.sh --apply --modules=wifi-kit
 ```
 
 Cette commande appelle `modules/wifi-kit/prototype/install-wifi-kit-runtime.sh`.
-Avant toute installation reelle, elle affiche `audit` et `plan`, puis demande la
-phrase exacte:
+Avant toute installation reelle, elle affiche `audit` et `plan`, puis demande
+une confirmation courte:
 
 ```text
-INSTALL WIFI-KIT RUNTIME
+install wifi-kit runtime? [y/N]
+```
+
+Si Wifi-Kit est deja installe, elle affiche `already installed` puis demande:
+
+```text
+reinstall? [y/N]
 ```
 
 Le chemin d'installation ne doit pas lancer AP mode, ne doit pas changer de

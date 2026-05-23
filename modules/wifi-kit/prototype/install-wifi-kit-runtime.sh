@@ -23,7 +23,6 @@ boot_guard_unit_path="${WIFI_KIT_BOOT_GUARD_UNIT_PATH:-/etc/systemd/system/wifi-
 ui_port="${WIFI_KIT_UI_PORT:-54321}"
 iface="${WIFI_KIT_BOOT_GUARD_IFACE:-wlan0}"
 internet_probe="${WIFI_KIT_BOOT_GUARD_PROBE:-1.1.1.1}"
-confirm_phrase="INSTALL WIFI-KIT RUNTIME"
 
 usage() {
   cat <<'EOF'
@@ -32,7 +31,8 @@ wifi-kit runtime installer prototype
 Usage:
   sh modules/wifi-kit/prototype/install-wifi-kit-runtime.sh audit
   sh modules/wifi-kit/prototype/install-wifi-kit-runtime.sh plan
-  sudo sh modules/wifi-kit/prototype/install-wifi-kit-runtime.sh install --confirm "INSTALL WIFI-KIT RUNTIME"
+  sudo sh modules/wifi-kit/prototype/install-wifi-kit-runtime.sh install
+  sudo sh modules/wifi-kit/prototype/install-wifi-kit-runtime.sh install --reinstall
 
 Modes:
   audit    Check inputs and show resolved paths. No mutation.
@@ -79,14 +79,12 @@ require_root() {
   fi
 }
 
-require_confirm() {
-  confirm=""
+parse_install_options() {
+  reinstall=0
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --confirm)
-        [ "$#" -gt 1 ] || { kv "status" "refused"; kv "reason" "missing-confirm-value"; exit 2; }
-        confirm=$2
-        shift
+      --reinstall)
+        reinstall=1
         ;;
       *)
         kv "status" "refused"
@@ -96,12 +94,6 @@ require_confirm() {
     esac
     shift
   done
-  if [ "$confirm" != "$confirm_phrase" ]; then
-    kv "status" "refused"
-    kv "reason" "confirm-phrase-mismatch"
-    kv "required_confirm" "$confirm_phrase"
-    exit 2
-  fi
 }
 
 source_file() {
@@ -165,9 +157,13 @@ require_install_preflight() {
   fi
   for target in "$sudoers_path" "$normal_unit_path" "$boot_guard_unit_path"; do
     if [ -e "$target" ]; then
+      if [ "${reinstall:-0}" = "1" ]; then
+        continue
+      fi
       kv "status" "refused"
       kv "reason" "target-exists"
       kv "target" "$target"
+      kv "hint" "rerun with --reinstall to overwrite runtime files and units"
       exit 1
     fi
   done
@@ -288,7 +284,7 @@ cmd_plan() {
   kv "03.runtime_config" "$runtime_config_dir 0700 and $runtime_config 0600 owned by $install_user"
   kv "04.sudoers" "$sudoers_path exact wrapper actions only; validate with visudo when available"
   kv "05.systemd_units" "$normal_unit_path and $boot_guard_unit_path"
-  kv "overwrite_policy" "install refuses when sudoers or target units already exist"
+  kv "overwrite_policy" "install refuses when sudoers or target units already exist unless --reinstall is used"
   kv "visudo_policy" "install refuses if visudo is unavailable"
   kv "06.daemon_reload" "systemctl daemon-reload"
   kv "07.enable_start_ui" "enable and start wifi-kit-ui.service on port $ui_port"
@@ -304,11 +300,12 @@ cmd_plan() {
 
 cmd_install() {
   require_root
-  require_confirm "$@"
+  parse_install_options "$@"
   require_install_preflight
 
   section "wifi-kit-install"
   kv "status" "starting"
+  kv "reinstall" "$reinstall"
   install -d -o root -g root -m 0755 "$app_dir" "$ui_dir"
   copy_file "prototype/wifi-kit-action-wrapper.sh" "$app_dir/wifi-kit-action-wrapper.sh" 0755
   copy_file "prototype/ap-setup-test.sh" "$app_dir/ap-setup-test.sh" 0755
