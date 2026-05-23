@@ -388,6 +388,28 @@
 
     .scan-status { margin-top: 4px; color: #cbd7e8; }
 
+    .mobile-cta {
+      display: grid;
+      gap: 5px;
+      margin: 0 0 12px;
+      border: 1px solid rgba(68, 212, 230, 0.28);
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(45, 149, 255, 0.18), rgba(83, 220, 98, 0.09));
+      padding: 13px;
+    }
+
+    .mobile-cta strong {
+      color: #f8fbff;
+      font-size: 1.02rem;
+      line-height: 1.12;
+    }
+
+    .mobile-cta p {
+      margin: 0;
+      color: #c9d8eb;
+      font-size: 0.86rem;
+    }
+
     .scan-spinner {
       display: inline-flex;
       align-items: center;
@@ -837,6 +859,11 @@
       padding: 12px;
     }
 
+    .network-prep .connect-button {
+      min-height: 50px;
+      font-size: 0.94rem;
+    }
+
     .field-label {
       display: grid;
       gap: 8px;
@@ -1011,6 +1038,28 @@
       background: rgba(255, 255, 255, 0.035);
       padding: 12px;
     }
+
+    .recovery-reassurance {
+      display: grid;
+      gap: 6px;
+      border: 1px solid rgba(83, 220, 98, 0.18);
+      border-radius: 16px;
+      background: rgba(83, 220, 98, 0.06);
+      padding: 11px;
+      color: var(--soft);
+      font-size: 0.86rem;
+    }
+
+    .recovery-reassurance strong {
+      color: #dfffe5;
+      font-size: 0.92rem;
+    }
+
+    .recovery-reassurance p {
+      margin: 0;
+      color: var(--muted);
+    }
+
 
     .recovery-settings-section {
       display: grid;
@@ -1567,7 +1616,7 @@
           </div>
         </div>
       </div>
-      <p class="lead">Connecter un Wi-Fi.</p>
+      <p class="lead">Connecte le node au bon Wi-Fi et garde un mode AP de secours si le reseau normal tombe.</p>
     </header>
 
     <section class="overview" aria-label="Etat Wi-Fi courant">
@@ -1580,7 +1629,7 @@
 
     <nav class="section-tabs" aria-label="Navigation Wifi-Kit">
       <button class="tab-button active" type="button" data-page-target="networks" aria-current="page"><svg class="icon-svg" aria-hidden="true"><use href="#icon-wifi"></use></svg>Wifi</button>
-      <button class="tab-button" type="button" data-page-target="recovery"><svg class="icon-svg" aria-hidden="true"><use href="#icon-shield"></use></svg>R&eacute;cup.</button>
+      <button class="tab-button" type="button" data-page-target="recovery"><svg class="icon-svg" aria-hidden="true"><use href="#icon-shield"></use></svg>Secours</button>
       <button class="tab-button" type="button" data-page-target="diagnostic"><svg class="icon-svg" aria-hidden="true"><use href="#icon-activity"></use></svg>Diag.</button>
       <button class="tab-button" type="button" data-page-target="config"><svg class="icon-svg" aria-hidden="true"><use href="#icon-gear"></use></svg>Config.</button>
     </nav>
@@ -1589,10 +1638,14 @@
       <section class="panel" aria-labelledby="network-title">
         <div class="section-head">
           <div>
-            <h2 id="network-title">Choisir ou changer de Wi-Fi</h2>
-            <p id="scan-status" class="scan-status">Scan passif prêt.</p>
+            <h2 id="network-title">Se connecter a un Wi-Fi</h2>
+            <p id="scan-status" class="scan-status">Les reseaux disponibles s'affichent automatiquement.</p>
           </div>
           <button id="refresh" type="button" class="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-refresh"></use></svg>Scanner</button>
+        </div>
+        <div class="mobile-cta">
+          <strong>Se connecter a un Wi-Fi</strong>
+          <p>Touche un reseau, verifie le mot de passe si besoin, puis lance la connexion. Les profils deja connus peuvent reutiliser leur mot de passe enregistre.</p>
         </div>
         <span id="scan-spinner" class="scan-spinner" hidden>Scan en cours</span>
         <div id="scan-message" class="callout" hidden></div>
@@ -1604,21 +1657,25 @@
       <section class="panel recovery-panel" id="recovery-panel" aria-labelledby="recovery-title">
         <div class="section-head">
           <div>
-            <h2 id="recovery-title">Configuration de récupération</h2>
-            <p class="section-copy" id="recovery-copy">Wi-Fi de secours temporaire et retour au Wi-Fi principal.</p>
+            <h2 id="recovery-title">Recuperation AP</h2>
+            <p class="section-copy" id="recovery-copy">Un Wi-Fi temporaire pour retrouver le node si le reseau principal ne repond plus.</p>
           </div>
           <span class="chip" id="recovery-chip">Plan-only</span>
         </div>
         <div class="recovery-grid" aria-label="Etat recovery">
           <div class="metric"><span>Wi-Fi AP</span><strong id="recovery-ssid">...</strong></div>
           <div class="metric"><span>Wi-Fi principal</span><strong id="recovery-return-ssid">...</strong></div>
-          <div class="metric"><span>IP locale</span><strong id="recovery-ip">192.168.50.1</strong></div>
-          <div class="metric"><span>Port captive</span><strong id="recovery-captive-port">80</strong></div>
+          <div class="metric"><span>Adresse AP</span><strong id="recovery-ip">192.168.50.1</strong></div>
+          <div class="metric"><span>Port portail</span><strong id="recovery-captive-port">80</strong></div>
           <div class="metric"><span>DHCP</span><strong id="recovery-dhcp">...</strong></div>
           <div class="metric"><span>DNS captive</span><strong id="recovery-dns">...</strong></div>
-          <div class="metric"><span>UI</span><strong id="recovery-ui">...</strong></div>
+          <div class="metric"><span>Interface</span><strong id="recovery-ui">...</strong></div>
         </div>
         <div class="recovery-settings" aria-label="Configuration recovery">
+          <div class="recovery-reassurance">
+            <strong>Le mode AP reste un secours manuel.</strong>
+            <p>Il ne demarre pas tout seul depuis cette page. Le retour utilise le Wi-Fi principal choisi ci-dessous.</p>
+          </div>
           <div class="recovery-settings-section">
             <h3 class="settings-title">Réglages AP</h3>
             <div class="recovery-settings-grid">
@@ -1677,8 +1734,8 @@
       <section class="panel network-actions-panel" aria-labelledby="network-actions-title">
         <div class="section-head">
           <div>
-            <h2 id="network-actions-title">Actions réseau</h2>
-            <p class="section-copy">Ces actions peuvent modifier temporairement l'accès réseau.</p>
+            <h2 id="network-actions-title">Actions de secours</h2>
+            <p class="section-copy">A utiliser seulement si tu veux basculer volontairement le node.</p>
           </div>
           <span class="chip">SAFE</span>
         </div>
@@ -1686,7 +1743,7 @@
           <div class="action-card">
             <span class="chip">Mode AP</span>
             <strong>Activer le mode AP</strong>
-            <p>Le node créera son propre Wi-Fi temporaire avec l'interface sur le port 80.</p>
+            <p>Le node cree son propre Wi-Fi temporaire. Tu pourras ouvrir l'interface sur le port 80.</p>
             <label class="confirm-line">
               <input id="ap-confirmed" type="checkbox">
               Je comprends que le mode AP peut couper temporairement l'acces reseau.
@@ -1699,7 +1756,7 @@
           </div>
           <div class="action-card">
             <strong>Retour au Wi-Fi principal</strong>
-            <p>Le retour utilise le Wi-Fi principal choisi plus bas.</p>
+            <p>Reconnecte le node au Wi-Fi principal configure dans la section Recuperation AP.</p>
             <button id="return-default-network-button" class="button secondary" type="button" data-network-action="return-default-network">Retour Wi-Fi principal</button>
             <details class="action-plan">
               <summary>Afficher le plan</summary>
@@ -2638,14 +2695,14 @@
 
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'button';
+      button.className = 'button connect-button';
       button.textContent = 'Connecter un Wi-Fi';
 
       const summary = document.createElement('p');
       summary.className = 'prep-summary';
       summary.textContent = knownProfileHasSecret
-        ? `Profil NetworkManager connu: ${knownConnection.profile}. Laisse les astérisques pour réutiliser ce profil.`
-        : "Action reelle uniquement depuis le mode AP. Aucun mot de passe deja valide n'est persiste dans ce prototype; le champ reste donc vide.";
+        ? `Mot de passe deja enregistre pour ce reseau. Laisse les asterisques pour reutiliser le profil ${knownConnection.profile}.`
+        : "Saisis le mot de passe au moment de la connexion. Il n'est pas stocke par Wifi-Kit.";
 
       const planDetails = document.createElement('details');
       planDetails.className = 'inline-plan';
