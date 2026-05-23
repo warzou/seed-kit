@@ -60,6 +60,7 @@ PRIVILEGED_ACTIONS_ENV = "WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS"
 AP_RECOVERY_CONFIRM = "WIFI-KIT AP RECOVERY MANUAL TEST"
 CONNECT_TRANSACTION_CONFIRM = "WIFI-KIT CONNECT SAFE TRANSACTION"
 SAVED_NM_SECRET_SENTINEL = "__WIFI_KIT_USE_SAVED_NM_SECRET__"
+SAVED_NM_SECRET_PLACEHOLDER = "********"
 RUNTIME_CONFIG_KEYS = {
     "original_ssid",
     "original_connection",
@@ -1150,6 +1151,8 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
     security = str(payload.get("security", "")).strip()
     dangerous_real_apply = bool_payload(payload.get("dangerous_real_apply"))
     confirm = str(payload.get("confirm", ""))
+    if password == SAVED_NM_SECRET_PLACEHOLDER and known_profile:
+        password = SAVED_NM_SECRET_SENTINEL
     use_saved_nm_secret = password == SAVED_NM_SECRET_SENTINEL
     known_connection = known_connection_for_ssid(ssid, known_profile) if use_saved_nm_secret else None
     existing_connection = str(known_connection.get("profile", "")) if known_connection else ""
