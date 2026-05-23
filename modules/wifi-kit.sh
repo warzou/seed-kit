@@ -2,42 +2,69 @@
 
 module_wifi_kit_plan() {
   echo "- module: wifi-kit"
-  echo "- mode: SAFE prototype / simulation"
+  echo "- mode: runtime installer prototype"
   echo "- docs: modules/wifi-kit/README.md"
   echo "- docs: modules/wifi-kit/docs/ARCHITECTURE.md"
   echo "- docs: modules/wifi-kit/docs/RECOVERY.md"
   echo "- docs: modules/wifi-kit/docs/SECURITY.md"
   echo "- docs: modules/wifi-kit/docs/ROADMAP.md"
+  echo "- docs: modules/wifi-kit/docs/RUNTIME-VALIDATION.md"
   echo "- prototype: modules/wifi-kit/prototype/wifi-kit.sh"
-  echo "- behavior: status, scan, connect, save-known-network, reconnect-plan, recovery-plan"
-  echo "- safety: no hostapd, no dnsmasq, no NetworkManager real actions"
-  echo "- safety: no Wi-Fi secret handling in this flow"
+  echo "- installer: modules/wifi-kit/prototype/install-wifi-kit-runtime.sh"
+  echo "- command: sh seed-kit.sh install wifi-kit"
+  echo "- alternate: sh seed-kit.sh --apply --modules=wifi-kit"
+  echo "- installs: /opt runtime, strict sudoers, normal UI service, boot guard service"
+  echo "- safety: explicit confirmation required before real install"
+  echo "- safety: no AP start, no Wi-Fi change, no profile deletion, no reboot"
+  echo "- safety: no client Wi-Fi password storage"
+  if [ -f modules/wifi-kit/prototype/install-wifi-kit-runtime.sh ]; then
+    echo "- installer plan:"
+    sh modules/wifi-kit/prototype/install-wifi-kit-runtime.sh plan | sed 's/^/  /'
+  fi
 }
 
 module_wifi_kit_apply() {
-  echo "- SAFE apply simulation (dry-run only)"
-  echo "- no real network action: no hostapd, no dnsmasq, no NetworkManager"
-  echo "- no Wi-Fi secrets are read, written, or logged"
-  echo "- check docs: modules/wifi-kit/README.md"
-  echo "- check prototype: modules/wifi-kit/prototype/wifi-kit.sh"
+  installer="modules/wifi-kit/prototype/install-wifi-kit-runtime.sh"
+  confirm_phrase="INSTALL WIFI-KIT RUNTIME"
+
+  echo "[wifi-kit] runtime install"
+  echo "[wifi-kit] installs /opt runtime, sudoers, wifi-kit-ui.service, and wifi-kit-boot-guard.service"
+  echo "[wifi-kit] does not start AP mode, change Wi-Fi, delete Wi-Fi profiles, store client Wi-Fi passwords, or reboot"
 
   if ! command -v sh >/dev/null 2>&1; then
-    echo "- simulation blocked: sh unavailable"
+    echo "[wifi-kit] blocked: sh unavailable" >&2
     return 1
   fi
 
-  if [ -f modules/wifi-kit/prototype/wifi-kit.sh ]; then
-    echo "- status simulation"
-    sh modules/wifi-kit/prototype/wifi-kit.sh status
-    echo "- scan simulation"
-    sh modules/wifi-kit/prototype/wifi-kit.sh scan
-    echo "- reconnect-plan simulation"
-    sh modules/wifi-kit/prototype/wifi-kit.sh reconnect-plan
-    echo "- recovery-plan simulation"
-    sh modules/wifi-kit/prototype/wifi-kit.sh recovery-plan
-    return 0
+  if [ ! -f "$installer" ]; then
+    echo "[wifi-kit] installer missing: $installer" >&2
+    return 1
   fi
 
-  echo "- prototype script is missing (non-blocking for core integration testing)"
-  return 1
+  echo "[wifi-kit] installer audit"
+  sh "$installer" audit
+  echo "[wifi-kit] installer plan"
+  sh "$installer" plan
+
+  echo ""
+  echo "[wifi-kit] To continue, type exactly:"
+  echo "$confirm_phrase"
+  printf "confirm wifi-kit runtime install: "
+  IFS= read -r answer || answer=
+  if [ "$answer" != "$confirm_phrase" ]; then
+    echo "[wifi-kit] aborted"
+    return 2
+  fi
+
+  if ! require_sudo_for_system_action "wifi-kit runtime install"; then
+    return 2
+  fi
+
+  if [ "$(id -u)" -eq 0 ]; then
+    SUDO=
+  else
+    SUDO=sudo
+  fi
+
+  $SUDO sh "$installer" install --confirm "$confirm_phrase"
 }

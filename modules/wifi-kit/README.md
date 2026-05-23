@@ -1,4 +1,4 @@
-# Wi-Fi Kit (SAFE / simulation)
+# Wi-Fi Kit
 
 `wifi-kit` est un module Seed-Kit pour preparer un flux Wi-Fi minimal, resilient et utilisable sur petit noeud nomade.
 
@@ -13,13 +13,19 @@ Le hotspot est un mode de secours, pas le moteur principal.
 
 ## Etat actuel
 
-Cette passe reste SAFE / simulation:
+Le prototype historique `prototype/wifi-kit.sh` conserve ses commandes SAFE /
+simulation et read-only.
 
-- aucune modification reseau reelle,
-- aucun `hostapd`,
-- aucun `dnsmasq`,
-- aucun NetworkManager,
-- aucun secret Wi-Fi manipule.
+Le runtime Wifi-Kit a aussi ete valide sur `pocket-node` avec:
+
+- UI normale permanente sur `54321`,
+- mode AP recovery explicite sur `80`,
+- retour AP vers Wi-Fi principal,
+- sudoers minimal,
+- boot guard minimal,
+- installation runtime sous `/opt/seed-kit/wifi-kit`.
+
+Voir `docs/RUNTIME-VALIDATION.md`.
 
 ## Choix V1
 
@@ -162,10 +168,29 @@ Cette application ne persiste rien apres reboot, ne modifie pas de config, ne la
 
 ## Integration core
 
-`wifi-kit` est enregistre comme module plan-only (`module_wifi_kit_plan`) et expose un apply SAFE / simulation (`module_wifi_kit_apply`).
+`wifi-kit` est enregistre comme module Seed-Kit et expose maintenant un chemin
+d'installation runtime minimal.
+
+Commande conseillee:
+
+```sh
+sh seed-kit.sh install wifi-kit
+```
+
+Commande equivalente:
 
 ```sh
 sh seed-kit.sh --apply --modules=wifi-kit
 ```
 
-Cette commande affiche uniquement un plan simule: docs, prototype, status, scan, reconnect-plan et recovery-plan.
+Cette commande appelle `modules/wifi-kit/prototype/install-wifi-kit-runtime.sh`.
+Avant toute installation reelle, elle affiche `audit` et `plan`, puis demande la
+phrase exacte:
+
+```text
+INSTALL WIFI-KIT RUNTIME
+```
+
+Le chemin d'installation ne doit pas lancer AP mode, ne doit pas changer de
+Wi-Fi, ne doit pas supprimer de profil Wi-Fi, ne doit pas stocker de mot de
+passe Wi-Fi client et ne doit pas reboot.

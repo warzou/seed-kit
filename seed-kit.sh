@@ -1136,6 +1136,7 @@ seed_kit_usage() {
   echo "  --modules        list available modules"
   echo "  --apply [--modules=git,docker] [--yes|-y]  minimal safe apply for supported modules"
   echo "  --apply-module=<module> [--yes|-y]  apply one module only"
+  echo "  install wifi-kit  install Wifi-Kit runtime through the module apply path"
   echo "  --fetch-module=wifi-kit [--yes|-y]  fetch one repo-backed module with git sparse checkout"
   echo "  --install-module=wifi-kit [--yes|-y]  prepare git if needed, then fetch one repo-backed module"
   echo "  --self-check     compare local Seed-Kit with public repository HEAD when git is available"
@@ -1808,6 +1809,29 @@ seed_detect_os
 load_backend
 
 case "${1:-}" in
+  install)
+    shift
+    install_target="${1:-}"
+    shift || true
+    case "$install_target" in
+      wifi-kit)
+        if [ "$#" -ne 0 ]; then
+          echo "usage: sh seed-kit.sh install wifi-kit" >&2
+          exit 2
+        fi
+        run_single_module_apply wifi-kit
+        ;;
+      "")
+        echo "usage: sh seed-kit.sh install wifi-kit" >&2
+        exit 2
+        ;;
+      *)
+        echo "unsupported install target: $install_target" >&2
+        echo "supported: wifi-kit" >&2
+        exit 2
+        ;;
+    esac
+    ;;
   --plan)
     show_plan
     ;;
