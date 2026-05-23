@@ -1265,6 +1265,7 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
         process.stdin.write(f"confirm={CONNECT_TRANSACTION_CONFIRM}\n")
         process.stdin.write("dangerous_real_apply=true\n")
         process.stdin.write(f"timeout_seconds={CONNECT_TRANSACTION_TIMEOUT_SECONDS}\n")
+        process.stdin.write(f"ui_log={CONNECT_TRANSACTION_LOG}\n")
         if existing_connection:
             process.stdin.write(f"existing_connection={existing_connection}\n")
         else:

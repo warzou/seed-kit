@@ -122,6 +122,7 @@ read_connect_request() {
       confirm) connect_confirm=$value ;;
       dangerous_real_apply) connect_dangerous_real_apply=$value ;;
       timeout_seconds) connect_timeout_seconds=$value ;;
+      ui_log) ui_connect_log=$value ;;
       *) ;;
     esac
   done
@@ -179,8 +180,8 @@ case "$action" in
     exec nmcli connection up "$return_connection"
     ;;
   connect-wifi)
-    require_root "$action"
     read_connect_request
+    require_root "$action"
     [ -n "$connect_ssid" ] || { reply "refused" "$action" "missing-ssid"; exit 2; }
     ssid_bytes=$(printf '%s' "$connect_ssid" | wc -c | tr -d ' ')
     [ "$ssid_bytes" -le 32 ] || { reply "refused" "$action" "ssid-too-long"; exit 2; }
@@ -193,6 +194,9 @@ case "$action" in
     export WIFI_KIT_AP_PSK="$ap_test_psk"
     if [ -n "$ap_ssid" ]; then
       export WIFI_KIT_AP_SSID="$ap_ssid"
+    fi
+    if [ -n "$ui_connect_log" ]; then
+      export WIFI_KIT_CONNECT_UI_LOG="$ui_connect_log"
     fi
     if [ -n "$connect_existing_connection" ]; then
       exec sh "$connect_transaction_script" apply \
