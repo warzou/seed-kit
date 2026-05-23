@@ -1584,27 +1584,30 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path == "/wifi/connect":
+        raw_path = parsed.path
+        path = normalize_request_path(raw_path)
+        log_route("post", raw_path, path)
+        if path == "/wifi/connect":
             payload, status = start_recovery_wifi_connect(parse_post_payload(self), bool(self.recovery.get("active")))
             self.send_action_json("wifi-connect-transaction", payload, status=status)
             return
 
-        if parsed.path == "/start-ap-mode":
+        if path == "/start-ap-mode":
             payload, status = start_ap_mode(parse_post_payload(self))
             self.send_action_json("start-ap-mode", payload, status=status)
             return
 
-        if parsed.path == "/return-default-network":
+        if path == "/return-default-network":
             payload, status = return_default_network(parse_post_payload(self))
             self.send_action_json("return-default-network", payload, status=status)
             return
 
-        if parsed.path == "/api/runtime-config":
+        if path == "/api/runtime-config":
             payload, status = update_runtime_config(parse_post_payload(self))
             self.send_action_json("runtime-config", payload, status=status)
             return
 
-        if parsed.path == "/reconnect-previous":
+        if path == "/reconnect-previous":
             if not self.recovery.get("active"):
                 previous_connection = read_ap_only_state_value("active_connection") or "unknown"
                 append_reconnect_previous_log(
@@ -1614,9 +1617,11 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
                     status="failure",
                     error="recovery-not-active",
                 )
-                self.send_json(
+                self.send_action_json(
+                    "reconnect-previous",
                     {
                         "status": "failure",
+                        "action": "reconnect-previous",
                         "error": "recovery-not-active",
                         "previous_connection": previous_connection,
                         "reconnect_started": False,
@@ -1627,12 +1632,15 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
                 return
 
             payload = start_reconnect_previous()
-            self.send_json(payload, status=200 if payload.get("status") == "success" else 500)
+            self.send_action_json("reconnect-previous", payload, status=200 if payload.get("status") == "success" else 500)
             return
 
-        self.send_json(
+        self.send_action_json(
+            "unknown-post",
             {
                 "error": "method-not-allowed",
+                "status": "failure",
+                "action": "unknown-post",
                 "safety": "Only POST /reconnect-previous can mutate recovery state.",
             },
             status=405,
