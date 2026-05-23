@@ -21,6 +21,36 @@ json_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
+safe_ui_log_path() {
+  path=$1
+  case "$path" in
+    /tmp/wifi-kit-actions/*.log)
+      base=${path##*/}
+      [ "$path" = "/tmp/wifi-kit-actions/$base" ] || return 1
+      [ -n "$base" ] || return 1
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+prepare_ui_log() {
+  path=$1
+  safe_ui_log_path "$path" || return 1
+  mkdir -p /tmp/wifi-kit-actions 2>/dev/null || return 1
+  chmod 1777 /tmp/wifi-kit-actions 2>/dev/null || true
+  ( : >> "$path" ) 2>/dev/null || return 1
+  chmod 0666 "$path" 2>/dev/null || true
+}
+
+append_ui_connect_log() {
+  line=$1
+  [ -n "$ui_connect_log" ] || return 0
+  prepare_ui_log "$ui_connect_log" || return 0
+  ( printf '%s\n' "$line" >> "$ui_connect_log" ) 2>/dev/null || true
+}
+
 log_event() {
   action=$1
   status=$2
@@ -34,7 +64,7 @@ log_event() {
   )
   printf '%s\n' "$line" >> "$log_file" 2>/dev/null || true
   if [ "$action" = "connect-wifi" ] && [ -n "$ui_connect_log" ]; then
-    printf '%s\n' "$line" >> "$ui_connect_log" 2>/dev/null || true
+    append_ui_connect_log "$line"
   fi
 }
 

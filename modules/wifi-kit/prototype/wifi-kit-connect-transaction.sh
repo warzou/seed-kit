@@ -61,6 +61,36 @@ timestamp() {
   date -u '+%Y-%m-%dT%H:%M:%SZ'
 }
 
+safe_ui_log_path() {
+  path=$1
+  case "$path" in
+    /tmp/wifi-kit-actions/*.log)
+      base=${path##*/}
+      [ "$path" = "/tmp/wifi-kit-actions/$base" ] || return 1
+      [ -n "$base" ] || return 1
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+prepare_ui_log() {
+  path=$1
+  safe_ui_log_path "$path" || return 1
+  mkdir -p /tmp/wifi-kit-actions 2>/dev/null || return 1
+  chmod 1777 /tmp/wifi-kit-actions 2>/dev/null || true
+  ( : >> "$path" ) 2>/dev/null || return 1
+  chmod 0666 "$path" 2>/dev/null || true
+}
+
+append_ui_log() {
+  line=$1
+  [ -n "$ui_log_file" ] || return 0
+  prepare_ui_log "$ui_log_file" || return 0
+  ( printf '%s\n' "$line" >> "$ui_log_file" ) 2>/dev/null || true
+}
+
 tx_id() {
   date -u '+%Y%m%dT%H%M%SZ'
 }
@@ -82,7 +112,7 @@ log_event() {
     printf '%s\n' "$line" >>"$log_file" 2>/dev/null || true
   fi
   if [ -n "$ui_log_file" ]; then
-    printf '%s\n' "$line" >>"$ui_log_file" 2>/dev/null || true
+    append_ui_log "$line"
   fi
 }
 
