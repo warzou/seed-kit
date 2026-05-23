@@ -48,6 +48,11 @@ def action_log_path(action: str) -> Path:
     return ACTION_LOG_DIR / f"{action}-{action_log_identity()}.log"
 
 
+def unique_action_log_path(action: str) -> Path:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    return ACTION_LOG_DIR / f"{action}-{action_log_identity()}-{timestamp}.log"
+
+
 def is_action_log_path(path: Path) -> bool:
     try:
         return path.resolve().parent == ACTION_LOG_DIR.resolve()
@@ -56,7 +61,6 @@ def is_action_log_path(path: Path) -> bool:
 
 
 RECONNECT_PREVIOUS_LOG = action_log_path("reconnect-previous")
-CONNECT_TRANSACTION_LOG = action_log_path("connect-transaction-ui")
 CONNECT_TRANSACTION_TIMEOUT_SECONDS = 180
 CONNECT_WRAPPER_ACTION = "connect-wifi"
 START_AP_MODE_LOG = action_log_path("start-ap-mode")
@@ -1155,8 +1159,28 @@ def known_connection_for_ssid(ssid: str, requested_profile: str = "") -> dict[st
 
 
 def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[dict, int]:
+    connect_transaction_log = unique_action_log_path("connect-transaction-ui")
+
+    def refused(error: str, http_status: int = 400, **extra: object) -> tuple[dict, int]:
+        append_action_log(
+            connect_transaction_log,
+            action="wifi-connect-transaction",
+            status="refused",
+            error=error,
+            ssid=str(extra.get("requested_ssid", "")) or "unknown",
+            existing_connection=str(extra.get("existing_connection", "")) or "none",
+        )
+        response = {
+            "status": "failure",
+            "error": error,
+            "connect_started": False,
+            "log": str(connect_transaction_log),
+        }
+        response.update(extra)
+        return response, http_status
+
     if payload.get("_error"):
-        return {"status": "failure", "error": payload["_error"], "connect_started": False}, 400
+        return refused(str(payload["_error"]))
 
     ssid = str(payload.get("ssid", "")).strip()
     password = str(payload.get("password", ""))
@@ -1172,15 +1196,15 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
     known_profile_reconnect = bool(existing_connection and use_saved_nm_secret)
     recovery_gate_ok = recovery_active or known_profile_reconnect
     if not ssid:
-        return {"status": "failure", "error": "missing-ssid", "connect_started": False}, 400
+        return refused("missing-ssid")
     if len(ssid.encode("utf-8")) > 32:
-        return {"status": "failure", "error": "ssid-too-long", "connect_started": False}, 400
+        return refused("ssid-too-long", requested_ssid=ssid)
     if use_saved_nm_secret and not existing_connection:
-        return {"status": "failure", "error": "known-profile-not-found", "connect_started": False}, 400
+        return refused("known-profile-not-found", requested_ssid=ssid)
     if security_requires_password(security) and not password and not existing_connection:
-        return {"status": "failure", "error": "missing-password", "connect_started": False}, 400
+        return refused("missing-password", requested_ssid=ssid)
     if password and not use_saved_nm_secret and len(password) < 8:
-        return {"status": "failure", "error": "password-too-short", "connect_started": False}, 400
+        return refused("password-too-short", requested_ssid=ssid)
 
     backend = "raspberrypi-networkmanager" if networkmanager_owns_wlan0() else "unknown"
     secret_policy = (
@@ -1211,6 +1235,19 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
         or not dangerous_real_apply
         or confirm != CONNECT_TRANSACTION_CONFIRM
     ):
+        append_action_log(
+            connect_transaction_log,
+            action="wifi-connect-transaction",
+            status="refused",
+            error="safe-gates-not-satisfied",
+            ssid=ssid,
+            existing_connection=existing_connection or "none",
+            recovery_active=recovery_active,
+            normal_mode_known_profile_allowed=known_profile_reconnect,
+            privileged_actions_enabled=privileged_actions_enabled(),
+            dangerous_real_apply=dangerous_real_apply,
+            confirm_ok=confirm == CONNECT_TRANSACTION_CONFIRM,
+        )
         return (
             {
                 "status": "planned",
@@ -1227,6 +1264,7 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
                 "confirm_ok": confirm == CONNECT_TRANSACTION_CONFIRM,
                 "secret_policy": secret_policy,
                 "existing_connection": existing_connection,
+                "log": str(connect_transaction_log),
                 "warning_if_recovery_active": (
                     "Known NetworkManager profile reconnect can run from normal mode with rollback, privileged actions, and exact confirmation."
                     if known_profile_reconnect
@@ -1239,6 +1277,14 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
 
     command, error = privileged_connect_transaction_command()
     if error:
+        append_action_log(
+            connect_transaction_log,
+            action="wifi-connect-transaction",
+            status="refused",
+            error=error,
+            ssid=ssid,
+            existing_connection=existing_connection or "none",
+        )
         payload = privileged_error_response("wifi-connect-transaction", error)
         payload.update(
             {
@@ -1248,13 +1294,14 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
                 "existing_connection": existing_connection,
                 "normal_mode_known_profile_allowed": known_profile_reconnect,
                 "secret_policy": secret_policy,
+                "log": str(connect_transaction_log),
             }
         )
         return payload, 403 if error == "wifi-kit-network-rights-not-installed" else 500
 
     try:
         append_action_log(
-            CONNECT_TRANSACTION_LOG,
+            connect_transaction_log,
             action="wifi-connect-transaction",
             status="starting",
             ssid=ssid,
@@ -1262,12 +1309,12 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
             secret_policy=secret_policy,
         )
         env = os.environ.copy()
-        env["WIFI_KIT_CONNECT_UI_LOG"] = str(CONNECT_TRANSACTION_LOG)
+        env["WIFI_KIT_CONNECT_UI_LOG"] = str(connect_transaction_log)
         process = subprocess.Popen(
             command,
             cwd=str(SCRIPT_DIR.parent),
             stdin=subprocess.PIPE,
-            stdout=open_action_log(CONNECT_TRANSACTION_LOG),
+            stdout=open_action_log(connect_transaction_log),
             stderr=subprocess.STDOUT,
             start_new_session=True,
             text=True,
@@ -1278,19 +1325,28 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
         process.stdin.write(f"confirm={CONNECT_TRANSACTION_CONFIRM}\n")
         process.stdin.write("dangerous_real_apply=true\n")
         process.stdin.write(f"timeout_seconds={CONNECT_TRANSACTION_TIMEOUT_SECONDS}\n")
-        process.stdin.write(f"ui_log={CONNECT_TRANSACTION_LOG}\n")
+        process.stdin.write(f"ui_log={connect_transaction_log}\n")
         if existing_connection:
             process.stdin.write(f"existing_connection={existing_connection}\n")
         else:
             process.stdin.write(f"password={password}\n")
         process.stdin.close()
     except (OSError, BrokenPipeError) as exc:
+        append_action_log(
+            connect_transaction_log,
+            action="wifi-connect-transaction",
+            status="failed",
+            error=f"start-failed: {exc}",
+            ssid=ssid,
+            existing_connection=existing_connection or "none",
+        )
         return {
             "status": "failure",
             "error": f"start-failed: {exc}",
             "requested_ssid": ssid,
             "backend": backend,
             "connect_started": False,
+            "log": str(connect_transaction_log),
         }, 500
 
     return (
@@ -1309,7 +1365,7 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
                 if existing_connection
                 else "runtime-only; password is passed on stdin and never returned or logged"
             ),
-            "log": str(CONNECT_TRANSACTION_LOG),
+            "log": str(connect_transaction_log),
             "connect_plan": [
                 "snapshot active NetworkManager profile and SSID",
                 (
