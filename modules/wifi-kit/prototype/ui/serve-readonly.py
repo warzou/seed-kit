@@ -1156,6 +1156,8 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
     use_saved_nm_secret = password == SAVED_NM_SECRET_SENTINEL
     known_connection = known_connection_for_ssid(ssid, known_profile) if use_saved_nm_secret else None
     existing_connection = str(known_connection.get("profile", "")) if known_connection else ""
+    known_profile_reconnect = bool(existing_connection and use_saved_nm_secret)
+    recovery_gate_ok = recovery_active or known_profile_reconnect
     if not ssid:
         return {"status": "failure", "error": "missing-ssid", "connect_started": False}, 400
     if len(ssid.encode("utf-8")) > 32:
@@ -1174,7 +1176,11 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
         else "runtime-only; password was not logged or persisted"
     )
     connect_plan = [
-        "require AP recovery context",
+        (
+            "allow normal mode because a known NetworkManager profile was selected"
+            if known_profile_reconnect
+            else "require AP recovery context"
+        ),
         "require WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS=1",
         "require exact confirmation phrase",
         (
@@ -1187,7 +1193,7 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
         "start AP recovery only if rollback fails",
     ]
     if (
-        not recovery_active
+        not recovery_gate_ok
         or not privileged_actions_enabled()
         or not dangerous_real_apply
         or confirm != CONNECT_TRANSACTION_CONFIRM
@@ -1201,13 +1207,18 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
                 "backend": backend,
                 "connect_started": False,
                 "recovery_active": recovery_active,
+                "normal_mode_known_profile_allowed": known_profile_reconnect,
                 "privileged_actions_enabled": privileged_actions_enabled(),
                 "dangerous_real_apply": dangerous_real_apply,
                 "confirm_required": CONNECT_TRANSACTION_CONFIRM,
                 "confirm_ok": confirm == CONNECT_TRANSACTION_CONFIRM,
                 "secret_policy": secret_policy,
                 "existing_connection": existing_connection,
-                "warning_if_recovery_active": "Real Wi-Fi connect requires AP recovery context, privileged actions, and exact confirmation.",
+                "warning_if_recovery_active": (
+                    "Known NetworkManager profile reconnect can run from normal mode with rollback, privileged actions, and exact confirmation."
+                    if known_profile_reconnect
+                    else "Real Wi-Fi connect requires AP recovery context, privileged actions, and exact confirmation."
+                ),
                 "connect_plan": connect_plan,
             },
             409,
@@ -1221,6 +1232,9 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
                 "requested_ssid": ssid,
                 "backend": backend,
                 "connect_started": False,
+                "existing_connection": existing_connection,
+                "normal_mode_known_profile_allowed": known_profile_reconnect,
+                "secret_policy": secret_policy,
             }
         )
         return payload, 403 if error == "wifi-kit-network-rights-not-installed" else 500
@@ -1262,6 +1276,7 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
             "backend": backend,
             "connect_started": True,
             "existing_connection": existing_connection,
+            "normal_mode_known_profile_allowed": known_profile_reconnect,
             "timeout_seconds": CONNECT_TRANSACTION_TIMEOUT_SECONDS,
             "expected_behavior": "success-keeps-target-failure-rolls-back-rollback-failure-starts-ap-recovery",
             "secret_policy": (
