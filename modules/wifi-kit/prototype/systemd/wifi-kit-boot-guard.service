@@ -1,0 +1,18 @@
+[Unit]
+Description=Wifi-Kit minimal boot guard
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+Environment=WIFI_KIT_RUNTIME_CONFIG=/home/warzy/.config/wifi-kit/runtime.conf
+Environment=WIFI_KIT_BOOT_GUARD_IFACE=wlan0
+Environment=WIFI_KIT_BOOT_GUARD_PROBE=1.1.1.1
+Environment=WIFI_KIT_BOOT_GUARD_CONNECT_WAIT=25
+Environment=WIFI_KIT_BOOT_GUARD_PING_WAIT=3
+ExecStart=/opt/seed-kit/wifi-kit/wifi-kit-boot-guard.sh run
+TimeoutStartSec=120
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target
