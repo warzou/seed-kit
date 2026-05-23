@@ -2,7 +2,7 @@
 set -eu
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-module_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
+module_dir=$script_dir
 
 install_user_source="default"
 if [ -n "${WIFI_KIT_INSTALL_USER:-}" ]; then
@@ -29,10 +29,10 @@ usage() {
 wifi-kit runtime installer prototype
 
 Usage:
-  sh modules/wifi-kit/prototype/install-wifi-kit-runtime.sh audit
-  sh modules/wifi-kit/prototype/install-wifi-kit-runtime.sh plan
-  sudo sh modules/wifi-kit/prototype/install-wifi-kit-runtime.sh install
-  sudo sh modules/wifi-kit/prototype/install-wifi-kit-runtime.sh install --reinstall
+  sh modules/wifi-kit/install-wifi-kit-runtime.sh audit
+  sh modules/wifi-kit/install-wifi-kit-runtime.sh plan
+  sudo sh modules/wifi-kit/install-wifi-kit-runtime.sh install
+  sudo sh modules/wifi-kit/install-wifi-kit-runtime.sh install --reinstall
 
 Modes:
   audit    Check inputs and show resolved paths. No mutation.
@@ -179,7 +179,7 @@ copy_file() {
 render_sudoers() {
   cat <<EOF
 # Wifi-Kit runtime sudoers.
-# Managed by prototype/install-wifi-kit-runtime.sh.
+# Managed by install-wifi-kit-runtime.sh.
 # No shell, wildcard, nmcli, systemctl, hostapd, dnsmasq, or reboot grant.
 $install_user ALL=(root) NOPASSWD: $app_dir/wifi-kit-action-wrapper.sh start-ap-mode, $app_dir/wifi-kit-action-wrapper.sh return-default-network, $app_dir/wifi-kit-action-wrapper.sh connect-wifi
 EOF

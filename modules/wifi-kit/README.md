@@ -183,7 +183,7 @@ Commande equivalente:
 sh seed-kit.sh --apply --modules=wifi-kit
 ```
 
-Cette commande appelle `modules/wifi-kit/prototype/install-wifi-kit-runtime.sh`.
+Cette commande appelle `modules/wifi-kit/install-wifi-kit-runtime.sh`.
 Avant toute installation reelle, elle affiche un resume court puis demande une
 confirmation courte:
 

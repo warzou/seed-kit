@@ -39,21 +39,21 @@ module_wifi_kit_plan() {
   echo "- docs: modules/wifi-kit/docs/ROADMAP.md"
   echo "- docs: modules/wifi-kit/docs/RUNTIME-VALIDATION.md"
   echo "- prototype: modules/wifi-kit/prototype/wifi-kit.sh"
-  echo "- installer: modules/wifi-kit/prototype/install-wifi-kit-runtime.sh"
+  echo "- installer: modules/wifi-kit/install-wifi-kit-runtime.sh"
   echo "- command: sh seed-kit.sh install wifi-kit"
   echo "- alternate: sh seed-kit.sh --apply --modules=wifi-kit"
   echo "- installs: /opt runtime, strict sudoers, normal UI service, boot guard service"
   echo "- safety: install/reinstall prompt before real install"
   echo "- safety: no AP start, no Wi-Fi change, no profile deletion, no reboot"
   echo "- safety: no client Wi-Fi password storage"
-  if [ -f modules/wifi-kit/prototype/install-wifi-kit-runtime.sh ]; then
+  if [ -f modules/wifi-kit/install-wifi-kit-runtime.sh ]; then
     echo "- installer plan:"
-    sh modules/wifi-kit/prototype/install-wifi-kit-runtime.sh plan | sed 's/^/  /'
+    sh modules/wifi-kit/install-wifi-kit-runtime.sh plan | sed 's/^/  /'
   fi
 }
 
 module_wifi_kit_apply() {
-  installer="modules/wifi-kit/prototype/install-wifi-kit-runtime.sh"
+  installer="modules/wifi-kit/install-wifi-kit-runtime.sh"
   installed=0
 
   echo "[wifi-kit] runtime install"
