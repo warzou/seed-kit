@@ -51,6 +51,13 @@ append_ui_connect_log() {
   ( printf '%s\n' "$line" >> "$ui_connect_log" ) 2>/dev/null || true
 }
 
+log_ui_connect_marker() {
+  marker=$1
+  detail=${2:-}
+  [ -n "$ui_connect_log" ] || return 0
+  log_event "connect-wifi" "$marker" "$detail"
+}
+
 log_event() {
   action=$1
   status=$2
@@ -211,6 +218,7 @@ case "$action" in
     ;;
   connect-wifi)
     read_connect_request
+    log_ui_connect_marker "wrapper-received-ui-log" "path-accepted"
     require_root "$action"
     [ -n "$connect_ssid" ] || { reply "refused" "$action" "missing-ssid"; exit 2; }
     ssid_bytes=$(printf '%s' "$connect_ssid" | wc -c | tr -d ' ')
@@ -228,6 +236,7 @@ case "$action" in
     if [ -n "$ui_connect_log" ]; then
       export WIFI_KIT_CONNECT_UI_LOG="$ui_connect_log"
     fi
+    log_ui_connect_marker "wrapper-launching-transaction" "existing_connection=${connect_existing_connection:-none}"
     if [ -n "$connect_existing_connection" ]; then
       exec sh "$connect_transaction_script" apply \
         --ssid "$connect_ssid" \
