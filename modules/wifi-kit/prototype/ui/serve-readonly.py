@@ -1158,6 +1158,27 @@ def known_connection_for_ssid(ssid: str, requested_profile: str = "") -> dict[st
     return None
 
 
+def connect_wrapper_stdin_lines(
+    *,
+    ui_log: Path,
+    ssid: str,
+    existing_connection: str,
+    password: str,
+) -> list[str]:
+    lines = [
+        f"ui_log={ui_log}\n",
+        f"ssid={ssid}\n",
+        f"confirm={CONNECT_TRANSACTION_CONFIRM}\n",
+        "dangerous_real_apply=true\n",
+        f"timeout_seconds={CONNECT_TRANSACTION_TIMEOUT_SECONDS}\n",
+    ]
+    if existing_connection:
+        lines.append(f"existing_connection={existing_connection}\n")
+    else:
+        lines.append(f"password={password}\n")
+    return lines
+
+
 def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[dict, int]:
     connect_transaction_log = unique_action_log_path("connect-transaction-ui")
 
@@ -1308,6 +1329,22 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
             existing_connection=existing_connection or "none",
             secret_policy=secret_policy,
         )
+        stdin_lines = connect_wrapper_stdin_lines(
+            ui_log=connect_transaction_log,
+            ssid=ssid,
+            existing_connection=existing_connection,
+            password=password,
+        )
+        append_action_log(
+            connect_transaction_log,
+            action="wifi-connect-transaction",
+            status="backend-handoff",
+            stdin_keys=(
+                "ui_log,ssid,confirm,dangerous_real_apply,timeout_seconds,"
+                + ("existing_connection" if existing_connection else "password")
+            ),
+            ui_log=str(connect_transaction_log),
+        )
         env = os.environ.copy()
         env["WIFI_KIT_CONNECT_UI_LOG"] = str(connect_transaction_log)
         process = subprocess.Popen(
@@ -1321,15 +1358,7 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
             env=env,
         )
         assert process.stdin is not None
-        process.stdin.write(f"ssid={ssid}\n")
-        process.stdin.write(f"confirm={CONNECT_TRANSACTION_CONFIRM}\n")
-        process.stdin.write("dangerous_real_apply=true\n")
-        process.stdin.write(f"timeout_seconds={CONNECT_TRANSACTION_TIMEOUT_SECONDS}\n")
-        process.stdin.write(f"ui_log={connect_transaction_log}\n")
-        if existing_connection:
-            process.stdin.write(f"existing_connection={existing_connection}\n")
-        else:
-            process.stdin.write(f"password={password}\n")
+        process.stdin.writelines(stdin_lines)
         process.stdin.close()
     except (OSError, BrokenPipeError) as exc:
         append_action_log(
