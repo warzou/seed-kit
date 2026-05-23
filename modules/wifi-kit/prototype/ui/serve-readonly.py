@@ -119,6 +119,19 @@ def public_recovery_status(recovery: dict | None) -> dict:
     return {key: value for key, value in recovery.items() if key in allowed_keys}
 
 
+def normalize_request_path(path: str) -> str:
+    if path == "/":
+        return path
+    return path.rstrip("/") or "/"
+
+
+def log_route(event: str, raw_path: str, path: str) -> None:
+    print(
+        f"wifi-kit-route event={event} raw_path={json.dumps(raw_path)} path={json.dumps(path)}",
+        flush=True,
+    )
+
+
 def run_json_command(args: list[str]) -> dict:
     if not WIFI_KIT_SH.exists():
         return {
@@ -1556,8 +1569,10 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
-        path = parsed.path
+        raw_path = parsed.path
+        path = normalize_request_path(raw_path)
         query = parse_qs(parsed.query)
+        log_route("get", raw_path, path)
 
         if path in CAPTIVE_PATHS:
             self.send_redirect("/recovery")
@@ -1632,6 +1647,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/backend-status":
+            log_route("match-backend-status", raw_path, path)
             self.send_json(backend_status(self.recovery))
             return
 
@@ -1639,6 +1655,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
             self.send_json(public_runtime_config())
             return
 
+        log_route("not-found", raw_path, path)
         self.send_json({"error": "not-found"}, status=404)
 
 
