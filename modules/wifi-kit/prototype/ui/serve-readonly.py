@@ -313,6 +313,54 @@ def redact_public_payload(value):
     return value
 
 
+def normalize_action_status(payload: dict, http_status: int) -> str:
+    status = str(payload.get("status", "")).strip().lower()
+    if status == "started":
+        return "started"
+    if status in {"saved", "success", "done"}:
+        return "done"
+    if status in {"planned", "refused"}:
+        return "refused"
+    if status in {"failure", "failed"}:
+        return "refused" if http_status < 500 else "failed"
+    return "failed" if http_status >= 400 else "done"
+
+
+def action_message(action: str, status: str, payload: dict) -> str:
+    for key in ("message", "warning", "note"):
+        value = str(payload.get(key, "")).strip()
+        if value:
+            return value
+    error = str(payload.get("error", "")).strip()
+    if error:
+        return error
+    defaults = {
+        "started": f"{action} started.",
+        "done": f"{action} completed.",
+        "refused": f"{action} refused by safety gates.",
+        "failed": f"{action} failed.",
+    }
+    return defaults.get(status, f"{action} returned {status}.")
+
+
+def action_response(action: str, payload: dict, http_status: int) -> dict:
+    normalized_status = normalize_action_status(payload, http_status)
+    response = dict(payload)
+    if "status" in payload and str(payload.get("status")) != normalized_status:
+        response["raw_status"] = payload.get("status")
+    response.update(
+        {
+            "ok": normalized_status in {"started", "done"},
+            "action": str(payload.get("action") or action),
+            "status": normalized_status,
+            "message": action_message(action, normalized_status, payload),
+            "log": str(payload.get("log", "")),
+            "error": payload.get("error") or None,
+        }
+    )
+    return response
+
+
 def public_runtime_config() -> dict[str, object]:
     return redact_runtime_config(read_runtime_config())
 
@@ -1518,6 +1566,9 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         body = json.dumps(payload, indent=2).encode("utf-8") + b"\n"
         self.send_bytes(status, "application/json; charset=utf-8", body)
 
+    def send_action_json(self, action: str, payload: dict, status: int = 200) -> None:
+        self.send_json(action_response(action, payload, status), status=status)
+
     def send_redirect(self, location: str = "/recovery") -> None:
         body = b"Wifi-Kit recovery\n"
         self.send_response(302)
@@ -1535,22 +1586,22 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/wifi/connect":
             payload, status = start_recovery_wifi_connect(parse_post_payload(self), bool(self.recovery.get("active")))
-            self.send_json(payload, status=status)
+            self.send_action_json("wifi-connect-transaction", payload, status=status)
             return
 
         if parsed.path == "/start-ap-mode":
             payload, status = start_ap_mode(parse_post_payload(self))
-            self.send_json(payload, status=status)
+            self.send_action_json("start-ap-mode", payload, status=status)
             return
 
         if parsed.path == "/return-default-network":
             payload, status = return_default_network(parse_post_payload(self))
-            self.send_json(payload, status=status)
+            self.send_action_json("return-default-network", payload, status=status)
             return
 
         if parsed.path == "/api/runtime-config":
             payload, status = update_runtime_config(parse_post_payload(self))
-            self.send_json(payload, status=status)
+            self.send_action_json("runtime-config", payload, status=status)
             return
 
         if parsed.path == "/reconnect-previous":
