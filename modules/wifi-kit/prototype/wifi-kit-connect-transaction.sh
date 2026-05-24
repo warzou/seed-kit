@@ -183,9 +183,13 @@ set_runtime_config_value() {
   path=$runtime_config
   dir=${path%/*}
   tmp="$dir/.runtime.conf.$$.$key.tmp"
+  owner_uid=""
+  owner_gid=""
   mkdir -p "$dir" 2>/dev/null || return 1
   chmod 700 "$dir" 2>/dev/null || true
   if [ -r "$path" ]; then
+    owner_uid=$(stat -c '%u' "$path" 2>/dev/null || true)
+    owner_gid=$(stat -c '%g' "$path" 2>/dev/null || true)
     awk -v key="$key" -v value="$value" '
       BEGIN { done = 0 }
       index($0, key "=") == 1 { print key "=" value; done = 1; next }
@@ -199,9 +203,24 @@ set_runtime_config_value() {
       printf '%s=%s\n' "$key" "$value"
     } >"$tmp" || return 1
   fi
+  if [ -z "$owner_uid" ] && [ -n "${SUDO_UID:-}" ] && [ "${SUDO_UID:-0}" != "0" ]; then
+    owner_uid=$SUDO_UID
+    owner_gid=${SUDO_GID:-}
+  fi
+  if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ] &&
+    [ -n "${SUDO_UID:-}" ] && [ "${SUDO_UID:-0}" != "0" ]; then
+    sudo_home=$(getent passwd "$SUDO_USER" 2>/dev/null | awk -F: '{ print $6 }' | sed -n '1p')
+    if [ -n "$sudo_home" ] && [ "$path" = "$sudo_home/.config/wifi-kit/runtime.conf" ]; then
+      owner_uid=$SUDO_UID
+      owner_gid=${SUDO_GID:-}
+    fi
+  fi
   chmod 600 "$tmp" 2>/dev/null || true
   mv "$tmp" "$path" || return 1
   chmod 600 "$path" 2>/dev/null || true
+  if [ -n "$owner_uid" ] && [ -n "$owner_gid" ]; then
+    chown "$owner_uid:$owner_gid" "$path" 2>/dev/null || true
+  fi
 }
 
 persist_last_good() {
