@@ -72,6 +72,12 @@ runtime_config_path() {
 runtime_config=$(runtime_config_path)
 runtime_config_dir=$(dirname -- "$runtime_config")
 
+legacy_user_ui_unit_path() {
+  home=$(user_home)
+  [ -n "$home" ] || home="/home/$install_user"
+  printf '%s\n' "$home/.config/systemd/user/wifi-kit-ui.service"
+}
+
 require_root() {
   if [ "$(id -u)" != "0" ]; then
     kv "status" "refused"
@@ -129,6 +135,27 @@ target_state() {
   else
     kv "${label}_exists" "no"
   fi
+}
+
+legacy_user_ui_unit_state() {
+  legacy_unit=$(legacy_user_ui_unit_path)
+  target_state "legacy_user_ui_unit" "$legacy_unit"
+  if [ -f "$legacy_unit" ] && grep -Eq 'seed-kit-wifi-kit-preview|WorkingDirectory=%h/seed-kit' "$legacy_unit"; then
+    kv "legacy_user_ui_unit_preview_path" "yes"
+  else
+    kv "legacy_user_ui_unit_preview_path" "no"
+  fi
+}
+
+disable_legacy_user_ui_unit_best_effort() {
+  legacy_unit=$(legacy_user_ui_unit_path)
+  [ -f "$legacy_unit" ] || return 0
+  grep -Eq 'seed-kit-wifi-kit-preview|WorkingDirectory=%h/seed-kit' "$legacy_unit" || return 0
+  if command -v runuser >/dev/null 2>&1; then
+    runuser -u "$install_user" -- systemctl --user disable --now wifi-kit-ui.service >/dev/null 2>&1 || true
+  fi
+  mv "$legacy_unit" "$legacy_unit.disabled-by-wifi-kit-install" 2>/dev/null || true
+  kv "legacy_user_ui_unit" "disabled-preview-path"
 }
 
 require_sources() {
@@ -300,6 +327,7 @@ cmd_audit() {
   target_state "ui_unit_target" "$normal_unit_path"
   target_state "boot_guard_unit_target" "$boot_guard_unit_path"
   target_state "runtime_watchdog_unit_target" "$runtime_watchdog_unit_path"
+  legacy_user_ui_unit_state
   if [ "$install_user" = "root" ] && [ "$install_user_source" != "env" ]; then
     kv "install_user_warning" "implicit-root-refused-by-install"
   fi
@@ -313,6 +341,7 @@ cmd_plan() {
   kv "03.runtime_config" "$runtime_config_dir 0700 and $runtime_config 0600 owned by $install_user"
   kv "04.sudoers" "$sudoers_path exact wrapper actions only; validate with visudo when available"
   kv "05.systemd_units" "$normal_unit_path, $boot_guard_unit_path, and $runtime_watchdog_unit_path"
+  kv "05b.legacy_user_unit" "disable old per-user wifi-kit-ui.service if it points to a preview clone"
   kv "overwrite_policy" "install refuses when sudoers or target units already exist unless --reinstall is used"
   kv "visudo_policy" "install refuses if visudo is unavailable"
   kv "06.daemon_reload" "systemctl daemon-reload"
@@ -370,6 +399,7 @@ cmd_install() {
   install -o root -g root -m 0644 "$tmp_unit" "$runtime_watchdog_unit_path"
   rm -f "$tmp_unit"
   kv "systemd_units" "installed"
+  disable_legacy_user_ui_unit_best_effort
 
   systemctl daemon-reload
   systemctl enable wifi-kit-ui.service

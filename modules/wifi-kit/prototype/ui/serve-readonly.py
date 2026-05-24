@@ -33,6 +33,8 @@ NORMAL_UI_PORT = 18089  # Prototype/dev local UI default; production/service tar
 RECOVERY_UI_PORT = 80
 RECOVERY_AP_TEST_PASSWORD = "12345678"
 AP_ONLY_NM_STATE = Path("/tmp/wifi-kit-ap-only-nm-state")
+RECOVERY_UI_PID = Path("/tmp/wifi-kit-ui-recovery.pid")
+RECOVERY_HOSTAPD_PID = Path("/tmp/wifi-kit-hostapd-test.pid")
 RUNTIME_CONFIG_PATH = Path(
     os.environ.get("WIFI_KIT_RUNTIME_CONFIG", str(Path.home() / ".config" / "wifi-kit" / "runtime.conf"))
 )
@@ -64,6 +66,33 @@ def is_action_log_path(path: Path) -> bool:
         return path.resolve().parent == ACTION_LOG_DIR.resolve()
     except OSError:
         return False
+
+
+def pid_is_alive(pid_path: Path, expected_markers: tuple[str, ...]) -> bool:
+    try:
+        pid_text = pid_path.read_text(encoding="utf-8").strip().splitlines()[0]
+        pid = int(pid_text)
+    except (OSError, IndexError, ValueError):
+        return False
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    cmdline_path = Path("/proc") / str(pid) / "cmdline"
+    try:
+        cmdline = cmdline_path.read_text(encoding="utf-8", errors="replace").replace("\x00", " ")
+    except OSError:
+        return True
+    return any(marker in cmdline for marker in expected_markers)
+
+
+def recovery_runtime_active() -> bool:
+    return pid_is_alive(RECOVERY_UI_PID, ("serve-readonly.py", "--recovery-mode")) or pid_is_alive(
+        RECOVERY_HOSTAPD_PID,
+        ("hostapd", "wifi-kit-hostapd-test.conf"),
+    )
 
 
 RECONNECT_PREVIOUS_LOG = action_log_path("reconnect-previous")
@@ -1380,6 +1409,7 @@ def networkmanager_scan(refresh: bool = True) -> dict:
 def ap_scan_worker_env() -> dict[str, str]:
     env = os.environ.copy()
     env["WIFI_KIT_AP_SKIP_NM_RESTORE"] = "1"
+    env["WIFI_KIT_AP_SKIP_UI_RESTORE"] = "1"
     env["WIFI_KIT_RUNTIME_CONFIG"] = str(RUNTIME_CONFIG_PATH)
     return env
 
@@ -2315,6 +2345,9 @@ def main() -> None:
     args = parse_args()
     if args.scan_ap_recovery_worker:
         raise SystemExit(run_ap_recovery_scan_worker())
+    if not args.recovery_mode and recovery_runtime_active():
+        print("wifi-kit normal UI suppressed while AP recovery is active")
+        raise SystemExit(0)
     hostname = socket.gethostname() or "node"
     config = read_runtime_config()
     server = ThreadingHTTPServer((args.host, args.port), WifiKitReadOnlyHandler)

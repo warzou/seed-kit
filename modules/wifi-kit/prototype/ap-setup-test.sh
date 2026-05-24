@@ -29,6 +29,8 @@ temporary_dnsmasq_log="/tmp/wifi-kit-dnsmasq-recovery.log"
 temporary_dnsmasq_pid="/tmp/wifi-kit-dnsmasq-recovery.pid"
 temporary_ui_log="/tmp/wifi-kit-ui-recovery-${runtime_user}.log"
 temporary_ui_pid="/tmp/wifi-kit-ui-recovery.pid"
+normal_ui_service="${WIFI_KIT_UI_SERVICE:-wifi-kit-ui.service}"
+normal_ui_stopped_state="/tmp/wifi-kit-normal-ui-stopped-for-recovery"
 recovery_ui_script="$script_dir/ui/serve-readonly.py"
 ap_return_check_script="$script_dir/wifi-kit-ap-return-check.sh"
 ui_port="80"
@@ -254,6 +256,43 @@ device_state() {
   [ -n "$nmcli_bin" ] || return 0
   "$nmcli_bin" -t -f DEVICE,STATE device status 2>/dev/null |
     awk -F: -v iface="$iface" '$1 == iface { print $2; exit }'
+}
+
+systemctl_bin() {
+  find_tool systemctl 2>/dev/null || true
+}
+
+suspend_normal_ui_service_best_effort() {
+  [ "$(id -u 2>/dev/null || printf 1)" = "0" ] || return 0
+  systemctl_path="$(systemctl_bin)"
+  [ -n "$systemctl_path" ] || return 0
+  if "$systemctl_path" is-active --quiet "$normal_ui_service" 2>/dev/null; then
+    umask 077
+    {
+      printf 'service=%s\n' "$normal_ui_service"
+      printf 'stopped_by=ap-recovery\n'
+    } >"$normal_ui_stopped_state"
+    "$systemctl_path" stop "$normal_ui_service" >/dev/null 2>&1 || true
+    kv "normal_ui_service" "stopped-for-ap-recovery"
+  else
+    rm -f "$normal_ui_stopped_state" 2>/dev/null || true
+    kv "normal_ui_service" "not-active"
+  fi
+}
+
+restore_normal_ui_service_best_effort() {
+  [ -r "$normal_ui_stopped_state" ] || return 0
+  [ "$(id -u 2>/dev/null || printf 1)" = "0" ] || return 0
+  if [ "${WIFI_KIT_AP_SKIP_UI_RESTORE:-0}" = "1" ]; then
+    kv "normal_ui_restore" "skipped"
+    kv "normal_ui_restore_reason" "caller-keeps-recovery-active"
+    return 0
+  fi
+  systemctl_path="$(systemctl_bin)"
+  [ -n "$systemctl_path" ] || return 0
+  "$systemctl_path" start "$normal_ui_service" >/dev/null 2>&1 || true
+  rm -f "$normal_ui_stopped_state" 2>/dev/null || true
+  kv "normal_ui_service" "restored"
 }
 
 write_ap_only_nm_state() {
@@ -713,11 +752,13 @@ cmd_apply_ap_recovery_manual_test() {
     rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid" "$temporary_dnsmasq_conf" "$temporary_dnsmasq_pid" "$temporary_ui_pid"
     remove_ap_recovery_ip_best_effort
     restore_nm_from_ap_only_state_best_effort
+    restore_normal_ui_service_best_effort
   }
   trap cleanup_ap_recovery EXIT INT TERM HUP
 
   prepare_recovery_runtime_files
   write_ap_only_nm_state "$iface" "$previous_connection"
+  suspend_normal_ui_service_best_effort
 
   section "real-apply"
   kv "apply_status" "starting"
@@ -1394,6 +1435,7 @@ cmd_stop() {
     cleanup_test_ap_interface_best_effort
     remove_ap_recovery_ip_best_effort
     restore_nm_from_ap_only_state_best_effort
+    restore_normal_ui_service_best_effort
     rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid" "$temporary_dnsmasq_conf" "$temporary_dnsmasq_pid" "$temporary_ui_pid" 2>/dev/null || true
     return 0
   fi
@@ -1406,6 +1448,7 @@ cmd_stop() {
     stop_test_dnsmasq_best_effort
     remove_ap_recovery_ip_best_effort
     restore_nm_from_ap_only_state_best_effort
+    restore_normal_ui_service_best_effort
     return 1
   fi
   if kill "$pid" 2>/dev/null; then
@@ -1419,6 +1462,7 @@ cmd_stop() {
     cleanup_test_ap_interface_best_effort
     remove_ap_recovery_ip_best_effort
     restore_nm_from_ap_only_state_best_effort
+    restore_normal_ui_service_best_effort
     rm -f "$temporary_hostapd_conf" "$temporary_hostapd_pid" "$temporary_dnsmasq_conf" "$temporary_dnsmasq_pid" "$temporary_ui_pid" 2>/dev/null || true
     return 0
   fi
