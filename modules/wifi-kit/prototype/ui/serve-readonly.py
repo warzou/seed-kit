@@ -1279,7 +1279,7 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
     known_profile = str(payload.get("known_profile", "")).strip()
     security = str(payload.get("security", "")).strip()
     dangerous_real_apply = bool_payload(payload.get("dangerous_real_apply"))
-    confirm = str(payload.get("confirm", ""))
+    user_confirmed = bool_payload(payload.get("user_confirmed")) or bool_payload(payload.get("confirmed"))
     if password == SAVED_NM_SECRET_PLACEHOLDER and known_profile:
         password = SAVED_NM_SECRET_SENTINEL
     use_saved_nm_secret = password == SAVED_NM_SECRET_SENTINEL
@@ -1311,7 +1311,7 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
             else "require AP recovery context"
         ),
         "require WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS=1",
-        "require exact confirmation phrase",
+        "require browser confirmation from the operator",
         (
             f"use existing NetworkManager profile {existing_connection} without reading its secret"
             if existing_connection
@@ -1325,7 +1325,7 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
         not recovery_gate_ok
         or not privileged_actions_enabled()
         or not dangerous_real_apply
-        or confirm != CONNECT_TRANSACTION_CONFIRM
+        or not user_confirmed
     ):
         append_action_log(
             connect_transaction_log,
@@ -1338,7 +1338,7 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
             normal_mode_known_profile_allowed=known_profile_reconnect,
             privileged_actions_enabled=privileged_actions_enabled(),
             dangerous_real_apply=dangerous_real_apply,
-            confirm_ok=confirm == CONNECT_TRANSACTION_CONFIRM,
+            user_confirmed=user_confirmed,
         )
         return (
             {
@@ -1352,15 +1352,15 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
                 "normal_mode_known_profile_allowed": known_profile_reconnect,
                 "privileged_actions_enabled": privileged_actions_enabled(),
                 "dangerous_real_apply": dangerous_real_apply,
-                "confirm_required": CONNECT_TRANSACTION_CONFIRM,
-                "confirm_ok": confirm == CONNECT_TRANSACTION_CONFIRM,
+                "confirm_required": "user_confirmed=true",
+                "confirm_ok": user_confirmed,
                 "secret_policy": secret_policy,
                 "existing_connection": existing_connection,
                 "log": str(connect_transaction_log),
                 "warning_if_recovery_active": (
-                    "Known NetworkManager profile reconnect can run from normal mode with rollback, privileged actions, and exact confirmation."
+                    "Known NetworkManager profile reconnect can run from normal mode with rollback, privileged actions, and browser confirmation."
                     if known_profile_reconnect
-                    else "Real Wi-Fi connect requires AP recovery context, privileged actions, and exact confirmation."
+                    else "Real Wi-Fi connect requires AP recovery context, privileged actions, and browser confirmation."
                 ),
                 "connect_plan": connect_plan,
             },

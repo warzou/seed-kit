@@ -2579,9 +2579,8 @@
       return plans[action] || `Action ${action}: plan-only.`;
     }
 
-    function strongConfirm(phrase, label) {
-      const typed = window.prompt(`${label}\n\nTape exactement : ${phrase}`);
-      return typed === phrase;
+    function confirmNetworkInterruption(label) {
+      return window.confirm(`${label}\n\nLe Wi-Fi actuel peut etre interrompu pendant quelques secondes. En cas d'echec, le node tentera de revenir automatiquement ou relancera l'AP recovery.`);
     }
 
     async function triggerNetworkAction(action) {
@@ -2600,6 +2599,10 @@
           if (button) button.textContent = 'Retour Wi-Fi principal...';
           showNetworkActionResult("Retour Wi-Fi principal... l'acces reseau peut couper quelques secondes.");
         } else if (action === 'ap-return-check-once') {
+          if (!confirmNetworkInterruption('Tester le retour au Wi-Fi connu ?')) {
+            showNetworkActionResult('Test de retour annule.');
+            return;
+          }
           if (button) button.textContent = 'Test du retour Wi-Fi...';
           showNetworkActionResult("Test du retour Wi-Fi connu... l'AP peut disparaitre pendant 30 a 40 secondes.");
         } else {
@@ -2717,7 +2720,7 @@
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'button connect-button';
-      button.textContent = 'Connecter un Wi-Fi';
+      button.textContent = 'Se connecter';
 
       const summary = document.createElement('p');
       summary.className = 'prep-summary';
@@ -2960,16 +2963,15 @@
         return;
       }
       const originalText = button.textContent;
-      const phrase = 'WIFI-KIT CONNECT SAFE TRANSACTION';
-      if (!strongConfirm(phrase, `Confirmation forte requise pour tenter ${ssid}.`)) {
+      if (!confirmNetworkInterruption(`Se connecter a ${ssid} ?`)) {
         renderConnectResponse({
           status: 'planned',
           requested_ssid: ssid,
-          secret_policy: 'Connexion non lancee: confirmation forte absente ou incorrecte.',
+          secret_policy: 'Connexion annulee par l utilisateur. Aucun mot de passe transmis.',
           connect_plan: [
             'aucune mutation reseau',
             'mot de passe non transmis',
-            'retenter avec la confirmation exacte depuis le contexte recovery autorise'
+            'relancer la connexion depuis le bouton Se connecter'
           ]
         }, plan);
         return;
@@ -2992,14 +2994,14 @@
             password: passwordPayload,
             known_profile: savedSecretUnchanged ? passwordField.dataset.knownProfile || '' : '',
             dangerous_real_apply: true,
-            confirm: phrase,
+            user_confirmed: true,
           })
         });
         const payload = await response.json();
         passwordField.value = savedSecretUnchanged ? '********' : '';
         renderConnectResponse(payload, plan);
         if (!response.ok) {
-          button.textContent = 'Connecter un Wi-Fi';
+          button.textContent = 'Se connecter';
           return;
         }
       } catch (error) {
