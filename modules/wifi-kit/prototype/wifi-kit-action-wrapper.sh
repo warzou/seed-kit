@@ -4,6 +4,7 @@ set -eu
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ap_setup_script="$script_dir/ap-setup-test.sh"
 connect_transaction_script="$script_dir/wifi-kit-connect-transaction.sh"
+ap_return_check_script="$script_dir/wifi-kit-ap-return-check.sh"
 log_file="/tmp/wifi-kit-action-wrapper.log"
 ui_connect_log="${WIFI_KIT_CONNECT_UI_LOG:-}"
 runtime_config="${WIFI_KIT_RUNTIME_CONFIG:-}"
@@ -178,7 +179,7 @@ require_root() {
 
 if [ "$#" -ne 1 ]; then
   log_event "unknown" "refused" "usage"
-  reply "refused" "unknown" "usage: wifi-kit-action-wrapper.sh start-ap-mode|return-default-network|connect-wifi"
+  reply "refused" "unknown" "usage: wifi-kit-action-wrapper.sh start-ap-mode|return-default-network|connect-wifi|ap-return-check-once"
   exit 2
 fi
 
@@ -256,6 +257,12 @@ case "$action" in
       --dangerous-real-apply \
       --confirm "WIFI-KIT CONNECT SAFE TRANSACTION" \
       --timeout-seconds "$connect_timeout_seconds"
+    ;;
+  ap-return-check-once)
+    require_root "$action"
+    [ -f "$ap_return_check_script" ] || { reply "failure" "$action" "ap-return-check-missing"; exit 1; }
+    log_event "$action" "started" "mode=run-once"
+    exec sh "$ap_return_check_script" run-once
     ;;
   *)
     log_event "$action" "refused" "action-not-allowed"
