@@ -9,6 +9,7 @@ import os
 import shutil
 import socket
 import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -71,6 +72,8 @@ CONNECT_WRAPPER_ACTION = "connect-wifi"
 START_AP_MODE_LOG = action_log_path("start-ap-mode")
 RETURN_DEFAULT_NETWORK_LOG = action_log_path("return-default-network")
 AP_RETURN_CHECK_ONCE_LOG = action_log_path("ap-return-check")
+SCAN_FROM_AP_LOG = action_log_path("scan-from-ap-recovery")
+SCAN_FROM_AP_CACHE = ACTION_LOG_DIR / "scan-from-ap-recovery-cache.json"
 DEFAULT_NETWORK_CONNECTION = "netplan-wlan0-GL-MT6000-d53"
 AP_MODE_MAX_SECONDS = 300
 PRIVILEGED_ACTIONS_ENV = "WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS"
@@ -737,6 +740,45 @@ def append_action_log(path: Path, *, action: str, status: str, **fields: object)
         pass
 
 
+def write_json_file(path: Path, payload: dict) -> None:
+    ensure_action_log_parent(path)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_text(json.dumps(redact_public_payload(payload), indent=2) + "\n", encoding="utf-8")
+    tmp_path.replace(path)
+    if is_action_log_path(path):
+        try:
+            path.chmod(0o666)
+        except OSError:
+            pass
+
+
+def read_scan_from_ap_cache() -> dict:
+    try:
+        payload = json.loads(SCAN_FROM_AP_CACHE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {
+            "status": "unavailable",
+            "backend": "ap-recovery-cache",
+            "reason": "scan-cache-missing",
+            "refresh_attempted": False,
+            "refresh_status": "not-requested",
+            "networks": [],
+        }
+    if not isinstance(payload, dict):
+        return {
+            "status": "unavailable",
+            "backend": "ap-recovery-cache",
+            "reason": "scan-cache-invalid",
+            "refresh_attempted": False,
+            "refresh_status": "not-requested",
+            "networks": [],
+        }
+    payload.setdefault("backend", "ap-recovery-cache")
+    payload.setdefault("networks", [])
+    payload["cache_path"] = str(SCAN_FROM_AP_CACHE)
+    return payload
+
+
 def bool_payload(value: object) -> bool:
     if isinstance(value, bool):
         return value
@@ -1335,7 +1377,139 @@ def networkmanager_scan(refresh: bool = True) -> dict:
     }
 
 
-def wifi_scan(refresh: bool = True) -> dict:
+def ap_scan_worker_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["WIFI_KIT_AP_SKIP_NM_RESTORE"] = "1"
+    env["WIFI_KIT_RUNTIME_CONFIG"] = str(RUNTIME_CONFIG_PATH)
+    return env
+
+
+def run_ap_recovery_scan_worker() -> int:
+    action = "scan-from-ap-recovery"
+    nmcli_bin = find_tool("nmcli") or "nmcli"
+    env = ap_scan_worker_env()
+    append_action_log(SCAN_FROM_AP_LOG, action=action, status="scan-ap-pausing")
+    try:
+        subprocess.run(
+            [find_tool("sh") or "sh", str(AP_SETUP_TEST_SH), "stop"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=env,
+        )
+        subprocess.run([nmcli_bin, "device", "set", "wlan0", "managed", "yes"], check=False, capture_output=True, text=True, timeout=10)
+        append_action_log(SCAN_FROM_AP_LOG, action=action, status="scan-starting")
+        scan_payload = networkmanager_scan(refresh=True)
+        scan_payload["ap_recovery_scan"] = True
+        scan_payload["ap_recovery_interrupted"] = True
+        scan_payload["ap_recovery_restart_expected"] = True
+        scan_payload["message"] = "AP recovery was paused briefly for Wi-Fi scan; reconnect to the AP if the page dropped."
+        write_json_file(SCAN_FROM_AP_CACHE, scan_payload)
+        append_action_log(
+            SCAN_FROM_AP_LOG,
+            action=action,
+            status="scan-finished",
+            scan_status=scan_payload.get("status", "unknown"),
+            network_count=len(scan_payload.get("networks", [])),
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        scan_payload = {
+            "status": "unavailable",
+            "backend": "ap-recovery-orchestrated",
+            "reason": "scan-from-ap-recovery-failed",
+            "error": str(exc),
+            "ap_recovery_scan": True,
+            "ap_recovery_restart_expected": True,
+            "networks": [],
+        }
+        write_json_file(SCAN_FROM_AP_CACHE, scan_payload)
+        append_action_log(SCAN_FROM_AP_LOG, action=action, status="scan-failed", error=exc)
+    finally:
+        try:
+            subprocess.run([nmcli_bin, "device", "disconnect", "wlan0"], check=False, capture_output=True, text=True, timeout=10)
+            subprocess.run([nmcli_bin, "device", "set", "wlan0", "managed", "no"], check=False, capture_output=True, text=True, timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        append_action_log(SCAN_FROM_AP_LOG, action=action, status="scan-ap-restarting")
+        wrapper = INSTALLED_ACTION_WRAPPER_SH if INSTALLED_ACTION_WRAPPER_SH.exists() else ACTION_WRAPPER_SH
+        try:
+            result = subprocess.run(
+                [find_tool("sh") or "sh", str(wrapper), "start-ap-mode"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                env=env,
+            )
+            if result.returncode == 0:
+                append_action_log(SCAN_FROM_AP_LOG, action=action, status="scan-ap-active")
+            else:
+                append_action_log(
+                    SCAN_FROM_AP_LOG,
+                    action=action,
+                    status="scan-failed-recovery-restarted",
+                    returncode=result.returncode,
+                    stderr=(result.stderr or result.stdout or "").strip()[:300],
+                )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            append_action_log(SCAN_FROM_AP_LOG, action=action, status="scan-failed-recovery-restarted", error=exc)
+    return 0
+
+
+def start_ap_recovery_scan() -> dict:
+    action = "scan-from-ap-recovery"
+    append_action_log(SCAN_FROM_AP_LOG, action=action, status="scan-ap-pausing", request="accepted")
+    try:
+        subprocess.Popen(
+            [sys.executable, str(Path(__file__).resolve()), "--scan-ap-recovery-worker"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            env=os.environ.copy() | {"WIFI_KIT_RUNTIME_CONFIG": str(RUNTIME_CONFIG_PATH)},
+        )
+    except OSError as exc:
+        append_action_log(SCAN_FROM_AP_LOG, action=action, status="failed", error=exc)
+        cached = read_scan_from_ap_cache()
+        cached.update(
+            {
+                "status": "unavailable",
+                "backend": "ap-recovery-orchestrated",
+                "reason": "scan-worker-start-failed",
+                "error": str(exc),
+                "refresh_attempted": True,
+                "refresh_status": "failed",
+                "log": str(SCAN_FROM_AP_LOG),
+            }
+        )
+        return cached
+    cached = read_scan_from_ap_cache()
+    cached.update(
+        {
+            "status": "started",
+            "backend": "ap-recovery-orchestrated",
+            "reason": "ap-recovery-scan-started",
+            "refresh_attempted": True,
+            "refresh_status": "started",
+            "ap_recovery_scan": True,
+            "ap_recovery_interrupted": True,
+            "ap_recovery_restart_expected": True,
+            "log": str(SCAN_FROM_AP_LOG),
+            "message": "AP recovery is pausing briefly for scan, then restarting. Reconnect to the AP and refresh the list.",
+        }
+    )
+    return cached
+
+
+def wifi_scan(refresh: bool = True, recovery_active: bool = False) -> dict:
+    if recovery_active:
+        if refresh:
+            return start_ap_recovery_scan()
+        cached = read_scan_from_ap_cache()
+        cached["ap_recovery_scan"] = True
+        cached.setdefault("message", "Use Scanner to pause AP recovery briefly and refresh the Wi-Fi list.")
+        return cached
     if networkmanager_owns_wlan0() or shutil.which("nmcli"):
         nm_scan = networkmanager_scan(refresh=refresh)
         if nm_scan.get("status") == "ok":
@@ -1847,7 +2021,8 @@ def ui_data(recovery: dict | None = None) -> dict:
     snapshot = snapshot_preview()
     hostname = socket.gethostname() or "node"
     config = read_runtime_config()
-    scan = wifi_scan(refresh=False)
+    recovery_active = bool(recovery and recovery.get("active"))
+    scan = wifi_scan(refresh=False, recovery_active=recovery_active)
     wifi_connections = known_wifi_connections(scan)
     recovery_payload = {
         "active": False,
@@ -1905,7 +2080,7 @@ def ui_data(recovery: dict | None = None) -> dict:
         "connect_options": {
             "apply_endpoint": "/wifi/connect",
             "actions": "runtime-gated",
-            "ap_services_started": bool(recovery and recovery.get("active")),
+            "ap_services_started": recovery_active,
         },
         "recovery": recovery_payload,
         "system": system_info(diagnose, recovery_payload),
@@ -2093,7 +2268,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/wifi/scan":
-            self.send_json(wifi_scan(refresh=query.get("refresh") != ["0"]))
+            self.send_json(wifi_scan(refresh=query.get("refresh") != ["0"], recovery_active=bool(self.recovery.get("active"))))
             return
 
         if path == "/api/scan-refresh":
@@ -2132,11 +2307,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--recovery-mode", action="store_true")
     parser.add_argument("--recovery-ssid", default="")
     parser.add_argument("--recovery-ip", default="192.168.50.1")
+    parser.add_argument("--scan-ap-recovery-worker", action="store_true")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    if args.scan_ap_recovery_worker:
+        raise SystemExit(run_ap_recovery_scan_worker())
     hostname = socket.gethostname() or "node"
     config = read_runtime_config()
     server = ThreadingHTTPServer((args.host, args.port), WifiKitReadOnlyHandler)
