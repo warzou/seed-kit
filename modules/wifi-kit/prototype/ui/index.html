@@ -1763,6 +1763,15 @@
               <p>Demande &agrave; NetworkManager de reconnecter uniquement le profil principal enregistré. L'accès réseau peut couper quelques secondes.</p>
             </details>
           </div>
+          <div class="action-card">
+            <strong>Tester le retour au Wi-Fi connu</strong>
+            <p>L'AP peut disparaitre pendant 30 a 40 secondes. Si le Wi-Fi revient, tu seras reconnecte au reseau normal. Sinon l'AP revient.</p>
+            <button id="ap-return-check-once-button" class="button secondary" type="button" data-network-action="ap-return-check-once">Tester le retour au Wi-Fi connu</button>
+            <details class="action-plan">
+              <summary>Afficher le plan</summary>
+              <p>Depuis le mode AP recovery, stoppe l'AP, tente une fois le dernier Wi-Fi connu, puis reste en mode normal si le retour reussit. En cas d'echec, relance l'AP recovery.</p>
+            </details>
+          </div>
         </div>
         <div id="network-action-result" class="callout recovery-result" hidden></div>
         <div id="recovery-action-result" class="callout recovery-result" hidden></div>
@@ -2564,7 +2573,8 @@
       const plans = {
         'reconnect-previous': "Retour au Wi-Fi precedent: le mode AP, DHCP, DNS et cette UI vont s'arreter, puis wlan0 revient a NetworkManager. Le portail peut disparaitre pendant le retour.",
         'start-ap-mode': `Activer le mode AP: snapshot NetworkManager, passer wlan0 en AP-only, lancer ${apSsid}, dnsmasq DHCP/DNS captive et l'UI locale sur 192.168.50.1:80. Timeout prototype: 300 s.`,
-        'return-default-network': `Retour Wi-Fi principal: demander a NetworkManager de reconnecter ${returnSsid} via le profil ${returnConnection}. L'acces reseau peut couper quelques secondes.`
+        'return-default-network': `Retour Wi-Fi principal: demander a NetworkManager de reconnecter ${returnSsid} via le profil ${returnConnection}. L'acces reseau peut couper quelques secondes.`,
+        'ap-return-check-once': `Tester le retour au Wi-Fi connu: stoppe temporairement l'AP, tente ${returnSsid} via ${returnConnection}, puis relance l'AP si le retour echoue.`
       };
       return plans[action] || `Action ${action}: plan-only.`;
     }
@@ -2589,6 +2599,9 @@
         } else if (action === 'return-default-network') {
           if (button) button.textContent = 'Retour Wi-Fi principal...';
           showNetworkActionResult("Retour Wi-Fi principal... l'acces reseau peut couper quelques secondes.");
+        } else if (action === 'ap-return-check-once') {
+          if (button) button.textContent = 'Test du retour Wi-Fi...';
+          showNetworkActionResult("Test du retour Wi-Fi connu... l'AP peut disparaitre pendant 30 a 40 secondes.");
         } else {
           showNetworkActionResult(networkActionPlan(action));
         }
@@ -2626,6 +2639,12 @@
             : `Retour Wi-Fi principal non lance: ${responsePayload.message || responsePayload.error || responsePayload.status}.`);
           return;
         }
+        if (action === 'ap-return-check-once') {
+          showNetworkActionResult(responsePayload.return_check_started
+            ? `Test de retour Wi-Fi lance: ${responsePayload.target_ssid || responsePayload.target_connection || 'Wi-Fi connu'}. L'AP peut disparaitre puis revenir si le test echoue.`
+            : `Test de retour non lance: ${responsePayload.message || responsePayload.error || responsePayload.status}.`);
+          return;
+        }
         if (!response.ok) return;
         showNetworkActionResult(`${networkActionPlan(action)} Serveur: ${responsePayload.mutation || responsePayload.status}.`);
       } catch (error) {
@@ -2633,6 +2652,8 @@
           showNetworkActionResult(`Connexion au portail perdue pendant le retour Wi-Fi. C'est attendu si le node quitte le mode AP. Detail: ${error.message}`);
         } else if (action === 'start-ap-mode') {
           showNetworkActionResult(`Connexion perdue pendant l'activation du mode AP. C'est possible si le node bascule son Wi-Fi. Detail: ${error.message}`);
+        } else if (action === 'ap-return-check-once') {
+          showNetworkActionResult(`Connexion perdue pendant le test de retour Wi-Fi. C'est attendu si le node quitte le mode AP. Detail: ${error.message}`);
         } else {
           showNetworkActionResult(`Action ${action} indisponible: ${error.message}`);
         }

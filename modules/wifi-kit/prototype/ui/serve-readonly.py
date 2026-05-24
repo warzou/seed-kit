@@ -65,6 +65,7 @@ CONNECT_TRANSACTION_TIMEOUT_SECONDS = 180
 CONNECT_WRAPPER_ACTION = "connect-wifi"
 START_AP_MODE_LOG = action_log_path("start-ap-mode")
 RETURN_DEFAULT_NETWORK_LOG = action_log_path("return-default-network")
+AP_RETURN_CHECK_ONCE_LOG = action_log_path("ap-return-check")
 DEFAULT_NETWORK_CONNECTION = "netplan-wlan0-GL-MT6000-d53"
 AP_MODE_MAX_SECONDS = 300
 PRIVILEGED_ACTIONS_ENV = "WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS"
@@ -97,6 +98,8 @@ ACTION_PATHS = {
     "/start-recovery": "start-recovery",
     "/start-ap-mode": "start-ap-mode",
     "/return-default-network": "return-default-network",
+    "/ap-return-check-once": "ap-return-check-once",
+    "/api/ap-return-check-once": "ap-return-check-once",
     "/exit-recovery": "exit-recovery",
     "/reboot-recovery": "reboot-recovery",
     "/set-recovery-password": "set-recovery-password",
@@ -635,6 +638,7 @@ def backend_status(recovery: dict | None = None) -> dict[str, object]:
             "connect_wifi": privileged_ready,
             "start_ap_mode": privileged_ready,
             "return_default_network": privileged_ready,
+            "ap_return_check_once": privileged_ready,
         },
         "runtime": {
             "config_exists": RUNTIME_CONFIG_PATH.exists(),
@@ -868,6 +872,73 @@ def return_default_network(payload: dict) -> tuple[dict, int]:
         "return_started": True,
         "expected_behavior": "NetworkManager reconnects the configured return connection.",
         "log": str(RETURN_DEFAULT_NETWORK_LOG),
+    }, 202
+
+
+def ap_return_check_once(payload: dict) -> tuple[dict, int]:
+    dry_run = bool_payload(payload.get("dry_run"))
+    action = "ap-return-check-once"
+    config = read_runtime_config()
+    if dry_run or not privileged_actions_enabled():
+        append_action_log(
+            AP_RETURN_CHECK_ONCE_LOG,
+            action=action,
+            status="planned",
+            privileged_actions_enabled=privileged_actions_enabled(),
+            return_check_enabled=config.get("return_check_enabled", "false"),
+            target_connection=config.get("last_good_connection") or config.get("return_connection") or "",
+        )
+        return {
+            "status": "planned",
+            "action": action,
+            "return_check_started": False,
+            "dry_run": dry_run,
+            "privileged_actions_enabled": privileged_actions_enabled(),
+            "return_check_enabled": config.get("return_check_enabled", "false"),
+            "target_ssid": config.get("last_good_ssid") or config.get("return_ssid") or "",
+            "target_connection": config.get("last_good_connection") or config.get("return_connection") or "",
+            "log": str(AP_RETURN_CHECK_ONCE_LOG),
+            "warning": "Real AP return check stops AP recovery briefly, tries the known Wi-Fi, and restarts AP recovery if the return fails.",
+        }, 200
+
+    command, error = privileged_action_command(action)
+    if error:
+        append_action_log(AP_RETURN_CHECK_ONCE_LOG, action=action, status="failure", error=error)
+        payload = privileged_error_response(action, error)
+        payload.update({"return_check_started": False, "log": str(AP_RETURN_CHECK_ONCE_LOG)})
+        return payload, 403 if error == "wifi-kit-network-rights-not-installed" else 500
+
+    try:
+        env = os.environ.copy()
+        env["WIFI_KIT_RUNTIME_CONFIG"] = str(RUNTIME_CONFIG_PATH)
+        subprocess.Popen(
+            command,
+            cwd=str(SCRIPT_DIR.parent),
+            start_new_session=True,
+            stdin=subprocess.DEVNULL,
+            stdout=open_action_log(AP_RETURN_CHECK_ONCE_LOG),
+            stderr=subprocess.STDOUT,
+            env=env,
+        )
+    except OSError as exc:
+        append_action_log(AP_RETURN_CHECK_ONCE_LOG, action=action, status="failure", error=f"start-failed: {exc}")
+        return {
+            "status": "failure",
+            "action": action,
+            "error": f"start-failed: {exc}",
+            "return_check_started": False,
+            "log": str(AP_RETURN_CHECK_ONCE_LOG),
+        }, 500
+
+    append_action_log(AP_RETURN_CHECK_ONCE_LOG, action=action, status="started")
+    return {
+        "status": "started",
+        "action": action,
+        "return_check_started": True,
+        "target_ssid": config.get("last_good_ssid") or config.get("return_ssid") or "",
+        "target_connection": config.get("last_good_connection") or config.get("return_connection") or "",
+        "expected_behavior": "AP recovery stops briefly; known Wi-Fi is tried once; success stays normal; failure restarts AP recovery.",
+        "log": str(AP_RETURN_CHECK_ONCE_LOG),
     }, 202
 
 
@@ -1730,6 +1801,11 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
             self.send_action_json("return-default-network", payload, status=status)
             return
 
+        if path in ("/ap-return-check-once", "/api/ap-return-check-once"):
+            payload, status = ap_return_check_once(parse_post_payload(self))
+            self.send_action_json("ap-return-check-once", payload, status=status)
+            return
+
         if path == "/api/runtime-config":
             payload, status = update_runtime_config(parse_post_payload(self))
             self.send_action_json("runtime-config", payload, status=status)
@@ -1769,7 +1845,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
                 "error": "method-not-allowed",
                 "status": "failure",
                 "action": "unknown-post",
-                "safety": "Only POST /reconnect-previous can mutate recovery state.",
+                "safety": "Only known Wifi-Kit POST actions can mutate recovery state.",
             },
             status=405,
         )
@@ -1819,7 +1895,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
 
         if path in ACTION_PATHS:
             action = ACTION_PATHS[path]
-            runtime_actions = {"reconnect-previous", "start-ap-mode", "return-default-network"}
+            runtime_actions = {"reconnect-previous", "start-ap-mode", "return-default-network", "ap-return-check-once"}
             self.send_json(
                 {
                     "status": "runtime-gated" if action in runtime_actions else "unavailable",
@@ -1911,7 +1987,7 @@ def main() -> None:
         "action_endpoints": sorted(ACTION_PATHS.keys()),
     }
     print(f"wifi-kit read-only HTTP on http://{args.host}:{args.port}")
-    print("GET read-only; POST actions: /reconnect-previous, /start-ap-mode, /return-default-network")
+    print("GET read-only; POST actions: /reconnect-previous, /start-ap-mode, /return-default-network, /ap-return-check-once")
     server.serve_forever()
 
 
