@@ -2231,7 +2231,7 @@
       const label = networks === 1 ? '1 réseau trouvé' : `${networks} réseaux trouvés`;
       if (scan.refresh_attempted) {
         const status = scan.refresh_status || 'unknown';
-        if (status === 'started') return `${label}; AP recovery redemarre apres scan`;
+        if (status === 'started') return `${label}; AP recovery interrompu puis redemarre apres scan`;
         if (status === 'ok') return `${label} après scan`;
         if (status === 'failed-used-existing-results') return `${label}; cache conservé`;
         return `${label}; scan ${status}`;
@@ -2292,8 +2292,8 @@
       if (reason === 'scan-tools-missing') return "Le scan Wi-Fi n'est pas disponible car nmcli et iw sont absents ou introuvables.";
       if (reason === 'iw-scan-failed') return 'Le fallback iw ne peut pas scanner les reseaux pour le moment tout en gardant la connexion Wi-Fi actuelle.';
       if (reason === 'iw-missing') return "Le scan Wi-Fi n'est pas disponible car l'outil iw est absent.";
-      if (reason === 'ap-recovery-scan-started') return "L'AP recovery se met en pause pour scanner, puis redemarre. Reconnecte-toi au Wi-Fi AP si la page se coupe.";
-      if (reason === 'scan-cache-missing') return "Aucun scan recent n'est encore disponible en mode AP recovery. Clique Scanner pour lancer un scan court avec redemarrage AP.";
+      if (reason === 'ap-recovery-scan-started') return "Le scan interrompt temporairement l'AP recovery et deconnecte les appareils. Reconnecte-toi au Wi-Fi AP apres son redemarrage.";
+      if (reason === 'scan-cache-missing') return "Aucun scan recent n'est encore disponible en mode AP recovery. Scanner interrompt temporairement l'AP et deconnecte les appareils.";
       if (reason === 'scan-from-ap-recovery-failed') return "Le scan depuis AP recovery a echoue, mais l'AP doit etre relance automatiquement.";
       if (reason === 'no-wifi-interface') return "Interface Wi-Fi non detectee dans cet environnement. C'est normal en previsualisation locale/WSL. Sur pocket-node, les reseaux apparaitront si wlan0 est disponible.";
       if (reason === 'demo-data') return 'Aucun reseau reel dans la demo. Lance le serveur local read-only pour afficher les donnees du Raspberry Pi.';
@@ -3320,7 +3320,7 @@
       const spinner = document.getElementById('scan-spinner');
       button.disabled = true;
       spinner.hidden = false;
-      status.textContent = recoveryState().active ? "Pause courte de l'AP pour scanner..." : 'Scan SAFE en cours...';
+      status.textContent = recoveryState().active ? "Scan: interruption temporaire de l'AP..." : 'Scan SAFE en cours...';
       try {
         const response = await fetch('/wifi/scan?refresh=1', { cache: 'no-store' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);

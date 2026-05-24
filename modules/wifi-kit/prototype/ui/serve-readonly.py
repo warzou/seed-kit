@@ -103,6 +103,8 @@ RETURN_DEFAULT_NETWORK_LOG = action_log_path("return-default-network")
 AP_RETURN_CHECK_ONCE_LOG = action_log_path("ap-return-check")
 SCAN_FROM_AP_LOG = action_log_path("scan-from-ap-recovery")
 SCAN_FROM_AP_CACHE = ACTION_LOG_DIR / "scan-from-ap-recovery-cache.json"
+SCAN_FROM_AP_RESTART_ATTEMPTS = 3
+SCAN_FROM_AP_RESTART_DELAY_SECONDS = 3
 DEFAULT_NETWORK_CONNECTION = "netplan-wlan0-GL-MT6000-d53"
 AP_MODE_MAX_SECONDS = 300
 PRIVILEGED_ACTIONS_ENV = "WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS"
@@ -1305,6 +1307,7 @@ def nmcli_wifi_list(nmcli_bin: str) -> tuple[list[dict], str]:
         check=False,
         capture_output=True,
         text=True,
+        timeout=8,
     )
     if result.returncode != 0:
         return [], result.stderr.strip()
@@ -1358,31 +1361,44 @@ def wpa_cli_refresh_scan(iface: str = "wlan0") -> tuple[bool, str]:
     return True, "ok"
 
 
+def short_command_error(result: subprocess.CompletedProcess[str]) -> str:
+    return (result.stderr or result.stdout or "").strip()[:300]
+
+
 def networkmanager_scan(refresh: bool = True) -> dict:
     nmcli_bin = find_tool("nmcli") or "nmcli"
     refresh_backend = "networkmanager"
     refresh_note = ""
-    if refresh:
-        subprocess.run(
-            [nmcli_bin, "-t", "device", "wifi", "rescan"],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+    try:
+        if refresh:
+            subprocess.run(
+                [nmcli_bin, "-t", "device", "wifi", "rescan"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=8,
+            )
         time.sleep(2.0)
-
-    networks, error = nmcli_wifi_list(nmcli_bin)
-    if refresh and len(networks) <= 1:
-        ok, refresh_note = wpa_cli_refresh_scan("wlan0")
-        if ok:
-            refresh_backend = "networkmanager+wpa_cli"
-            time.sleep(5.0)
-            wpa_networks, wpa_error = nmcli_wifi_list(nmcli_bin)
-            if wpa_networks:
-                networks = wpa_networks
-                error = ""
-            elif wpa_error:
-                error = wpa_error
+        networks, error = nmcli_wifi_list(nmcli_bin)
+        if refresh and len(networks) <= 1:
+            ok, refresh_note = wpa_cli_refresh_scan("wlan0")
+            if ok:
+                refresh_backend = "networkmanager+wpa_cli"
+                time.sleep(3.0)
+                wpa_networks, wpa_error = nmcli_wifi_list(nmcli_bin)
+                if wpa_networks:
+                    networks = wpa_networks
+                    error = ""
+                elif wpa_error:
+                    error = wpa_error
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "status": "unavailable",
+            "backend": "networkmanager",
+            "reason": "nmcli-scan-timeout",
+            "stderr": str(exc),
+            "networks": [],
+        }
 
     if error:
         return {
@@ -1414,27 +1430,94 @@ def ap_scan_worker_env() -> dict[str, str]:
     return env
 
 
+def wait_until_inactive(pid_path: Path, timeout_seconds: float = 5.0) -> bool:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() <= deadline:
+        if not pid_is_alive(pid_path, ("serve-readonly.py", "hostapd", "dnsmasq")):
+            return True
+        time.sleep(0.25)
+    return not pid_is_alive(pid_path, ("serve-readonly.py", "hostapd", "dnsmasq"))
+
+
+def stop_ap_for_scan(env: dict[str, str]) -> None:
+    append_action_log(SCAN_FROM_AP_LOG, action="scan-from-ap-recovery", status="scan-ap-pausing")
+    result = subprocess.run(
+        [find_tool("sh") or "sh", str(AP_SETUP_TEST_SH), "stop"],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env=env,
+    )
+    append_action_log(
+        SCAN_FROM_AP_LOG,
+        action="scan-from-ap-recovery",
+        status="scan-ap-paused",
+        returncode=result.returncode,
+        detail=short_command_error(result),
+    )
+    ui_stopped = wait_until_inactive(RECOVERY_UI_PID)
+    hostapd_stopped = wait_until_inactive(RECOVERY_HOSTAPD_PID)
+    append_action_log(
+        SCAN_FROM_AP_LOG,
+        action="scan-from-ap-recovery",
+        status="scan-ap-stop-observed",
+        ui_stopped=ui_stopped,
+        hostapd_stopped=hostapd_stopped,
+    )
+
+
+def restart_ap_after_scan(env: dict[str, str]) -> bool:
+    wrapper = INSTALLED_ACTION_WRAPPER_SH if INSTALLED_ACTION_WRAPPER_SH.exists() else ACTION_WRAPPER_SH
+    for attempt in range(1, SCAN_FROM_AP_RESTART_ATTEMPTS + 1):
+        append_action_log(SCAN_FROM_AP_LOG, action="scan-from-ap-recovery", status="scan-ap-restarting", attempt=attempt)
+        if attempt > 1:
+            try:
+                stop_ap_for_scan(env)
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                append_action_log(SCAN_FROM_AP_LOG, action="scan-from-ap-recovery", status="scan-ap-pre-retry-stop-failed", error=exc)
+        try:
+            result = subprocess.run(
+                [find_tool("sh") or "sh", str(wrapper), "start-ap-mode"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                env=env,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            append_action_log(SCAN_FROM_AP_LOG, action="scan-from-ap-recovery", status="scan-ap-restart-error", attempt=attempt, error=exc)
+            result = None
+        if result is not None and result.returncode == 0:
+            append_action_log(SCAN_FROM_AP_LOG, action="scan-from-ap-recovery", status="scan-ap-active", attempt=attempt)
+            return True
+        append_action_log(
+            SCAN_FROM_AP_LOG,
+            action="scan-from-ap-recovery",
+            status="scan-ap-restart-failed",
+            attempt=attempt,
+            returncode="timeout" if result is None else result.returncode,
+            detail="" if result is None else short_command_error(result),
+        )
+        time.sleep(SCAN_FROM_AP_RESTART_DELAY_SECONDS)
+    append_action_log(SCAN_FROM_AP_LOG, action="scan-from-ap-recovery", status="scan-failed-recovery-restarted")
+    return False
+
+
 def run_ap_recovery_scan_worker() -> int:
     action = "scan-from-ap-recovery"
     nmcli_bin = find_tool("nmcli") or "nmcli"
     env = ap_scan_worker_env()
-    append_action_log(SCAN_FROM_AP_LOG, action=action, status="scan-ap-pausing")
     try:
-        subprocess.run(
-            [find_tool("sh") or "sh", str(AP_SETUP_TEST_SH), "stop"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            env=env,
-        )
+        stop_ap_for_scan(env)
         subprocess.run([nmcli_bin, "device", "set", "wlan0", "managed", "yes"], check=False, capture_output=True, text=True, timeout=10)
         append_action_log(SCAN_FROM_AP_LOG, action=action, status="scan-starting")
         scan_payload = networkmanager_scan(refresh=True)
         scan_payload["ap_recovery_scan"] = True
         scan_payload["ap_recovery_interrupted"] = True
         scan_payload["ap_recovery_restart_expected"] = True
-        scan_payload["message"] = "AP recovery was paused briefly for Wi-Fi scan; reconnect to the AP if the page dropped."
+        scan_payload["ap_recovery_disconnects_clients"] = True
+        scan_payload["message"] = "AP recovery was interrupted briefly for Wi-Fi scan; connected devices were disconnected and must reconnect to the AP."
         write_json_file(SCAN_FROM_AP_CACHE, scan_payload)
         append_action_log(
             SCAN_FROM_AP_LOG,
@@ -1451,6 +1534,7 @@ def run_ap_recovery_scan_worker() -> int:
             "error": str(exc),
             "ap_recovery_scan": True,
             "ap_recovery_restart_expected": True,
+            "ap_recovery_disconnects_clients": True,
             "networks": [],
         }
         write_json_file(SCAN_FROM_AP_CACHE, scan_payload)
@@ -1461,29 +1545,7 @@ def run_ap_recovery_scan_worker() -> int:
             subprocess.run([nmcli_bin, "device", "set", "wlan0", "managed", "no"], check=False, capture_output=True, text=True, timeout=10)
         except (OSError, subprocess.TimeoutExpired):
             pass
-        append_action_log(SCAN_FROM_AP_LOG, action=action, status="scan-ap-restarting")
-        wrapper = INSTALLED_ACTION_WRAPPER_SH if INSTALLED_ACTION_WRAPPER_SH.exists() else ACTION_WRAPPER_SH
-        try:
-            result = subprocess.run(
-                [find_tool("sh") or "sh", str(wrapper), "start-ap-mode"],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=60,
-                env=env,
-            )
-            if result.returncode == 0:
-                append_action_log(SCAN_FROM_AP_LOG, action=action, status="scan-ap-active")
-            else:
-                append_action_log(
-                    SCAN_FROM_AP_LOG,
-                    action=action,
-                    status="scan-failed-recovery-restarted",
-                    returncode=result.returncode,
-                    stderr=(result.stderr or result.stdout or "").strip()[:300],
-                )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            append_action_log(SCAN_FROM_AP_LOG, action=action, status="scan-failed-recovery-restarted", error=exc)
+        restart_ap_after_scan(env)
     return 0
 
 
@@ -1497,6 +1559,7 @@ def start_ap_recovery_scan() -> dict:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             close_fds=True,
+            start_new_session=True,
             env=os.environ.copy() | {"WIFI_KIT_RUNTIME_CONFIG": str(RUNTIME_CONFIG_PATH)},
         )
     except OSError as exc:
@@ -1525,8 +1588,9 @@ def start_ap_recovery_scan() -> dict:
             "ap_recovery_scan": True,
             "ap_recovery_interrupted": True,
             "ap_recovery_restart_expected": True,
+            "ap_recovery_disconnects_clients": True,
             "log": str(SCAN_FROM_AP_LOG),
-            "message": "AP recovery is pausing briefly for scan, then restarting. Reconnect to the AP and refresh the list.",
+            "message": "AP recovery will be interrupted briefly for scan. Connected devices will be disconnected, then the AP should restart.",
         }
     )
     return cached
