@@ -2803,6 +2803,12 @@
     }
 
     function selectNetwork(network) {
+      if (network.current === 'yes') {
+        selectedNetwork = null;
+        selectedNetworkKey = null;
+        renderNetworks();
+        return;
+      }
       selectedNetwork = network;
       selectedNetworkKey = scanNetworkKey(network);
       renderNetworks();
@@ -2839,7 +2845,12 @@
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'button connect-button';
-      button.textContent = 'Se connecter';
+      if (network.current === 'yes') {
+        button.textContent = 'Connecté';
+        button.disabled = true;
+      } else {
+        button.textContent = 'Se connecter';
+      }
 
       const summary = document.createElement('p');
       summary.className = 'prep-summary';
@@ -2864,6 +2875,7 @@
       });
       button.addEventListener('click', (event) => {
         event.stopPropagation();
+        if (network.current === 'yes') return;
         triggerWifiConnect(network, password, plan, button);
       });
       password.addEventListener('click', (event) => event.stopPropagation());

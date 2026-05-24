@@ -1505,7 +1505,6 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
                 "normal_mode_known_profile_allowed": known_profile_reconnect,
                 "privileged_actions_enabled": privileged_actions_enabled(),
                 "dangerous_real_apply": dangerous_real_apply,
-                "confirm_required": "user_confirmed=true",
                 "confirm_ok": user_confirmed,
                 "secret_policy": secret_policy,
                 "existing_connection": existing_connection,
