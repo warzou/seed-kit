@@ -420,21 +420,21 @@ stabilize_success_profile() {
   fi
 
   if connection_exists "$stable_connection"; then
-    log_event "stable-profile-existing" "stable_connection=$(quote "$stable_connection")"
+    log_event "stable-profile-existing" "stable_connection=$(quote "$stable_connection")" >/dev/null
     printf '%s\n' "$stable_connection"
     return 0
   fi
 
   if [ "$connection" = "$temp_connection" ] || is_wifi_kit_transient_profile "$connection"; then
     if "$nmcli" connection modify "$connection" connection.id "$stable_connection" connection.autoconnect yes >>"$log_file" 2>&1; then
-      log_event "stable-profile-created" "stable_connection=$(quote "$stable_connection") source_connection=$(quote "$connection")"
+      log_event "stable-profile-created" "stable_connection=$(quote "$stable_connection") source_connection=$(quote "$connection")" >/dev/null
       if [ "$connection" = "$temp_connection" ]; then
         temp_connection=""
       fi
       printf '%s\n' "$stable_connection"
       return 0
     fi
-    log_event "stable-profile-failed" "source_connection=$(quote "$connection") stable_connection=$(quote "$stable_connection")"
+    log_event "stable-profile-failed" "source_connection=$(quote "$connection") stable_connection=$(quote "$stable_connection")" >/dev/null
   fi
 
   printf '%s\n' "$connection"
