@@ -71,12 +71,12 @@ timestamp() {
 }
 
 log_event() {
-  status=$1
+  event_status=$1
   detail=${2:-}
   mkdir -p /tmp/wifi-kit-actions 2>/dev/null || true
   chmod 1777 /tmp/wifi-kit-actions 2>/dev/null || true
   {
-    printf 'timestamp=%s action=ap-return-check status=%s' "$(timestamp)" "$status"
+    printf 'timestamp=%s action=ap-return-check status=%s' "$(timestamp)" "$event_status"
     if [ -n "$detail" ]; then
       printf ' detail=%s' "$detail"
     fi
