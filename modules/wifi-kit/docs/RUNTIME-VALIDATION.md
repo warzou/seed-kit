@@ -198,6 +198,44 @@ The minimal boot guard uses this order:
 AP recovery remains explicit and temporary. It stays active until the user asks
 Wifi-Kit to return to the main Wi-Fi.
 
+## Runtime disconnect policy
+
+Runtime disconnects are intentionally different from boot recovery.
+
+If the node already had a valid Wi-Fi connection during runtime and later loses
+that connection, Wifi-Kit should stay in retry/reconnect mode for the configured
+main Wi-Fi. It must not automatically open AP recovery just because a runtime
+link drops. AP recovery is a boot-time fallback after bounded startup recovery
+fails, or an explicit user action.
+
+Target policy names:
+
+- `runtime_disconnect_policy=keep_retrying`
+- `runtime_retry_target=return_connection`
+- `runtime_retry_timeout=indefinite-or-configurable`
+- `boot_recovery_policy=ap_after_timeout`
+- `ap_recovery_actions=new_wifi|retry_primary|stay_ap`
+
+The AP recovery UI must not treat AP mode as abandoning the main Wi-Fi. While
+in AP recovery it should clearly offer:
+
+1. configure a new Wi-Fi;
+2. retry the configured main Wi-Fi;
+3. stay in AP recovery.
+
+## Field incident note
+
+A real field incident confirmed why runtime disconnects should not immediately
+open AP recovery. The Flint 2.4 GHz environment was disturbed by an older
+client WWAN / pocket-box interface. `pocket-node` became temporarily
+unreachable, but later returned successfully after the WWAN side was disabled
+on Flint.
+
+Conclusion: during a runtime outage after a previously valid Wi-Fi session,
+Wifi-Kit should keep trying the known main Wi-Fi instead of automatically
+switching to AP recovery. AP recovery remains the correct fallback at boot when
+no usable Wi-Fi is recovered within a configurable timeout.
+
 ## Remaining install work
 
 This runtime state was validated manually on the prototype target. A future

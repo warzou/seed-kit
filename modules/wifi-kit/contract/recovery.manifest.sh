@@ -28,6 +28,12 @@ WIFI_KIT_RECOVERY_CAPTIVE_PORT="80"
 WIFI_KIT_RECOVERY_NORMAL_UI_PORT="54321"
 WIFI_KIT_RECOVERY_DEFAULT_TIMEOUT_SECONDS="300"
 WIFI_KIT_RECOVERY_CONNECT_TIMEOUT_SECONDS="180"
+WIFI_KIT_RECOVERY_RUNTIME_DISCONNECT_POLICY="keep_retrying"
+WIFI_KIT_RECOVERY_RUNTIME_RETRY_TARGET="return_connection"
+WIFI_KIT_RECOVERY_RUNTIME_RETRY_TIMEOUT="indefinite-or-configurable"
+WIFI_KIT_RECOVERY_BOOT_POLICY="ap_after_timeout"
+WIFI_KIT_RECOVERY_BOOT_TIMEOUT_SECONDS="configurable"
+WIFI_KIT_RECOVERY_AP_USER_ACTIONS="new_wifi|retry_primary|stay_ap"
 
 WIFI_KIT_RECOVERY_ACTIONS='
 start-ap-mode
@@ -76,9 +82,12 @@ hostapd temporary only
 dnsmasq temporary only
 captive UI temporary only
 no AP at normal boot
+no AP on runtime disconnect after a previously valid Wi-Fi session
 no permanent AP+STA mode
 normal UI remains on port 54321
 recovery captive UI uses port 80
+runtime disconnect keeps retrying the configured main Wi-Fi
+boot recovery may start AP only after timeout
 '
 
 WIFI_KIT_RECOVERY_READINESS_CHECKS='
@@ -120,11 +129,13 @@ start temporary dnsmasq
 start temporary captive UI on port 80
 run timeout-based cleanup
 run return-default-network after explicit confirmation
+offer AP UI choices: configure new Wi-Fi, retry primary Wi-Fi, or stay in AP recovery
 '
 
 WIFI_KIT_RECOVERY_FORBIDDEN='
 no-ap-at-boot
 no-ap-without-explicit-action
+no-runtime-disconnect-auto-ap
 no-dnsmasq-service
 no-system-hostapd-service
 no-permanent-ap-plus-sta-assumption
@@ -191,6 +202,12 @@ module_wifi_kit_recovery_manifest() {
   printf 'WIFI_KIT_RECOVERY_NORMAL_UI_PORT=%s\n' "$WIFI_KIT_RECOVERY_NORMAL_UI_PORT"
   printf 'WIFI_KIT_RECOVERY_DEFAULT_TIMEOUT_SECONDS=%s\n' "$WIFI_KIT_RECOVERY_DEFAULT_TIMEOUT_SECONDS"
   printf 'WIFI_KIT_RECOVERY_CONNECT_TIMEOUT_SECONDS=%s\n' "$WIFI_KIT_RECOVERY_CONNECT_TIMEOUT_SECONDS"
+  printf 'WIFI_KIT_RECOVERY_RUNTIME_DISCONNECT_POLICY=%s\n' "$WIFI_KIT_RECOVERY_RUNTIME_DISCONNECT_POLICY"
+  printf 'WIFI_KIT_RECOVERY_RUNTIME_RETRY_TARGET=%s\n' "$WIFI_KIT_RECOVERY_RUNTIME_RETRY_TARGET"
+  printf 'WIFI_KIT_RECOVERY_RUNTIME_RETRY_TIMEOUT=%s\n' "$WIFI_KIT_RECOVERY_RUNTIME_RETRY_TIMEOUT"
+  printf 'WIFI_KIT_RECOVERY_BOOT_POLICY=%s\n' "$WIFI_KIT_RECOVERY_BOOT_POLICY"
+  printf 'WIFI_KIT_RECOVERY_BOOT_TIMEOUT_SECONDS=%s\n' "$WIFI_KIT_RECOVERY_BOOT_TIMEOUT_SECONDS"
+  printf 'WIFI_KIT_RECOVERY_AP_USER_ACTIONS=%s\n' "$WIFI_KIT_RECOVERY_AP_USER_ACTIONS"
   _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_ACTION "$WIFI_KIT_RECOVERY_ACTIONS"
   _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_PRIVILEGED_ACTION "$WIFI_KIT_RECOVERY_PRIVILEGED_ACTIONS"
   _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_UNPRIVILEGED_UI_ACTION "$WIFI_KIT_RECOVERY_UNPRIVILEGED_UI_ACTIONS"
