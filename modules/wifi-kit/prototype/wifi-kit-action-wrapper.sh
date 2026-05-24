@@ -218,6 +218,9 @@ case "$action" in
     ;;
   return-default-network)
     require_root "$action"
+    if [ -f "$ap_return_check_script" ]; then
+      WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$ap_return_check_script" stop-loop >/dev/null 2>&1 || true
+    fi
     log_event "$action" "started" "connection=$return_connection"
     if [ -f "$ap_setup_script" ]; then
       sh "$ap_setup_script" stop >> "$log_file" 2>&1 || true
@@ -228,6 +231,9 @@ case "$action" in
     read_connect_request
     log_ui_connect_marker "wrapper-received-ui-log" "path-accepted"
     require_root "$action"
+    if [ -f "$ap_return_check_script" ]; then
+      WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$ap_return_check_script" stop-loop >/dev/null 2>&1 || true
+    fi
     [ -n "$connect_ssid" ] || { reply "refused" "$action" "missing-ssid"; exit 2; }
     ssid_bytes=$(printf '%s' "$connect_ssid" | wc -c | tr -d ' ')
     [ "$ssid_bytes" -le 32 ] || { reply "refused" "$action" "ssid-too-long"; exit 2; }
@@ -265,6 +271,7 @@ case "$action" in
   ap-return-check-once)
     require_root "$action"
     [ -f "$ap_return_check_script" ] || { reply "failure" "$action" "ap-return-check-missing"; exit 1; }
+    WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$ap_return_check_script" stop-loop >/dev/null 2>&1 || true
     log_event "$action" "started" "mode=run-once"
     WIFI_KIT_RUNTIME_CONFIG="$runtime_config" exec sh "$ap_return_check_script" run-once
     ;;

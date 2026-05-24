@@ -11,6 +11,8 @@ Usage:
   sh modules/wifi-kit/prototype/wifi-kit-ap-return-check.sh audit
   sh modules/wifi-kit/prototype/wifi-kit-ap-return-check.sh plan
   sudo sh modules/wifi-kit/prototype/wifi-kit-ap-return-check.sh run-once
+  sudo sh modules/wifi-kit/prototype/wifi-kit-ap-return-check.sh run-loop
+  sudo sh modules/wifi-kit/prototype/wifi-kit-ap-return-check.sh stop-loop
 
 Modes:
   audit  Read runtime config and resolve the future AP return-check target.
@@ -19,6 +21,11 @@ Modes:
          If AP recovery is active and return_check_enabled=true, stop AP
          recovery, try the configured target once with bounded timeouts, and
          restart AP recovery if the return attempt fails.
+  run-loop
+         From AP recovery only, sleep return_check_interval_minutes between
+         run-once attempts. This is not AP+STA parallel mode.
+  stop-loop
+         Stop the background AP return-check loop, if it is running.
 
 This helper never stores or logs client Wi-Fi passwords. The run-once mode is
 for controlled AP recovery testing only.
@@ -33,6 +40,8 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ap_setup_script="$script_dir/ap-setup-test.sh"
 action_wrapper="$script_dir/wifi-kit-action-wrapper.sh"
 log_file="${WIFI_KIT_RETURN_CHECK_LOG:-/tmp/wifi-kit-actions/ap-return-check-$(id -u).log}"
+loop_pid_file="${WIFI_KIT_RETURN_CHECK_LOOP_PID:-/tmp/wifi-kit-ap-return-check-loop.pid}"
+run_once_pid_file="${WIFI_KIT_RETURN_CHECK_RUN_ONCE_PID:-/tmp/wifi-kit-ap-return-check-run-once.pid}"
 
 kv() {
   printf '%s=%s\n' "$1" "$2"
@@ -112,7 +121,7 @@ normalize_bool() {
 }
 
 return_check_interval_minutes() {
-  runtime_value return_check_interval_minutes 5
+  runtime_value return_check_interval_minutes 1
 }
 
 return_check_target() {
@@ -129,9 +138,6 @@ target_ssid_for() {
     last_good_ssid|last_good_connection)
       runtime_value last_good_ssid ""
       ;;
-    return_ssid|return_connection)
-      runtime_value return_ssid ""
-      ;;
     *)
       printf ''
       ;;
@@ -143,9 +149,6 @@ target_connection_for() {
   case "$target" in
     last_good_ssid|last_good_connection)
       runtime_value last_good_connection ""
-      ;;
-    return_ssid|return_connection)
-      runtime_value return_connection ""
       ;;
     *)
       printf ''
@@ -180,6 +183,43 @@ connection_for_ssid() {
 ap_recovery_active() {
   [ -f "$ap_setup_script" ] || return 1
   sh "$ap_setup_script" status 2>/dev/null | grep -q '^test_hostapd_running=yes$'
+}
+
+loop_pid() {
+  [ -r "$loop_pid_file" ] || return 0
+  sed -n '1p' "$loop_pid_file" 2>/dev/null || true
+}
+
+is_return_check_pid() {
+  pid=$1
+  mode=$2
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  ps -p "$pid" -o args= 2>/dev/null | grep -q "wifi-kit-ap-return-check.sh $mode"
+}
+
+is_loop_pid() {
+  is_return_check_pid "$1" "run-loop"
+}
+
+run_once_pid() {
+  [ -r "$run_once_pid_file" ] || return 0
+  sed -n '1p' "$run_once_pid_file" 2>/dev/null || true
+}
+
+stop_loop_best_effort() {
+  child_pid=$(run_once_pid)
+  if [ -n "$child_pid" ] && is_return_check_pid "$child_pid" "run-once"; then
+    log_event "stopping loop" "run_once_pid=$child_pid"
+    kill "$child_pid" 2>/dev/null || true
+  fi
+  rm -f "$run_once_pid_file" 2>/dev/null || true
+  pid=$(loop_pid)
+  if [ -n "$pid" ] && [ "$pid" != "$$" ] && is_loop_pid "$pid"; then
+    log_event "stopping loop" "pid=$pid"
+    kill "$pid" 2>/dev/null || true
+  fi
+  rm -f "$loop_pid_file" 2>/dev/null || true
 }
 
 internet_ok() {
@@ -239,7 +279,7 @@ audit_values() {
     reason="${reason:-return-check-mode-unsupported}"
   fi
   case "$target" in
-    last_good_ssid|last_good_connection|return_ssid|return_connection) ;;
+    last_good_ssid|last_good_connection) ;;
     *) status="refused"; reason="${reason:-return-check-target-unsupported}" ;;
   esac
   if [ "$enabled" = "true" ] && [ -z "$target_ssid" ] && [ -z "$target_connection" ]; then
@@ -270,6 +310,14 @@ cmd_audit() {
   kv "return_ssid" "${return_ssid:-}"
   kv "return_connection" "${return_connection:-}"
   kv "ap_ssid" "${ap_ssid:-}"
+  loop_pid_value=$(loop_pid)
+  if [ -n "$loop_pid_value" ] && is_loop_pid "$loop_pid_value"; then
+    kv "loop_running" "yes"
+    kv "loop_pid" "$loop_pid_value"
+  else
+    kv "loop_running" "no"
+    kv "loop_pid" "${loop_pid_value:-missing}"
+  fi
   kv "secret_policy" "no client Wi-Fi password is read, logged, or stored"
   if [ -n "$reason" ]; then
     kv "reason" "$reason"
@@ -289,10 +337,108 @@ cmd_plan() {
   kv "future_01_scope" "only from AP recovery"
   kv "future_02_wait" "sleep return_check_interval_minutes between attempts"
   kv "future_03_leave_ap" "temporarily leave AP recovery; do not use permanent AP+STA"
-  kv "future_04_try_target" "try last_good or return NetworkManager connection with bounded timeout"
+  kv "future_04_try_target" "try only last_good NetworkManager connection with bounded timeout"
   kv "future_05_success" "stay normal and leave AP recovery stopped"
   kv "future_06_failure" "relaunch or remain in AP recovery"
   kv "future_07_secrets" "no Wi-Fi client password read, logged, or returned"
+}
+
+cmd_stop_loop() {
+  section "ap-return-check-stop-loop"
+  kv "mode" "stop-loop"
+  kv "pidfile" "$loop_pid_file"
+  stop_loop_best_effort
+  kv "status" "done"
+}
+
+cmd_run_loop() {
+  audit_values
+  section "ap-return-check-run-loop"
+  kv "mode" "run-loop"
+  kv "log_file" "$log_file"
+  kv "pidfile" "$loop_pid_file"
+  kv "run_once_pidfile" "$run_once_pid_file"
+  kv "runtime_config" "$runtime_config"
+  kv "return_check_enabled" "$enabled"
+  kv "return_check_interval_minutes" "$interval"
+  kv "return_check_target" "$target"
+  kv "return_check_mode" "$mode"
+  kv "target_connection" "${target_connection:-}"
+  kv "target_ssid" "${target_ssid:-}"
+  kv "secret_policy" "no client Wi-Fi password is read, logged, or stored"
+  require_root
+  if [ "$status" != "ok" ] || [ "$enabled" != "true" ]; then
+    kv "status" "refused"
+    kv "reason" "${reason:-return-check-disabled}"
+    log_event "refused" "${reason:-return-check-disabled}"
+    exit 2
+  fi
+  require_number "return-check-interval-minutes" "$interval" "1440"
+  if [ -n "${WIFI_KIT_RETURN_CHECK_INTERVAL_SECONDS:-}" ]; then
+    require_number "return-check-interval-seconds" "$WIFI_KIT_RETURN_CHECK_INTERVAL_SECONDS" "86400"
+    interval_seconds=$WIFI_KIT_RETURN_CHECK_INTERVAL_SECONDS
+  else
+    interval_seconds=$((interval * 60))
+  fi
+  existing_pid=$(loop_pid)
+  if [ -n "$existing_pid" ] && is_loop_pid "$existing_pid"; then
+    kv "status" "refused"
+    kv "reason" "loop-already-running"
+    kv "loop_pid" "$existing_pid"
+    exit 2
+  fi
+  printf '%s\n' "$$" >"$loop_pid_file"
+  cleanup_loop() {
+    current_pid=$(loop_pid)
+    if [ "$current_pid" = "$$" ]; then
+      rm -f "$loop_pid_file" 2>/dev/null || true
+    fi
+    rm -f "$run_once_pid_file" 2>/dev/null || true
+    log_event "stopping loop" "pid=$$"
+  }
+  trap cleanup_loop EXIT INT TERM HUP
+  kv "status" "started"
+  kv "interval_seconds" "$interval_seconds"
+  log_event "ap-return-check-loop started" "interval_seconds=$interval_seconds"
+  while ap_recovery_active; do
+    log_event "sleeping interval" "seconds=$interval_seconds"
+    sleep "$interval_seconds"
+    audit_values
+    if [ "$enabled" != "true" ]; then
+      kv "status" "stopping"
+      kv "reason" "return-check-disabled"
+      log_event "stopping loop" "return-check-disabled"
+      exit 0
+    fi
+    if ! ap_recovery_active; then
+      kv "status" "stopping"
+      kv "reason" "ap-recovery-not-active"
+      log_event "stopping loop" "ap-recovery-not-active"
+      exit 0
+    fi
+    log_event "run-once started" "target_connection=${target_connection:-unknown}"
+    WIFI_KIT_AP_RETURN_CHECK_INTERNAL=1 WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$0" run-once &
+    run_once_pid=$!
+    printf '%s\n' "$run_once_pid" >"$run_once_pid_file"
+    if wait "$run_once_pid"; then
+      rm -f "$run_once_pid_file" 2>/dev/null || true
+      kv "status" "done"
+      kv "decision" "normal"
+      log_event "success" "loop-exit-normal"
+      exit 0
+    fi
+    rm -f "$run_once_pid_file" 2>/dev/null || true
+    log_event "failure" "run-once-failed"
+    if ! ap_recovery_active; then
+      kv "status" "stopping"
+      kv "reason" "ap-recovery-not-active-after-failure"
+      log_event "stopping loop" "ap-recovery-not-active-after-failure"
+      exit 1
+    fi
+  done
+  kv "status" "done"
+  kv "reason" "ap-recovery-not-active"
+  log_event "stopping loop" "ap-recovery-not-active"
 }
 
 cmd_run_once() {
@@ -378,6 +524,8 @@ case "$1" in
   audit) cmd_audit ;;
   plan) cmd_plan ;;
   run-once) cmd_run_once ;;
+  run-loop) cmd_run_loop ;;
+  stop-loop) cmd_stop_loop ;;
   -h|--help|help) usage ;;
   *) usage; exit 2 ;;
 esac

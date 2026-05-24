@@ -30,6 +30,7 @@ temporary_dnsmasq_pid="/tmp/wifi-kit-dnsmasq-recovery.pid"
 temporary_ui_log="/tmp/wifi-kit-ui-recovery-${runtime_user}.log"
 temporary_ui_pid="/tmp/wifi-kit-ui-recovery.pid"
 recovery_ui_script="$script_dir/ui/serve-readonly.py"
+ap_return_check_script="$script_dir/wifi-kit-ap-return-check.sh"
 ui_port="80"
 confirm_phrase=""
 dangerous_real_apply="0"
@@ -433,6 +434,28 @@ stop_test_dnsmasq_best_effort() {
   rm -f "$temporary_dnsmasq_pid" 2>/dev/null || true
 }
 
+stop_return_check_loop_best_effort() {
+  [ "${WIFI_KIT_AP_RETURN_CHECK_INTERNAL:-0}" != "1" ] || return 0
+  [ -f "$ap_return_check_script" ] || return 0
+  sh "$ap_return_check_script" stop-loop >/dev/null 2>&1 || true
+}
+
+start_return_check_loop_best_effort() {
+  [ -f "$ap_return_check_script" ] || return 0
+  mkdir -p /tmp/wifi-kit-actions 2>/dev/null || true
+  chmod 1777 /tmp/wifi-kit-actions 2>/dev/null || true
+  enabled=$(
+    WIFI_KIT_RUNTIME_CONFIG="${WIFI_KIT_RUNTIME_CONFIG:-}" sh "$ap_return_check_script" audit 2>/dev/null |
+      sed -n 's/^return_check_enabled=//p' |
+      sed -n '1p'
+  )
+  [ "$enabled" = "true" ] || return 0
+  WIFI_KIT_RUNTIME_CONFIG="${WIFI_KIT_RUNTIME_CONFIG:-}" \
+    sh "$ap_return_check_script" run-loop >> /tmp/wifi-kit-actions/ap-return-check-loop.log 2>&1 &
+  kv "return_check_loop" "started"
+  kv "return_check_loop_pid" "$!"
+}
+
 stop_test_ui_best_effort() {
   ui_pid="$(test_ui_pid_from_file || true)"
   if [ -n "$ui_pid" ] && is_test_ui_pid "$ui_pid"; then
@@ -665,6 +688,7 @@ cmd_apply_ap_recovery_manual_test() {
   dnsmasq_pid=""
   ui_pid=""
   cleanup_ap_recovery() {
+    stop_return_check_loop_best_effort
     if [ -n "${ui_pid:-}" ] && is_test_ui_pid "$ui_pid"; then
       kill "$ui_pid" 2>/dev/null || true
       wait "$ui_pid" 2>/dev/null || true
@@ -764,6 +788,7 @@ cmd_apply_ap_recovery_manual_test() {
   fi
 
   if [ "$ap_stay_up_until_stop" = "1" ]; then
+    start_return_check_loop_best_effort
     trap - EXIT INT TERM HUP
     section "ready"
     kv "apply_status" "running-until-explicit-stop"
@@ -1353,6 +1378,7 @@ cmd_stop() {
   kv "pidfile" "$temporary_hostapd_pid"
   if [ -z "$pid" ]; then
     kv "stop_status" "no-pidfile"
+    stop_return_check_loop_best_effort
     write_redacted_hostapd_config_copy
     write_redacted_dnsmasq_config_copy
     stop_test_ui_best_effort
@@ -1366,6 +1392,7 @@ cmd_stop() {
   if ! is_test_hostapd_pid "$pid"; then
     kv "stop_status" "pid-not-matching-wifi-kit-hostapd"
     kv "pid" "$pid"
+    stop_return_check_loop_best_effort
     write_redacted_dnsmasq_config_copy
     stop_test_ui_best_effort
     stop_test_dnsmasq_best_effort
@@ -1376,6 +1403,7 @@ cmd_stop() {
   if kill "$pid" 2>/dev/null; then
     kv "stop_status" "signal-sent"
     kv "pid" "$pid"
+    stop_return_check_loop_best_effort
     write_redacted_hostapd_config_copy
     write_redacted_dnsmasq_config_copy
     stop_test_ui_best_effort

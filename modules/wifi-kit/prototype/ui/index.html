@@ -1690,6 +1690,21 @@
             </div>
           </div>
           <div class="recovery-settings-section">
+            <h3 class="settings-title">Test de retour automatique</h3>
+            <p class="section-copy">Depuis le mode AP recovery, le node peut tenter ponctuellement de revenir au dernier Wi-Fi valide. Ce n'est pas un mode AP+STA permanent.</p>
+            <div class="recovery-settings-grid">
+              <label class="confirm-line">
+                <input id="return-check-enabled-input" type="checkbox">
+                Tester automatiquement le retour au dernier Wi-Fi connu
+              </label>
+              <label class="field-label">
+                Intervalle
+                <input id="return-check-interval-input" class="password-local" type="number" min="1" step="1" inputmode="numeric" placeholder="1">
+              </label>
+            </div>
+            <p class="danger-note">30-60 s recommande. Tres court = AP plus instable. Tres long = retour plus lent.</p>
+          </div>
+          <div class="recovery-settings-section">
             <h3 class="settings-title">Sélectionner le Wi-Fi principal</h3>
             <div class="recovery-settings-grid">
               <div class="field-label">
@@ -2285,6 +2300,10 @@
       document.getElementById('recovery-ui').textContent = `${serviceLabel(recovery.ui)}:${recovery.ui_port || 80}`;
       setInputValue('recovery-ap-ssid-input', apSsid);
       setInputValue('recovery-ap-password-input', apPassword);
+      const returnCheckEnabled = String(config.return_check_enabled || 'false') === 'true';
+      const returnCheckEnabledInput = document.getElementById('return-check-enabled-input');
+      if (returnCheckEnabledInput) returnCheckEnabledInput.checked = returnCheckEnabled;
+      setInputValue('return-check-interval-input', config.return_check_interval_minutes || '1');
       renderReturnConnectionSelect(returnConnection);
       renderReturnConnectionDetails(returnConnection);
       updateRecoveryButtons();
@@ -2525,6 +2544,8 @@
         data.recovery.original_connection = payload.config.original_connection;
         data.recovery.return_ssid = payload.config.return_ssid;
         data.recovery.return_connection = payload.config.return_connection;
+        data.recovery.return_check_enabled = payload.config.return_check_enabled;
+        data.recovery.return_check_interval_minutes = payload.config.return_check_interval_minutes;
       }
       if (data.system) {
         data.system.recovery_ssid = payload.config.ap_ssid;
@@ -2533,6 +2554,8 @@
         data.system.original_connection = payload.config.original_connection;
         data.system.return_ssid = payload.config.return_ssid;
         data.system.return_connection = payload.config.return_connection;
+        data.system.return_check_enabled = payload.config.return_check_enabled;
+        data.system.return_check_interval_minutes = payload.config.return_check_interval_minutes;
       }
       renderAll();
       const message = `Configuration enregistree dans ${payload.config.path}.`;
@@ -2543,6 +2566,8 @@
     async function saveRecoveryConfig() {
       const apSsid = document.getElementById('recovery-ap-ssid-input').value.trim();
       const apPassword = document.getElementById('recovery-ap-password-input').value;
+      const returnCheckEnabled = Boolean(document.getElementById('return-check-enabled-input')?.checked);
+      const returnCheckInterval = document.getElementById('return-check-interval-input')?.value.trim() || '1';
       const returnInput = document.getElementById('recovery-return-connection-select');
       const returnConnection = returnInput.value.trim();
       const returnSsid = (returnInput.dataset.ssid || returnConnection).trim();
@@ -2562,7 +2587,20 @@
         showRecoveryConfigResult('Profil NetworkManager requis.');
         return;
       }
-      await saveRuntimeConfig({ ap_ssid: apSsid, ap_password: apPassword, return_ssid: returnSsid, return_connection: returnConnection });
+      if (!/^[0-9]+$/.test(returnCheckInterval) || Number(returnCheckInterval) < 1) {
+        showRecoveryConfigResult('Intervalle de test retour: minimum 1 minute.');
+        return;
+      }
+      await saveRuntimeConfig({
+        ap_ssid: apSsid,
+        ap_password: apPassword,
+        return_ssid: returnSsid,
+        return_connection: returnConnection,
+        return_check_enabled: returnCheckEnabled,
+        return_check_interval_minutes: returnCheckInterval,
+        return_check_target: 'last_good_ssid',
+        return_check_mode: 'periodic-from-ap'
+      });
     }
 
     function networkActionPlan(action) {

@@ -35,7 +35,7 @@ WIFI_KIT_RECOVERY_BOOT_POLICY="ap_after_timeout"
 WIFI_KIT_RECOVERY_BOOT_TIMEOUT_SECONDS="configurable"
 WIFI_KIT_RECOVERY_AP_USER_ACTIONS="new_wifi|retry_primary|stay_ap"
 WIFI_KIT_RECOVERY_RETURN_CHECK_ENABLED="false"
-WIFI_KIT_RECOVERY_RETURN_CHECK_INTERVAL_MINUTES="5"
+WIFI_KIT_RECOVERY_RETURN_CHECK_INTERVAL_MINUTES="1"
 WIFI_KIT_RECOVERY_RETURN_CHECK_TARGET="last_good_ssid"
 WIFI_KIT_RECOVERY_RETURN_CHECK_MODE="periodic-from-ap"
 
@@ -44,12 +44,15 @@ start-ap-mode
 return-default-network
 reconnect-previous
 wifi-connect-recovery
+ap-return-check-once
+ap-return-check-loop
 '
 
 WIFI_KIT_RECOVERY_PRIVILEGED_ACTIONS='
 start-ap-mode
 return-default-network
 wifi-connect-recovery
+ap-return-check-once
 '
 
 WIFI_KIT_RECOVERY_UNPRIVILEGED_UI_ACTIONS='

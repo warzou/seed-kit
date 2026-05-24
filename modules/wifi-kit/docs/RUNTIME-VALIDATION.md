@@ -265,7 +265,7 @@ The safer recovery option is a periodic return check while the node is already
 in AP recovery:
 
 - `return_check_enabled=false` by default;
-- `return_check_interval_minutes=5`;
+- `return_check_interval_minutes=1` by default in the runtime UI;
 - `return_check_target=last_good_ssid`;
 - `return_check_mode=periodic-from-ap`.
 

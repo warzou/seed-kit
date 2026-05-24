@@ -82,6 +82,10 @@ RUNTIME_CONFIG_KEYS = {
     "default_connection",
     "ap_ssid",
     "ap_password",
+    "return_check_enabled",
+    "return_check_interval_minutes",
+    "return_check_target",
+    "return_check_mode",
 }
 
 CAPTIVE_PATHS = {
@@ -250,6 +254,10 @@ def default_runtime_config() -> dict[str, str]:
         "return_connection": DEFAULT_NETWORK_CONNECTION,
         "ap_ssid": f"Wifi-Kit-{hostname}",
         "ap_password": os.environ.get("WIFI_KIT_AP_PSK", RECOVERY_AP_TEST_PASSWORD),
+        "return_check_enabled": "false",
+        "return_check_interval_minutes": "1",
+        "return_check_target": "last_good_ssid",
+        "return_check_mode": "periodic-from-ap",
     }
 
 
@@ -302,6 +310,10 @@ def redact_runtime_config(config: dict[str, str]) -> dict[str, object]:
         "return_connection": config["return_connection"],
         "ap_ssid": config["ap_ssid"],
         "ap_password_set": bool(config["ap_password"]),
+        "return_check_enabled": config.get("return_check_enabled", "false"),
+        "return_check_interval_minutes": config.get("return_check_interval_minutes", "1"),
+        "return_check_target": config.get("return_check_target", "last_good_ssid"),
+        "return_check_mode": config.get("return_check_mode", "periodic-from-ap"),
         "path": str(RUNTIME_CONFIG_PATH),
         "password_policy": "min-8-chars",
         "secret_policy": "stores AP recovery password only; never stores client Wi-Fi passwords",
@@ -397,6 +409,10 @@ def write_runtime_config(config: dict[str, str]) -> None:
         f"return_connection={config['return_connection']}",
         f"ap_ssid={config['ap_ssid']}",
         f"ap_password={config['ap_password']}",
+        f"return_check_enabled={config.get('return_check_enabled', 'false')}",
+        f"return_check_interval_minutes={config.get('return_check_interval_minutes', '1')}",
+        f"return_check_target={config.get('return_check_target', 'last_good_ssid')}",
+        f"return_check_mode={config.get('return_check_mode', 'periodic-from-ap')}",
     ]
     fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
@@ -468,6 +484,29 @@ def update_runtime_config(payload: dict) -> tuple[dict, int]:
                 "message": "Mot de passe AP refuse: valeur de test/factice sans validation explicite.",
             }, 400
         config["ap_password"] = ap_password
+    if "return_check_enabled" in payload:
+        enabled = str(payload.get("return_check_enabled", "")).strip().lower()
+        if enabled in {"true", "1", "yes", "on"}:
+            config["return_check_enabled"] = "true"
+        elif enabled in {"false", "0", "no", "off", ""}:
+            config["return_check_enabled"] = "false"
+        else:
+            return {"status": "failure", "error": "return-check-enabled-invalid"}, 400
+    if "return_check_interval_minutes" in payload:
+        interval = str(payload.get("return_check_interval_minutes", "")).strip()
+        if not interval.isdigit() or int(interval) < 1:
+            return {"status": "failure", "error": "return-check-interval-invalid"}, 400
+        config["return_check_interval_minutes"] = str(int(interval))
+    if "return_check_target" in payload:
+        target = str(payload.get("return_check_target", "")).strip()
+        if target != "last_good_ssid":
+            return {"status": "failure", "error": "return-check-target-unsupported"}, 400
+        config["return_check_target"] = target
+    if "return_check_mode" in payload:
+        mode = str(payload.get("return_check_mode", "")).strip()
+        if mode != "periodic-from-ap":
+            return {"status": "failure", "error": "return-check-mode-unsupported"}, 400
+        config["return_check_mode"] = mode
 
     write_runtime_config(config)
     return {
