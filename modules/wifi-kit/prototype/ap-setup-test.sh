@@ -486,6 +486,11 @@ stop_return_check_loop_best_effort() {
 
 start_return_check_loop_best_effort() {
   [ -f "$ap_return_check_script" ] || return 0
+  if [ "${WIFI_KIT_AP_START_RETURN_CHECK_LOOP:-0}" != "1" ]; then
+    kv "return_check_loop" "not-started"
+    kv "return_check_loop_reason" "not-requested-for-manual-ap"
+    return 0
+  fi
   mkdir -p /tmp/wifi-kit-actions 2>/dev/null || true
   chmod 1777 /tmp/wifi-kit-actions 2>/dev/null || true
   enabled=$(
@@ -841,6 +846,9 @@ cmd_apply_ap_recovery_manual_test() {
     trap - EXIT INT TERM HUP
     section "ready"
     kv "apply_status" "running-until-explicit-stop"
+    kv "ap-hold-started" "yes"
+    kv "ap-stay-up-until-stop" "yes"
+    kv "no-auto-cleanup" "yes"
     kv "hostapd_pid" "$hostapd_pid"
     kv "dnsmasq_pid" "$dnsmasq_pid"
     kv "ui_pid" "$ui_pid"

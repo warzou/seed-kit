@@ -420,7 +420,7 @@ cmd_run() {
     log_event "recovery-enter" "last_good_ssid=$last_good_ssid runtime_reason=$runtime_reason grace_seconds=$grace_seconds"
     log_event "starting-ap-recovery" "last_good_ssid=$last_good_ssid grace_seconds=$grace_seconds"
     write_state "starting-ap-recovery" "grace-expired" "$last_good_ssid"
-    WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$action_wrapper" start-ap-mode >> "$log_file" 2>&1 || true
+    WIFI_KIT_AP_START_RETURN_CHECK_LOOP=1 WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$action_wrapper" start-ap-mode >> "$log_file" 2>&1 || true
     grace_active=0
     sleep "$poll_seconds"
   done
