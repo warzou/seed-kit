@@ -279,6 +279,11 @@ restore_nm_from_ap_only_state_best_effort() {
   [ "$(id -u 2>/dev/null || printf 1)" = "0" ] || return 0
   nmcli_bin="$(find_tool nmcli 2>/dev/null || true)"
   [ -n "$nmcli_bin" ] || return 0
+  if [ "${WIFI_KIT_AP_SKIP_NM_RESTORE:-0}" = "1" ]; then
+    kv "networkmanager_restore" "skipped"
+    kv "networkmanager_restore_reason" "caller-controls-wlan0"
+    return 0
+  fi
 
   restore_iface="$(read_ap_only_state_value iface || true)"
   restore_connection="$(read_ap_only_state_value active_connection || true)"
@@ -741,6 +746,8 @@ cmd_apply_ap_recovery_manual_test() {
 
   "$nmcli_bin" device disconnect "$iface"
   "$nmcli_bin" device set "$iface" managed no
+  kv "recovery-enter" "ap-recovery"
+  kv "nm-managed-no" "$iface"
   "$ip_bin" addr flush dev "$iface"
   "$ip_bin" addr add "$ap_recovery_ip/$ap_recovery_cidr" dev "$iface"
   "$ip_bin" link set "$iface" up

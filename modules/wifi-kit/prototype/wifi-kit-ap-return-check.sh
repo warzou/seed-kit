@@ -510,7 +510,9 @@ cmd_run_once() {
   kv "target_ssid" "${target_ssid:-$resolved_ssid}"
   kv "ap_stop" "starting"
   log_event "ap-stop-starting" "target_connection=$target_connection"
-  sh "$ap_setup_script" stop >/dev/null 2>&1 || true
+  WIFI_KIT_AP_SKIP_NM_RESTORE=1 sh "$ap_setup_script" stop >/dev/null 2>&1 || true
+  "$nmcli_bin" device set "$iface" managed yes >/dev/null 2>&1 || true
+  log_event "return-check-attempt-last-good" "target_connection=$target_connection target_ssid=${target_ssid:-$resolved_ssid}"
   kv "connect" "starting"
   log_event "connect-starting" "target_connection=$target_connection"
   if "$nmcli_bin" --wait "$connect_wait_seconds" connection up "$target_connection" ifname "$iface" >/dev/null 2>&1 &&
@@ -518,7 +520,7 @@ cmd_run_once() {
     kv "status" "done"
     kv "decision" "normal"
     kv "internet" "ok"
-    log_event "success" "target_connection=$target_connection"
+    log_event "recovery-exit-success" "target_connection=$target_connection"
     exit 0
   fi
   kv "connect" "failed"
@@ -527,6 +529,7 @@ cmd_run_once() {
   log_event "failure" "restarting-ap-recovery"
   "$nmcli_bin" device disconnect "$iface" >/dev/null 2>&1 || true
   "$nmcli_bin" device set "$iface" managed no >/dev/null 2>&1 || true
+  log_event "return-check-failed-keep-ap" "target_connection=$target_connection nm_managed=no"
   if [ -f "$action_wrapper" ]; then
     if sh "$action_wrapper" start-ap-mode; then
       kv "status" "failed"
