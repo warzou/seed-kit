@@ -108,6 +108,10 @@ default_runtime_config_path() {
       return 0
     fi
   fi
+  if [ -r "/home/warzy/.config/wifi-kit/runtime.conf" ]; then
+    printf '%s\n' "/home/warzy/.config/wifi-kit/runtime.conf"
+    return 0
+  fi
   printf '%s\n' "${HOME:-/tmp}/.config/wifi-kit/runtime.conf"
 }
 
