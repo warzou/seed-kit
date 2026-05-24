@@ -36,6 +36,7 @@ iface="${WIFI_KIT_RETURN_CHECK_IFACE:-wlan0}"
 connect_wait_seconds="${WIFI_KIT_RETURN_CHECK_CONNECT_WAIT:-30}"
 ping_wait_seconds="${WIFI_KIT_RETURN_CHECK_PING_WAIT:-3}"
 internet_probe="${WIFI_KIT_RETURN_CHECK_PROBE:-1.1.1.1}"
+ap_restart_wait_seconds="${WIFI_KIT_RETURN_CHECK_AP_RESTART_WAIT:-30}"
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ap_setup_script="$script_dir/ap-setup-test.sh"
 action_wrapper="$script_dir/wifi-kit-action-wrapper.sh"
@@ -183,6 +184,19 @@ connection_for_ssid() {
 ap_recovery_active() {
   [ -f "$ap_setup_script" ] || return 1
   sh "$ap_setup_script" status 2>/dev/null | grep -q '^test_hostapd_running=yes$'
+}
+
+wait_ap_recovery_active() {
+  timeout=$1
+  elapsed=0
+  while [ "$elapsed" -le "$timeout" ]; do
+    if ap_recovery_active; then
+      return 0
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  return 1
 }
 
 loop_pid() {
@@ -365,6 +379,7 @@ cmd_run_loop() {
   kv "return_check_mode" "$mode"
   kv "target_connection" "${target_connection:-}"
   kv "target_ssid" "${target_ssid:-}"
+  kv "ap_restart_wait_seconds" "$ap_restart_wait_seconds"
   kv "secret_policy" "no client Wi-Fi password is read, logged, or stored"
   require_root
   if [ "$status" != "ok" ] || [ "$enabled" != "true" ]; then
@@ -374,6 +389,7 @@ cmd_run_loop() {
     exit 2
   fi
   require_number "return-check-interval-minutes" "$interval" "1440"
+  require_number "ap-restart-wait-seconds" "$ap_restart_wait_seconds" "120"
   if [ -n "${WIFI_KIT_RETURN_CHECK_INTERVAL_SECONDS:-}" ]; then
     require_number "return-check-interval-seconds" "$WIFI_KIT_RETURN_CHECK_INTERVAL_SECONDS" "86400"
     interval_seconds=$WIFI_KIT_RETURN_CHECK_INTERVAL_SECONDS
@@ -429,7 +445,11 @@ cmd_run_loop() {
     fi
     rm -f "$run_once_pid_file" 2>/dev/null || true
     log_event "failure" "run-once-failed"
-    if ! ap_recovery_active; then
+    log_event "waiting" "ap-recovery-restart timeout_seconds=$ap_restart_wait_seconds"
+    if wait_ap_recovery_active "$ap_restart_wait_seconds"; then
+      log_event "ap-recovery-active" "loop-continues"
+      continue
+    else
       kv "status" "stopping"
       kv "reason" "ap-recovery-not-active-after-failure"
       log_event "stopping loop" "ap-recovery-not-active-after-failure"
@@ -506,7 +526,16 @@ cmd_run_once() {
   kv "ap_restart" "starting"
   log_event "failure" "restarting-ap-recovery"
   if [ -f "$action_wrapper" ]; then
-    sh "$action_wrapper" start-ap-mode
+    if sh "$action_wrapper" start-ap-mode; then
+      kv "status" "failed"
+      kv "reason" "target-connect-failed-ap-restarted"
+      log_event "failure" "ap-recovery-restarted"
+      exit 1
+    fi
+    kv "status" "failed"
+    kv "reason" "ap-recovery-restart-failed"
+    log_event "failed" "ap-recovery-restart-failed"
+    exit 1
   else
     kv "status" "failed"
     kv "reason" "action-wrapper-missing"
