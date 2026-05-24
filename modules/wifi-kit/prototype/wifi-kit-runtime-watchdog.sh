@@ -135,6 +135,10 @@ state_value() {
 }
 
 active_connection() {
+  if [ -n "${WIFI_KIT_RUNTIME_WATCHDOG_MOCK_CURRENT_CONNECTION:-}" ]; then
+    printf '%s\n' "$WIFI_KIT_RUNTIME_WATCHDOG_MOCK_CURRENT_CONNECTION"
+    return 0
+  fi
   nmcli_bin=$(find_tool nmcli 2>/dev/null || true)
   [ -n "$nmcli_bin" ] || return 0
   "$nmcli_bin" -t -f DEVICE,CONNECTION device status 2>/dev/null |
@@ -150,6 +154,10 @@ connection_ssid() {
 }
 
 active_ssid() {
+  if [ -n "${WIFI_KIT_RUNTIME_WATCHDOG_MOCK_CURRENT_SSID:-}" ]; then
+    printf '%s\n' "$WIFI_KIT_RUNTIME_WATCHDOG_MOCK_CURRENT_SSID"
+    return 0
+  fi
   connection=$(active_connection)
   ssid=$(connection_ssid "$connection")
   if [ -n "$ssid" ]; then
@@ -178,6 +186,8 @@ config_values() {
   return_connection=$(runtime_value return_connection "")
   current_connection=$(active_connection)
   current_ssid=$(active_ssid)
+  runtime_match="false"
+  runtime_reason="disconnected"
   unstable_ssid=$(state_value unstable_ssid)
   if [ -z "$unstable_ssid" ] && [ -r "$instability_file" ]; then
     unstable_ssid=$(sed -n 's/^unstable_ssid=//p' "$instability_file" 2>/dev/null | sed -n '1p')
@@ -206,11 +216,23 @@ config_values() {
     status="refused"
     reason="${reason:-last-good-missing}"
   fi
+  if [ -n "$last_good_connection" ] && [ "$current_connection" = "$last_good_connection" ]; then
+    runtime_match="true"
+    runtime_reason="matched-last-good"
+  elif [ -n "$last_good_ssid" ] && [ "$current_ssid" = "$last_good_ssid" ]; then
+    runtime_match="true"
+    runtime_reason="matched-last-good"
+  elif [ -z "$current_connection" ] && [ -z "$current_ssid" ]; then
+    runtime_reason="disconnected"
+  elif [ -n "$return_connection" ] && [ "$current_connection" = "$return_connection" ]; then
+    runtime_reason="mismatch-return-connection"
+  else
+    runtime_reason="mismatch-last-good"
+  fi
 }
 
 is_last_good_active() {
-  [ -n "$last_good_connection" ] && [ "$current_connection" = "$last_good_connection" ] && return 0
-  [ -n "$last_good_ssid" ] && [ "$current_ssid" = "$last_good_ssid" ] && return 0
+  [ "$runtime_match" = "true" ] && return 0
   return 1
 }
 
@@ -268,6 +290,8 @@ cmd_audit() {
   kv "return_connection" "$return_connection"
   kv "current_ssid" "$current_ssid"
   kv "current_connection" "$current_connection"
+  kv "runtime_match" "$runtime_match"
+  kv "runtime_reason" "$runtime_reason"
   kv "ap_recovery_active" "$(ap_recovery_active && printf yes || printf no)"
   kv "watchdog_state_file" "$state_file"
   kv "watchdog_instability_file" "$instability_file"
@@ -318,7 +342,6 @@ cmd_run() {
   log_event "started" "grace_seconds=$grace_seconds"
   write_state "watching" "started" "$last_good_ssid"
 
-  seen_last_good=0
   grace_active=0
   grace_start=0
   while :; do
@@ -348,23 +371,17 @@ cmd_run() {
       if [ "$grace_active" = "1" ]; then
         log_event "recovery-cancelled link-restored" "ssid=${current_ssid:-unknown}"
       fi
-      seen_last_good=1
       grace_active=0
       write_state "watching" "last-good-active" "${current_ssid:-$last_good_ssid}"
-      sleep "$poll_seconds"
-      continue
-    fi
-    if [ "$seen_last_good" != "1" ]; then
-      write_state "waiting-last-good" "last-good-not-active-yet" "$last_good_ssid"
       sleep "$poll_seconds"
       continue
     fi
     if [ "$grace_active" != "1" ]; then
       grace_active=1
       grace_start=$(epoch_seconds)
-      log_event "runtime-disconnect detected" "last_good_ssid=$last_good_ssid current_ssid=${current_ssid:-unknown}"
+      log_event "runtime-disconnect detected" "reason=$runtime_reason last_good_ssid=$last_good_ssid current_ssid=${current_ssid:-unknown} current_connection=${current_connection:-unknown}"
       log_event "grace-period started" "seconds=$grace_seconds"
-      write_state "grace-period" "runtime-disconnect-detected" "$last_good_ssid"
+      write_state "grace-period" "$runtime_reason" "$last_good_ssid"
       record_instability_event "$last_good_ssid"
     fi
     now=$(epoch_seconds)
@@ -381,7 +398,6 @@ cmd_run() {
     log_event "starting-ap-recovery" "last_good_ssid=$last_good_ssid grace_seconds=$grace_seconds"
     write_state "starting-ap-recovery" "grace-expired" "$last_good_ssid"
     WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$action_wrapper" start-ap-mode >> "$log_file" 2>&1 || true
-    seen_last_good=0
     grace_active=0
     sleep "$poll_seconds"
   done
