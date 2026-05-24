@@ -239,6 +239,33 @@ persist_last_good() {
   return 1
 }
 
+runtime_config_value() {
+  key=$1
+  fallback=${2:-}
+  if [ -r "$runtime_config" ]; then
+    value=$(sed -n "s/^$key=//p" "$runtime_config" 2>/dev/null | sed -n '1p' || true)
+    if [ -n "$value" ]; then
+      printf '%s\n' "$value"
+      return 0
+    fi
+  fi
+  printf '%s\n' "$fallback"
+}
+
+apply_runtime_autoconnect_policy() {
+  last_good_connection=$1
+  return_connection=$(runtime_config_value return_connection "$(runtime_config_value default_connection "")")
+  [ -n "$last_good_connection" ] || return 0
+  "$nmcli" connection modify "$last_good_connection" connection.autoconnect yes >>"$log_file" 2>&1 || true
+  log_event "autoconnect-policy" "last_good_connection=$(quote "$last_good_connection") autoconnect=yes"
+  if [ -n "$return_connection" ] && [ "$return_connection" != "$last_good_connection" ]; then
+    if "$nmcli" connection show "$return_connection" >/dev/null 2>&1; then
+      "$nmcli" connection modify "$return_connection" connection.autoconnect no >>"$log_file" 2>&1 || true
+      log_event "autoconnect-policy" "return_connection=$(quote "$return_connection") autoconnect=no scope=boot-only"
+    fi
+  fi
+}
+
 require_number() {
   name=$1
   value=$2
@@ -610,6 +637,7 @@ cmd_apply() {
       [ -n "$connected_connection" ] && [ "$connected_connection" != "--" ] || connected_connection=$connect_target
       connected_connection=$(stabilize_success_profile "$connected_ssid" "$connected_connection")
       persist_last_good "$connected_ssid" "$connected_connection" || true
+      apply_runtime_autoconnect_policy "$connected_connection"
       state_set "status" "success"
       state_set "connected_ssid" "$connected_ssid"
       state_set "connected_connection" "$connected_connection"

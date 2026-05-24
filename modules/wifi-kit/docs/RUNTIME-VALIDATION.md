@@ -215,18 +215,23 @@ Wifi-Kit to return to the main Wi-Fi.
 Runtime disconnects are intentionally different from boot recovery.
 
 If the node already had a valid Wi-Fi connection during runtime and later loses
-that connection, Wifi-Kit should stay in retry/reconnect mode for the configured
-main Wi-Fi. It must not automatically open AP recovery just because a runtime
-link drops. AP recovery is a boot-time fallback after bounded startup recovery
-fails, or an explicit user action.
+that connection, Wifi-Kit should prefer the last validated Wi-Fi. It must not
+fall back automatically to the configured return/main Wi-Fi during runtime.
+AP recovery is a boot-time fallback after bounded startup recovery fails, or an
+explicit user action.
 
 Target policy names:
 
 - `runtime_disconnect_policy=keep_retrying`
-- `runtime_retry_target=return_connection`
+- `runtime_retry_target=last_good_connection`
 - `runtime_retry_timeout=indefinite-or-configurable`
 - `boot_recovery_policy=ap_after_timeout`
 - `ap_recovery_actions=new_wifi|retry_primary|stay_ap`
+
+`return_connection` is a boot-only fallback. NetworkManager autoconnect for the
+return/main Wi-Fi may be disabled after a successful Wifi-Kit connection when it
+differs from `last_good_connection`; the boot guard can still use it explicitly
+with `nmcli connection up`.
 
 The AP recovery UI must not treat AP mode as abandoning the main Wi-Fi. While
 in AP recovery it should clearly offer:
