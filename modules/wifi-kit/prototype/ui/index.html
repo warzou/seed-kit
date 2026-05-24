@@ -1841,6 +1841,10 @@
           <div class="metric"><span>DHCP</span><strong id="node-dhcp">...</strong></div>
           <div class="metric"><span>Dernier evenement</span><strong id="diag-last-event">...</strong></div>
           <div class="metric"><span>Watchdog runtime</span><strong id="diag-runtime-watchdog">...</strong></div>
+          <div class="metric"><span>Cause runtime</span><strong id="diag-runtime-reason">...</strong></div>
+          <div class="metric"><span>Debug passif</span><strong id="diag-runtime-debug-passive">...</strong></div>
+          <div class="metric"><span>Connexion actuelle</span><strong id="diag-current-connection">...</strong></div>
+          <div class="metric"><span>Last good attendu</span><strong id="diag-last-good">...</strong></div>
           <div class="metric"><span>SSID instable</span><strong id="diag-unstable-ssid">...</strong></div>
           <div class="metric"><span>AP</span><strong id="diag-ap">...</strong></div>
           <div class="metric"><span>DHCP</span><strong id="diag-dhcp">...</strong></div>
@@ -2392,6 +2396,10 @@
       const watchdog = system.runtime_watchdog || recovery.runtime_watchdog || {};
       setText('diag-last-event', system.last_recovery_event || recovery.last_event || 'inconnu');
       setText('diag-runtime-watchdog', watchdog.status || 'inconnu');
+      setText('diag-runtime-reason', watchdog.runtime_reason || watchdog.reason || 'inconnu');
+      setText('diag-runtime-debug-passive', String(watchdog.runtime_recovery_debug_passive || runtimeConfig().runtime_recovery_debug_passive || 'false'));
+      setText('diag-current-connection', watchdog.current_connection || watchdog.current_ssid || 'inconnu');
+      setText('diag-last-good', watchdog.last_good_connection || watchdog.last_good_ssid || runtimeConfig().last_good_connection || runtimeConfig().last_good_ssid || 'inconnu');
       setText('diag-unstable-ssid', watchdog.unstable_ssid || 'aucun');
       setText('diag-ap', serviceLabel(system.ap_state || recovery.ap));
       setText('diag-dhcp', serviceLabel(system.dhcp_state || recovery.dhcp));

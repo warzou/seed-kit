@@ -121,6 +121,13 @@ write_state() {
     kv "status" "$status"
     kv "reason" "$reason"
     kv "ssid" "$ssid"
+    kv "runtime_match" "${runtime_match:-}"
+    kv "runtime_reason" "${runtime_reason:-$reason}"
+    kv "runtime_recovery_debug_passive" "${debug_passive:-false}"
+    kv "current_connection" "${current_connection:-}"
+    kv "current_ssid" "${current_ssid:-}"
+    kv "last_good_connection" "${last_good_connection:-}"
+    kv "last_good_ssid" "${last_good_ssid:-}"
     kv "iface" "$iface"
     kv "runtime_config" "$runtime_config"
     kv "log_file" "$log_file"
@@ -261,7 +268,6 @@ record_instability_event() {
   count=$(awk -F'|' -v ssid="$ssid" '$2 == ssid { c++ } END { print c + 0 }' "$events_file" 2>/dev/null || printf '0')
   if [ "$count" -ge "$threshold" ]; then
     log_event "unstable-ssid" "ssid=$ssid count=$count window_minutes=$window_minutes"
-    write_state "unstable-ssid" "threshold-reached" "$ssid"
     {
       kv "unstable_ssid" "$ssid"
       kv "unstable_count" "$count"
@@ -405,7 +411,7 @@ cmd_run() {
       continue
     fi
     if [ "$debug_passive" = "true" ]; then
-      log_event "debug-passive-suppressed-action" "would_start_ap_recovery=yes last_good_ssid=$last_good_ssid runtime_reason=$runtime_reason grace_seconds=$grace_seconds"
+      log_event "debug-passive-suppressed-action" "would_start_ap_recovery=yes runtime_reason=$runtime_reason current_connection=${current_connection:-unknown} current_ssid=${current_ssid:-unknown} last_good_connection=${last_good_connection:-unknown} last_good_ssid=${last_good_ssid:-unknown} grace_seconds=$grace_seconds"
       write_state "debug-passive-suppressed-action" "$runtime_reason" "$last_good_ssid"
       grace_active=0
       sleep "$poll_seconds"
