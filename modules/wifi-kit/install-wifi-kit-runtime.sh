@@ -20,6 +20,7 @@ ui_dir="$app_dir/ui"
 sudoers_path="${WIFI_KIT_SUDOERS_PATH:-/etc/sudoers.d/wifi-kit}"
 normal_unit_path="${WIFI_KIT_UI_UNIT_PATH:-/etc/systemd/system/wifi-kit-ui.service}"
 boot_guard_unit_path="${WIFI_KIT_BOOT_GUARD_UNIT_PATH:-/etc/systemd/system/wifi-kit-boot-guard.service}"
+runtime_watchdog_unit_path="${WIFI_KIT_RUNTIME_WATCHDOG_UNIT_PATH:-/etc/systemd/system/wifi-kit-runtime-watchdog.service}"
 ui_port="${WIFI_KIT_UI_PORT:-54321}"
 iface="${WIFI_KIT_BOOT_GUARD_IFACE:-wlan0}"
 internet_probe="${WIFI_KIT_BOOT_GUARD_PROBE:-1.1.1.1}"
@@ -114,6 +115,7 @@ prototype/ap-setup-test.sh
 prototype/wifi-kit-connect-transaction.sh
 prototype/wifi-kit-boot-guard.sh
 prototype/wifi-kit-ap-return-check.sh
+prototype/wifi-kit-runtime-watchdog.sh
 prototype/ui/serve-readonly.py
 prototype/ui/index.html
 EOF
@@ -156,7 +158,7 @@ require_install_preflight() {
     kv "reason" "visudo-required"
     exit 1
   fi
-  for target in "$sudoers_path" "$normal_unit_path" "$boot_guard_unit_path"; do
+  for target in "$sudoers_path" "$normal_unit_path" "$boot_guard_unit_path" "$runtime_watchdog_unit_path"; do
     if [ -e "$target" ]; then
       if [ "${reinstall:-0}" = "1" ]; then
         continue
@@ -233,6 +235,26 @@ WantedBy=multi-user.target
 EOF
 }
 
+render_runtime_watchdog_unit() {
+  cat <<EOF
+[Unit]
+Description=Wifi-Kit runtime recovery watchdog
+After=NetworkManager.service wifi-kit-ui.service
+Wants=NetworkManager.service wifi-kit-ui.service
+
+[Service]
+Type=simple
+Environment=WIFI_KIT_RUNTIME_CONFIG=$runtime_config
+Environment=WIFI_KIT_RUNTIME_WATCHDOG_IFACE=$iface
+ExecStart=$app_dir/wifi-kit-runtime-watchdog.sh run
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
 ensure_runtime_config() {
   install -d -o "$install_user" -g "$install_user" -m 0700 "$runtime_config_dir"
   if [ ! -f "$runtime_config" ]; then
@@ -241,6 +263,10 @@ ensure_runtime_config() {
       printf '# Stores AP recovery password only; never stores client Wi-Fi passwords.\n'
       printf 'ap_ssid=Wifi-Kit-%s\n' "$(hostname 2>/dev/null || printf node)"
       printf 'ap_password=12345678\n'
+      printf 'runtime_recovery_enabled=true\n'
+      printf 'runtime_recovery_grace_seconds=30\n'
+      printf 'runtime_recovery_instability_window_minutes=10\n'
+      printf 'runtime_recovery_instability_threshold=3\n'
     } > "$runtime_config"
   fi
   chown "$install_user:$install_user" "$runtime_config"
@@ -260,6 +286,7 @@ cmd_audit() {
   kv "sudoers_path" "$sudoers_path"
   kv "normal_unit_path" "$normal_unit_path"
   kv "boot_guard_unit_path" "$boot_guard_unit_path"
+  kv "runtime_watchdog_unit_path" "$runtime_watchdog_unit_path"
   kv "ui_port" "$ui_port"
   kv "iface" "$iface"
   kv "internet_probe" "$internet_probe"
@@ -272,6 +299,7 @@ cmd_audit() {
   target_state "sudoers_target" "$sudoers_path"
   target_state "ui_unit_target" "$normal_unit_path"
   target_state "boot_guard_unit_target" "$boot_guard_unit_path"
+  target_state "runtime_watchdog_unit_target" "$runtime_watchdog_unit_path"
   if [ "$install_user" = "root" ] && [ "$install_user_source" != "env" ]; then
     kv "install_user_warning" "implicit-root-refused-by-install"
   fi
@@ -281,15 +309,16 @@ cmd_plan() {
   cmd_audit
   section "wifi-kit-install-plan"
   kv "01.create_dirs" "$app_dir and $ui_dir root:root 0755"
-  kv "02.copy_runtime_files" "wrapper, AP helper, connect transaction, boot guard, AP return-check helper, UI backend, UI index"
+  kv "02.copy_runtime_files" "wrapper, AP helper, connect transaction, boot guard, runtime watchdog, AP return-check helper, UI backend, UI index"
   kv "03.runtime_config" "$runtime_config_dir 0700 and $runtime_config 0600 owned by $install_user"
   kv "04.sudoers" "$sudoers_path exact wrapper actions only; validate with visudo when available"
-  kv "05.systemd_units" "$normal_unit_path and $boot_guard_unit_path"
+  kv "05.systemd_units" "$normal_unit_path, $boot_guard_unit_path, and $runtime_watchdog_unit_path"
   kv "overwrite_policy" "install refuses when sudoers or target units already exist unless --reinstall is used"
   kv "visudo_policy" "install refuses if visudo is unavailable"
   kv "06.daemon_reload" "systemctl daemon-reload"
   kv "07.enable_restart_ui" "enable and restart wifi-kit-ui.service on port $ui_port so installed backend code is reloaded"
   kv "08.enable_boot_guard" "enable wifi-kit-boot-guard.service; do not start AP"
+  kv "09.enable_restart_runtime_watchdog" "enable and restart wifi-kit-runtime-watchdog.service; it starts AP only after runtime grace expires"
   kv "non_actions" "no reboot, no AP start, no Wi-Fi profile deletion, no client Wi-Fi password storage"
   section "sudoers-preview"
   render_sudoers
@@ -297,6 +326,8 @@ cmd_plan() {
   render_ui_unit
   section "wifi-kit-boot-guard.service-preview"
   render_boot_guard_unit
+  section "wifi-kit-runtime-watchdog.service-preview"
+  render_runtime_watchdog_unit
 }
 
 cmd_install() {
@@ -313,6 +344,7 @@ cmd_install() {
   copy_file "prototype/wifi-kit-connect-transaction.sh" "$app_dir/wifi-kit-connect-transaction.sh" 0755
   copy_file "prototype/wifi-kit-boot-guard.sh" "$app_dir/wifi-kit-boot-guard.sh" 0755
   copy_file "prototype/wifi-kit-ap-return-check.sh" "$app_dir/wifi-kit-ap-return-check.sh" 0755
+  copy_file "prototype/wifi-kit-runtime-watchdog.sh" "$app_dir/wifi-kit-runtime-watchdog.sh" 0755
   copy_file "prototype/ui/serve-readonly.py" "$ui_dir/serve-readonly.py" 0755
   copy_file "prototype/ui/index.html" "$ui_dir/index.html" 0644
   kv "files" "installed"
@@ -334,6 +366,8 @@ cmd_install() {
   install -o root -g root -m 0644 "$tmp_unit" "$normal_unit_path"
   render_boot_guard_unit > "$tmp_unit"
   install -o root -g root -m 0644 "$tmp_unit" "$boot_guard_unit_path"
+  render_runtime_watchdog_unit > "$tmp_unit"
+  install -o root -g root -m 0644 "$tmp_unit" "$runtime_watchdog_unit_path"
   rm -f "$tmp_unit"
   kv "systemd_units" "installed"
 
@@ -341,8 +375,11 @@ cmd_install() {
   systemctl enable wifi-kit-ui.service
   systemctl restart wifi-kit-ui.service
   systemctl enable wifi-kit-boot-guard.service
+  systemctl enable wifi-kit-runtime-watchdog.service
+  systemctl restart wifi-kit-runtime-watchdog.service
   kv "wifi-kit-ui" "enabled-restarted"
   kv "wifi-kit-boot-guard" "enabled"
+  kv "wifi-kit-runtime-watchdog" "enabled-restarted"
   kv "status" "done"
 }
 

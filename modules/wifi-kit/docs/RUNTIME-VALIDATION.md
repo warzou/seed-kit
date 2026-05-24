@@ -222,11 +222,32 @@ explicit user action.
 
 Target policy names:
 
-- `runtime_disconnect_policy=keep_retrying`
+- `runtime_disconnect_policy=ap_after_grace_then_return_check`
 - `runtime_retry_target=last_good_connection`
 - `runtime_retry_timeout=indefinite-or-configurable`
 - `boot_recovery_policy=ap_after_timeout`
 - `ap_recovery_actions=new_wifi|retry_primary|stay_ap`
+
+The runtime recovery watchdog makes this policy explicit for installed nodes:
+
+- `runtime_recovery_enabled=true` by default;
+- `runtime_recovery_grace_seconds=30` by default;
+- `runtime_recovery_instability_window_minutes=10` by default;
+- `runtime_recovery_instability_threshold=3` by default.
+
+When `last_good_connection` / `last_good_ssid` has been active during runtime
+and then disappears, the watchdog starts a grace timer. If last-good returns
+before the timer expires, it logs `recovery-cancelled link-restored`. If it is
+still absent after the grace period, it starts AP recovery through the existing
+wrapper. From AP recovery, the periodic return-check loop takes over and tests
+only `last_good_*`; it does not try `return_connection` unless that is also the
+last-good target.
+
+If the same SSID disconnects at least
+`runtime_recovery_instability_threshold` times within
+`runtime_recovery_instability_window_minutes`, the watchdog writes/logs an
+`unstable-ssid` state for the backend/UI to expose. This is a diagnostic hint,
+not a destructive action.
 
 `return_connection` is a boot-only fallback. NetworkManager autoconnect for the
 return/main Wi-Fi may be disabled after a successful Wifi-Kit connection when it

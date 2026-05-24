@@ -34,6 +34,7 @@ prototype/wifi-kit-connect-transaction.sh|/opt/seed-kit/wifi-kit/wifi-kit-connec
 prototype/wifi-kit-recovery-guard.sh|/opt/seed-kit/wifi-kit/wifi-kit-recovery-guard.sh|root:root|0755|recovery-cleanup-guard
 prototype/wifi-kit-action-wrapper.sh|/opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh|root:root|0755|privileged-action-wrapper
 prototype/wifi-kit-ap-return-check.sh|/opt/seed-kit/wifi-kit/wifi-kit-ap-return-check.sh|root:root|0755|ap-return-check-helper
+prototype/wifi-kit-runtime-watchdog.sh|/opt/seed-kit/wifi-kit/wifi-kit-runtime-watchdog.sh|root:root|0755|runtime-recovery-watchdog
 '
 
 WIFI_KIT_INSTALL_CONFIG_POLICY='

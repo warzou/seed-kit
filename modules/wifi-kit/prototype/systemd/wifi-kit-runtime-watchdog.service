@@ -1,0 +1,15 @@
+[Unit]
+Description=Wifi-Kit runtime recovery watchdog
+After=NetworkManager.service wifi-kit-ui.service
+Wants=NetworkManager.service wifi-kit-ui.service
+
+[Service]
+Type=simple
+Environment=WIFI_KIT_RUNTIME_CONFIG=/home/warzy/.config/wifi-kit/runtime.conf
+Environment=WIFI_KIT_RUNTIME_WATCHDOG_IFACE=wlan0
+ExecStart=/opt/seed-kit/wifi-kit/wifi-kit-runtime-watchdog.sh run
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

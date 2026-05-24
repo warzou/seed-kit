@@ -94,6 +94,7 @@ no permanent AP+STA mode
 normal UI remains on port 54321
 recovery captive UI uses port 80
 runtime disconnect keeps retrying the configured main Wi-Fi
+runtime recovery watchdog may start AP after configurable grace when last_good is lost
 boot recovery may start AP only after timeout
 optional AP recovery return check is periodic and single-radio compatible
 '
@@ -139,6 +140,7 @@ run timeout-based cleanup
 run return-default-network after explicit confirmation
 offer AP UI choices: configure new Wi-Fi, retry primary Wi-Fi, or stay in AP recovery
 optionally run a bounded periodic return check from AP recovery to last_good_ssid
+run runtime recovery watchdog with configurable grace and instability thresholds
 '
 
 WIFI_KIT_RECOVERY_FORBIDDEN='

@@ -14,6 +14,7 @@ wifi_kit_apply_summary() {
   sudoers_exists=$(printf '%s\n' "$audit_output" | wifi_kit_audit_value sudoers_target_exists)
   ui_unit_exists=$(printf '%s\n' "$audit_output" | wifi_kit_audit_value ui_unit_target_exists)
   boot_guard_unit_exists=$(printf '%s\n' "$audit_output" | wifi_kit_audit_value boot_guard_unit_target_exists)
+  runtime_watchdog_unit_exists=$(printf '%s\n' "$audit_output" | wifi_kit_audit_value runtime_watchdog_unit_target_exists)
   runtime_config_exists=no
 
   if [ -n "$runtime_config" ] && [ -f "$runtime_config" ]; then
@@ -25,7 +26,7 @@ wifi_kit_apply_summary() {
   echo "  target: ${app_dir:-unknown}"
   echo "  UI port: ${ui_port:-54321}"
   echo "  sudoers: ${sudoers_exists:-unknown}"
-  echo "  systemd units: ui=${ui_unit_exists:-unknown} boot-guard=${boot_guard_unit_exists:-unknown}"
+  echo "  systemd units: ui=${ui_unit_exists:-unknown} boot-guard=${boot_guard_unit_exists:-unknown} runtime-watchdog=${runtime_watchdog_unit_exists:-unknown}"
   echo "  runtime config: $runtime_config_exists"
 }
 
@@ -42,7 +43,7 @@ module_wifi_kit_plan() {
   echo "- installer: modules/wifi-kit/install-wifi-kit-runtime.sh"
   echo "- command: sh seed-kit.sh install wifi-kit"
   echo "- alternate: sh seed-kit.sh --apply --modules=wifi-kit"
-  echo "- installs: /opt runtime, strict sudoers, normal UI service, boot guard service"
+  echo "- installs: /opt runtime, strict sudoers, normal UI service, boot guard service, runtime watchdog service"
   echo "- safety: install/reinstall prompt before real install"
   echo "- safety: no AP start, no Wi-Fi change, no profile deletion, no reboot"
   echo "- safety: no client Wi-Fi password storage"
@@ -57,7 +58,7 @@ module_wifi_kit_apply() {
   installed=0
 
   echo "[wifi-kit] runtime install"
-  echo "[wifi-kit] installs /opt runtime, sudoers, wifi-kit-ui.service, and wifi-kit-boot-guard.service"
+  echo "[wifi-kit] installs /opt runtime, sudoers, wifi-kit-ui.service, wifi-kit-boot-guard.service, and wifi-kit-runtime-watchdog.service"
   echo "[wifi-kit] does not start AP mode, change Wi-Fi, delete Wi-Fi profiles, store client Wi-Fi passwords, or reboot"
 
   if ! command -v sh >/dev/null 2>&1; then
@@ -82,7 +83,7 @@ module_wifi_kit_apply() {
   fi
 
   echo ""
-  if [ -d /opt/seed-kit/wifi-kit ] || [ -e /etc/sudoers.d/wifi-kit ] || [ -e /etc/systemd/system/wifi-kit-ui.service ] || [ -e /etc/systemd/system/wifi-kit-boot-guard.service ]; then
+  if [ -d /opt/seed-kit/wifi-kit ] || [ -e /etc/sudoers.d/wifi-kit ] || [ -e /etc/systemd/system/wifi-kit-ui.service ] || [ -e /etc/systemd/system/wifi-kit-boot-guard.service ] || [ -e /etc/systemd/system/wifi-kit-runtime-watchdog.service ]; then
     installed=1
     echo "[wifi-kit] already installed"
     printf "reinstall? [y/N] "
