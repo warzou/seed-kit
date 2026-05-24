@@ -356,6 +356,10 @@ def redact_public_payload(value):
     if isinstance(value, dict):
         redacted = {}
         for key, item in value.items():
+            if key == "confirm_required":
+                redacted["requires_user_confirmation"] = True
+                redacted["confirmation_kind"] = "simple"
+                continue
             if key == "ap_password":
                 redacted["ap_password_set"] = bool(item)
                 continue
@@ -369,6 +373,8 @@ def redact_public_payload(value):
         return redacted
     if isinstance(value, list):
         return [redact_public_payload(item) for item in value]
+    if isinstance(value, str) and CONNECT_TRANSACTION_CONFIRM in value:
+        return value.replace(CONNECT_TRANSACTION_CONFIRM, "internal-confirmation")
     return value
 
 
