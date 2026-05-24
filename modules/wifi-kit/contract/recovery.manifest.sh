@@ -34,6 +34,10 @@ WIFI_KIT_RECOVERY_RUNTIME_RETRY_TIMEOUT="indefinite-or-configurable"
 WIFI_KIT_RECOVERY_BOOT_POLICY="ap_after_timeout"
 WIFI_KIT_RECOVERY_BOOT_TIMEOUT_SECONDS="configurable"
 WIFI_KIT_RECOVERY_AP_USER_ACTIONS="new_wifi|retry_primary|stay_ap"
+WIFI_KIT_RECOVERY_RETURN_CHECK_ENABLED="false"
+WIFI_KIT_RECOVERY_RETURN_CHECK_INTERVAL_MINUTES="5"
+WIFI_KIT_RECOVERY_RETURN_CHECK_TARGET="last_good_ssid"
+WIFI_KIT_RECOVERY_RETURN_CHECK_MODE="periodic-from-ap"
 
 WIFI_KIT_RECOVERY_ACTIONS='
 start-ap-mode
@@ -88,6 +92,7 @@ normal UI remains on port 54321
 recovery captive UI uses port 80
 runtime disconnect keeps retrying the configured main Wi-Fi
 boot recovery may start AP only after timeout
+optional AP recovery return check is periodic and single-radio compatible
 '
 
 WIFI_KIT_RECOVERY_READINESS_CHECKS='
@@ -130,6 +135,7 @@ start temporary captive UI on port 80
 run timeout-based cleanup
 run return-default-network after explicit confirmation
 offer AP UI choices: configure new Wi-Fi, retry primary Wi-Fi, or stay in AP recovery
+optionally run a bounded periodic return check from AP recovery to last_good_ssid
 '
 
 WIFI_KIT_RECOVERY_FORBIDDEN='
@@ -139,6 +145,7 @@ no-runtime-disconnect-auto-ap
 no-dnsmasq-service
 no-system-hostapd-service
 no-permanent-ap-plus-sta-assumption
+no-parallel-ap-sta-return-check
 no-save-config
 no-delete-user-wifi-profiles
 no-arbitrary-shell
@@ -208,6 +215,10 @@ module_wifi_kit_recovery_manifest() {
   printf 'WIFI_KIT_RECOVERY_BOOT_POLICY=%s\n' "$WIFI_KIT_RECOVERY_BOOT_POLICY"
   printf 'WIFI_KIT_RECOVERY_BOOT_TIMEOUT_SECONDS=%s\n' "$WIFI_KIT_RECOVERY_BOOT_TIMEOUT_SECONDS"
   printf 'WIFI_KIT_RECOVERY_AP_USER_ACTIONS=%s\n' "$WIFI_KIT_RECOVERY_AP_USER_ACTIONS"
+  printf 'WIFI_KIT_RECOVERY_RETURN_CHECK_ENABLED=%s\n' "$WIFI_KIT_RECOVERY_RETURN_CHECK_ENABLED"
+  printf 'WIFI_KIT_RECOVERY_RETURN_CHECK_INTERVAL_MINUTES=%s\n' "$WIFI_KIT_RECOVERY_RETURN_CHECK_INTERVAL_MINUTES"
+  printf 'WIFI_KIT_RECOVERY_RETURN_CHECK_TARGET=%s\n' "$WIFI_KIT_RECOVERY_RETURN_CHECK_TARGET"
+  printf 'WIFI_KIT_RECOVERY_RETURN_CHECK_MODE=%s\n' "$WIFI_KIT_RECOVERY_RETURN_CHECK_MODE"
   _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_ACTION "$WIFI_KIT_RECOVERY_ACTIONS"
   _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_PRIVILEGED_ACTION "$WIFI_KIT_RECOVERY_PRIVILEGED_ACTIONS"
   _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_UNPRIVILEGED_UI_ACTION "$WIFI_KIT_RECOVERY_UNPRIVILEGED_UI_ACTIONS"

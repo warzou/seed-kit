@@ -223,6 +223,31 @@ in AP recovery it should clearly offer:
 2. retry the configured main Wi-Fi;
 3. stay in AP recovery.
 
+## AP recovery return-check option
+
+Permanent parallel AP+STA mode is not the target behavior for Raspberry Pi Zero
+2 W class hardware. Field and lab work showed that a single-radio permanent
+AP+STA assumption is not reliable enough for the product path.
+
+The safer recovery option is a periodic return check while the node is already
+in AP recovery:
+
+- `return_check_enabled=false` by default;
+- `return_check_interval_minutes=5`;
+- `return_check_target=last_good_ssid`;
+- `return_check_mode=periodic-from-ap`.
+
+When enabled, Wifi-Kit may periodically pause normal AP recovery activity long
+enough to test whether the last good SSID is visible again. If the target is
+detected, it may attempt a controlled reconnect to the configured main Wi-Fi.
+If that reconnect succeeds, Wifi-Kit exits AP recovery and returns to normal
+mode. If it fails, Wifi-Kit returns to or remains in AP recovery.
+
+This check must be punctual, bounded, and compatible with one Wi-Fi radio. It
+must not be implemented as a permanent AP+STA mode. The motivating field case
+is a remote box reboot: the node may be in local AP recovery while the upstream
+box is unavailable, then return by itself when the last good SSID comes back.
+
 ## Field incident note
 
 A real field incident confirmed why runtime disconnects should not immediately
