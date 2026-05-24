@@ -1712,6 +1712,10 @@
                 <input id="runtime-recovery-enabled-input" type="checkbox">
                 Activer le watchdog runtime
               </label>
+              <label class="confirm-line">
+                <input id="runtime-recovery-debug-passive-input" type="checkbox">
+                Mode debug passif: observer sans ouvrir l'AP
+              </label>
               <label class="field-label">
                 D&eacute;lai avant AP recovery
                 <input id="runtime-recovery-grace-input" class="password-local" type="number" min="1" step="1" inputmode="numeric" placeholder="30">
@@ -1725,7 +1729,7 @@
                 <input id="runtime-recovery-threshold-input" class="password-local" type="number" min="1" step="1" inputmode="numeric" placeholder="3">
               </label>
             </div>
-            <p class="danger-note">Le watchdog ne teste jamais le Wi-Fi principal/Flint en runtime. Il bascule vers AP recovery, puis le retour automatique cible last_good.</p>
+            <p class="danger-note">Le watchdog ne teste jamais le Wi-Fi principal/Flint en runtime. En mode debug passif, il loggue la decision mais ne lance aucune action reseau.</p>
           </div>
           <div class="recovery-settings-section">
             <h3 class="settings-title">Sélectionner le Wi-Fi principal</h3>
@@ -2332,6 +2336,9 @@
       const runtimeRecoveryEnabled = String(config.runtime_recovery_enabled || 'true') === 'true';
       const runtimeRecoveryEnabledInput = document.getElementById('runtime-recovery-enabled-input');
       if (runtimeRecoveryEnabledInput) runtimeRecoveryEnabledInput.checked = runtimeRecoveryEnabled;
+      const runtimeRecoveryDebugPassive = String(config.runtime_recovery_debug_passive || 'false') === 'true';
+      const runtimeRecoveryDebugPassiveInput = document.getElementById('runtime-recovery-debug-passive-input');
+      if (runtimeRecoveryDebugPassiveInput) runtimeRecoveryDebugPassiveInput.checked = runtimeRecoveryDebugPassive;
       setInputValue('runtime-recovery-grace-input', config.runtime_recovery_grace_seconds || '30');
       setInputValue('runtime-recovery-window-input', config.runtime_recovery_instability_window_minutes || '10');
       setInputValue('runtime-recovery-threshold-input', config.runtime_recovery_instability_threshold || '3');
@@ -2581,6 +2588,7 @@
         data.recovery.return_check_enabled = payload.config.return_check_enabled;
         data.recovery.return_check_interval_minutes = payload.config.return_check_interval_minutes;
         data.recovery.runtime_recovery_enabled = payload.config.runtime_recovery_enabled;
+        data.recovery.runtime_recovery_debug_passive = payload.config.runtime_recovery_debug_passive;
         data.recovery.runtime_recovery_grace_seconds = payload.config.runtime_recovery_grace_seconds;
         data.recovery.runtime_recovery_instability_window_minutes = payload.config.runtime_recovery_instability_window_minutes;
         data.recovery.runtime_recovery_instability_threshold = payload.config.runtime_recovery_instability_threshold;
@@ -2595,6 +2603,7 @@
         data.system.return_check_enabled = payload.config.return_check_enabled;
         data.system.return_check_interval_minutes = payload.config.return_check_interval_minutes;
         data.system.runtime_recovery_enabled = payload.config.runtime_recovery_enabled;
+        data.system.runtime_recovery_debug_passive = payload.config.runtime_recovery_debug_passive;
         data.system.runtime_recovery_grace_seconds = payload.config.runtime_recovery_grace_seconds;
         data.system.runtime_recovery_instability_window_minutes = payload.config.runtime_recovery_instability_window_minutes;
         data.system.runtime_recovery_instability_threshold = payload.config.runtime_recovery_instability_threshold;
@@ -2611,6 +2620,7 @@
       const returnCheckEnabled = Boolean(document.getElementById('return-check-enabled-input')?.checked);
       const returnCheckInterval = document.getElementById('return-check-interval-input')?.value.trim() || '1';
       const runtimeRecoveryEnabled = Boolean(document.getElementById('runtime-recovery-enabled-input')?.checked);
+      const runtimeRecoveryDebugPassive = Boolean(document.getElementById('runtime-recovery-debug-passive-input')?.checked);
       const runtimeRecoveryGrace = document.getElementById('runtime-recovery-grace-input')?.value.trim() || '30';
       const runtimeRecoveryWindow = document.getElementById('runtime-recovery-window-input')?.value.trim() || '10';
       const runtimeRecoveryThreshold = document.getElementById('runtime-recovery-threshold-input')?.value.trim() || '3';
@@ -2659,6 +2669,7 @@
         return_check_target: 'last_good_ssid',
         return_check_mode: 'periodic-from-ap',
         runtime_recovery_enabled: runtimeRecoveryEnabled,
+        runtime_recovery_debug_passive: runtimeRecoveryDebugPassive,
         runtime_recovery_grace_seconds: runtimeRecoveryGrace,
         runtime_recovery_instability_window_minutes: runtimeRecoveryWindow,
         runtime_recovery_instability_threshold: runtimeRecoveryThreshold

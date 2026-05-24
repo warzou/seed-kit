@@ -94,6 +94,7 @@ RUNTIME_CONFIG_KEYS = {
     "return_check_target",
     "return_check_mode",
     "runtime_recovery_enabled",
+    "runtime_recovery_debug_passive",
     "runtime_recovery_grace_seconds",
     "runtime_recovery_instability_window_minutes",
     "runtime_recovery_instability_threshold",
@@ -144,6 +145,7 @@ def public_recovery_status(recovery: dict | None) -> dict:
         "return_ssid",
         "return_connection",
         "runtime_recovery_enabled",
+        "runtime_recovery_debug_passive",
         "runtime_recovery_grace_seconds",
         "runtime_recovery_instability_window_minutes",
         "runtime_recovery_instability_threshold",
@@ -277,6 +279,7 @@ def default_runtime_config() -> dict[str, str]:
         "return_check_target": "last_good_ssid",
         "return_check_mode": "periodic-from-ap",
         "runtime_recovery_enabled": "true",
+        "runtime_recovery_debug_passive": "false",
         "runtime_recovery_grace_seconds": "30",
         "runtime_recovery_instability_window_minutes": "10",
         "runtime_recovery_instability_threshold": "3",
@@ -339,6 +342,7 @@ def redact_runtime_config(config: dict[str, str]) -> dict[str, object]:
         "return_check_target": config.get("return_check_target", "last_good_ssid"),
         "return_check_mode": config.get("return_check_mode", "periodic-from-ap"),
         "runtime_recovery_enabled": config.get("runtime_recovery_enabled", "true"),
+        "runtime_recovery_debug_passive": config.get("runtime_recovery_debug_passive", "false"),
         "runtime_recovery_grace_seconds": config.get("runtime_recovery_grace_seconds", "30"),
         "runtime_recovery_instability_window_minutes": config.get("runtime_recovery_instability_window_minutes", "10"),
         "runtime_recovery_instability_threshold": config.get("runtime_recovery_instability_threshold", "3"),
@@ -444,6 +448,7 @@ def write_runtime_config(config: dict[str, str]) -> None:
         f"return_check_target={config.get('return_check_target', 'last_good_ssid')}",
         f"return_check_mode={config.get('return_check_mode', 'periodic-from-ap')}",
         f"runtime_recovery_enabled={config.get('runtime_recovery_enabled', 'true')}",
+        f"runtime_recovery_debug_passive={config.get('runtime_recovery_debug_passive', 'false')}",
         f"runtime_recovery_grace_seconds={config.get('runtime_recovery_grace_seconds', '30')}",
         f"runtime_recovery_instability_window_minutes={config.get('runtime_recovery_instability_window_minutes', '10')}",
         f"runtime_recovery_instability_threshold={config.get('runtime_recovery_instability_threshold', '3')}",
@@ -549,6 +554,14 @@ def update_runtime_config(payload: dict) -> tuple[dict, int]:
             config["runtime_recovery_enabled"] = "false"
         else:
             return {"status": "failure", "error": "runtime-recovery-enabled-invalid"}, 400
+    if "runtime_recovery_debug_passive" in payload:
+        debug_passive = str(payload.get("runtime_recovery_debug_passive", "")).strip().lower()
+        if debug_passive in {"true", "1", "yes", "on"}:
+            config["runtime_recovery_debug_passive"] = "true"
+        elif debug_passive in {"false", "0", "no", "off", ""}:
+            config["runtime_recovery_debug_passive"] = "false"
+        else:
+            return {"status": "failure", "error": "runtime-recovery-debug-passive-invalid"}, 400
     if "runtime_recovery_grace_seconds" in payload:
         grace = str(payload.get("runtime_recovery_grace_seconds", "")).strip()
         if not grace.isdigit() or int(grace) < 1:
@@ -771,6 +784,7 @@ def backend_status(recovery: dict | None = None) -> dict[str, object]:
             "ap_ssid_configured": bool(config.get("ap_ssid")),
             "last_good_configured": bool(runtime_config_value("last_good_connection") or runtime_config_value("last_good_ssid")),
             "runtime_recovery_enabled": config.get("runtime_recovery_enabled", "true"),
+            "runtime_recovery_debug_passive": config.get("runtime_recovery_debug_passive", "false"),
             "runtime_recovery_grace_seconds": config.get("runtime_recovery_grace_seconds", "30"),
             "runtime_recovery_instability_window_minutes": config.get("runtime_recovery_instability_window_minutes", "10"),
             "runtime_recovery_instability_threshold": config.get("runtime_recovery_instability_threshold", "3"),
@@ -1804,6 +1818,7 @@ def system_info(diagnose: dict, recovery: dict | None = None) -> dict:
         "return_ssid": config["return_ssid"],
         "return_connection": config["return_connection"],
         "runtime_recovery_enabled": config.get("runtime_recovery_enabled", "true"),
+        "runtime_recovery_debug_passive": config.get("runtime_recovery_debug_passive", "false"),
         "runtime_recovery_grace_seconds": config.get("runtime_recovery_grace_seconds", "30"),
         "runtime_recovery_instability_window_minutes": config.get("runtime_recovery_instability_window_minutes", "10"),
         "runtime_recovery_instability_threshold": config.get("runtime_recovery_instability_threshold", "3"),
@@ -1841,6 +1856,7 @@ def ui_data(recovery: dict | None = None) -> dict:
         "return_ssid": config["return_ssid"],
         "return_connection": config["return_connection"],
         "runtime_recovery_enabled": config.get("runtime_recovery_enabled", "true"),
+        "runtime_recovery_debug_passive": config.get("runtime_recovery_debug_passive", "false"),
         "runtime_recovery_grace_seconds": config.get("runtime_recovery_grace_seconds", "30"),
         "runtime_recovery_instability_window_minutes": config.get("runtime_recovery_instability_window_minutes", "10"),
         "runtime_recovery_instability_threshold": config.get("runtime_recovery_instability_threshold", "3"),
@@ -1858,6 +1874,7 @@ def ui_data(recovery: dict | None = None) -> dict:
         recovery_payload["return_ssid"] = config["return_ssid"]
         recovery_payload["return_connection"] = config["return_connection"]
         recovery_payload["runtime_recovery_enabled"] = config.get("runtime_recovery_enabled", "true")
+        recovery_payload["runtime_recovery_debug_passive"] = config.get("runtime_recovery_debug_passive", "false")
         recovery_payload["runtime_recovery_grace_seconds"] = config.get("runtime_recovery_grace_seconds", "30")
         recovery_payload["runtime_recovery_instability_window_minutes"] = config.get("runtime_recovery_instability_window_minutes", "10")
         recovery_payload["runtime_recovery_instability_threshold"] = config.get("runtime_recovery_instability_threshold", "3")

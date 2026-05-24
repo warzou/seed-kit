@@ -178,6 +178,8 @@ ap_recovery_active() {
 config_values() {
   enabled_raw=$(runtime_value runtime_recovery_enabled true)
   enabled=$(normalize_bool "$enabled_raw")
+  debug_passive_raw=$(runtime_value runtime_recovery_debug_passive false)
+  debug_passive=$(normalize_bool "$debug_passive_raw")
   grace_seconds=$(runtime_value runtime_recovery_grace_seconds 30)
   window_minutes=$(runtime_value runtime_recovery_instability_window_minutes 10)
   threshold=$(runtime_value runtime_recovery_instability_threshold 3)
@@ -199,6 +201,10 @@ config_values() {
   case "$enabled" in
     true|false) ;;
     *) status="refused"; reason="runtime-recovery-enabled-invalid" ;;
+  esac
+  case "$debug_passive" in
+    true|false) ;;
+    *) status="refused"; reason="${reason:-runtime-recovery-debug-passive-invalid}" ;;
   esac
   if ! is_positive_integer "$grace_seconds"; then
     status="refused"
@@ -282,6 +288,8 @@ cmd_audit() {
   kv "runtime_config_readable" "$([ -r "$runtime_config" ] && printf yes || printf no)"
   kv "runtime_recovery_enabled" "$enabled"
   kv "runtime_recovery_enabled_raw" "$enabled_raw"
+  kv "runtime_recovery_debug_passive" "$debug_passive"
+  kv "runtime_recovery_debug_passive_raw" "$debug_passive_raw"
   kv "runtime_recovery_grace_seconds" "$grace_seconds"
   kv "runtime_recovery_instability_window_minutes" "$window_minutes"
   kv "runtime_recovery_instability_threshold" "$threshold"
@@ -313,6 +321,7 @@ cmd_plan() {
   kv "03.cancel" "if last_good returns during grace, log recovery-cancelled link-restored"
   kv "04.recover" "if still disconnected from last_good, call wrapper start-ap-mode"
   kv "05.ap" "AP return-check loop handles periodic last_good retry from AP recovery"
+  kv "debug_passive" "if runtime_recovery_debug_passive=true, log the decision but suppress start-ap-mode"
   kv "non_actions" "no reboot, no profile deletion, no AP+STA permanent mode, no return_connection runtime retry"
 }
 
@@ -391,6 +400,13 @@ cmd_run() {
       continue
     fi
     if ap_recovery_active; then
+      grace_active=0
+      sleep "$poll_seconds"
+      continue
+    fi
+    if [ "$debug_passive" = "true" ]; then
+      log_event "debug-passive-suppressed-action" "would_start_ap_recovery=yes last_good_ssid=$last_good_ssid runtime_reason=$runtime_reason grace_seconds=$grace_seconds"
+      write_state "debug-passive-suppressed-action" "$runtime_reason" "$last_good_ssid"
       grace_active=0
       sleep "$poll_seconds"
       continue

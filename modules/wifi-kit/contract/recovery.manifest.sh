@@ -38,6 +38,7 @@ WIFI_KIT_RECOVERY_RETURN_CHECK_ENABLED="false"
 WIFI_KIT_RECOVERY_RETURN_CHECK_INTERVAL_MINUTES="1"
 WIFI_KIT_RECOVERY_RETURN_CHECK_TARGET="last_good_ssid"
 WIFI_KIT_RECOVERY_RETURN_CHECK_MODE="periodic-from-ap"
+WIFI_KIT_RECOVERY_RUNTIME_DEBUG_PASSIVE="false"
 
 WIFI_KIT_RECOVERY_ACTIONS='
 start-ap-mode
@@ -141,6 +142,7 @@ run return-default-network after explicit confirmation
 offer AP UI choices: configure new Wi-Fi, retry primary Wi-Fi, or stay in AP recovery
 optionally run a bounded periodic return check from AP recovery to last_good_ssid
 run runtime recovery watchdog with configurable grace and instability thresholds
+runtime recovery debug passive may observe and log decisions without starting AP
 '
 
 WIFI_KIT_RECOVERY_FORBIDDEN='
@@ -224,6 +226,7 @@ module_wifi_kit_recovery_manifest() {
   printf 'WIFI_KIT_RECOVERY_RETURN_CHECK_INTERVAL_MINUTES=%s\n' "$WIFI_KIT_RECOVERY_RETURN_CHECK_INTERVAL_MINUTES"
   printf 'WIFI_KIT_RECOVERY_RETURN_CHECK_TARGET=%s\n' "$WIFI_KIT_RECOVERY_RETURN_CHECK_TARGET"
   printf 'WIFI_KIT_RECOVERY_RETURN_CHECK_MODE=%s\n' "$WIFI_KIT_RECOVERY_RETURN_CHECK_MODE"
+  printf 'WIFI_KIT_RECOVERY_RUNTIME_DEBUG_PASSIVE=%s\n' "$WIFI_KIT_RECOVERY_RUNTIME_DEBUG_PASSIVE"
   _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_ACTION "$WIFI_KIT_RECOVERY_ACTIONS"
   _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_PRIVILEGED_ACTION "$WIFI_KIT_RECOVERY_PRIVILEGED_ACTIONS"
   _wifi_kit_recovery_print_list WIFI_KIT_RECOVERY_UNPRIVILEGED_UI_ACTION "$WIFI_KIT_RECOVERY_UNPRIVILEGED_UI_ACTIONS"
