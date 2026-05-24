@@ -266,7 +266,7 @@ case "$action" in
     require_root "$action"
     [ -f "$ap_return_check_script" ] || { reply "failure" "$action" "ap-return-check-missing"; exit 1; }
     log_event "$action" "started" "mode=run-once"
-    exec sh "$ap_return_check_script" run-once
+    WIFI_KIT_RUNTIME_CONFIG="$runtime_config" exec sh "$ap_return_check_script" run-once
     ;;
   *)
     log_event "$action" "refused" "action-not-allowed"
