@@ -595,7 +595,7 @@ cmd_plan_ap_recovery() {
   section "future-command-sequence"
   kv "01.preflight" "sh modules/wifi-kit/prototype/ap-setup-test.sh preflight"
   kv "02.snapshot_nm" "record current $iface NetworkManager state and active connection in $ap_only_nm_state"
-  kv "03.disconnect_nm" "sudo nmcli device disconnect $iface"
+  kv "03.disconnect_nm" "sudo nmcli device disconnect $iface; sudo nmcli device set $iface managed no"
   kv "04.assign_ap_ip" "sudo ip addr flush dev $iface; sudo ip addr add $ap_recovery_ip/$ap_recovery_cidr dev $iface; sudo ip link set $iface up"
   kv "05.write_hostapd" "create $(shell_quote "$temporary_hostapd_conf") mode 600 with WIFI_KIT_AP_PSK runtime passphrase; test value $ap_recovery_test_psk"
   kv "06.start_hostapd" "sudo hostapd -d $(shell_quote "$temporary_hostapd_conf") > $(shell_quote "$temporary_hostapd_log") 2>&1"
@@ -740,6 +740,7 @@ cmd_apply_ap_recovery_manual_test() {
   kv "runtime_files_prepare" "done"
 
   "$nmcli_bin" device disconnect "$iface"
+  "$nmcli_bin" device set "$iface" managed no
   "$ip_bin" addr flush dev "$iface"
   "$ip_bin" addr add "$ap_recovery_ip/$ap_recovery_cidr" dev "$iface"
   "$ip_bin" link set "$iface" up

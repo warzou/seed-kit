@@ -525,6 +525,8 @@ cmd_run_once() {
   kv "internet" "failed"
   kv "ap_restart" "starting"
   log_event "failure" "restarting-ap-recovery"
+  "$nmcli_bin" device disconnect "$iface" >/dev/null 2>&1 || true
+  "$nmcli_bin" device set "$iface" managed no >/dev/null 2>&1 || true
   if [ -f "$action_wrapper" ]; then
     if sh "$action_wrapper" start-ap-mode; then
       kv "status" "failed"
