@@ -103,6 +103,14 @@ return_check_enabled() {
   runtime_value return_check_enabled false
 }
 
+normalize_bool() {
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    true|1|yes|on) printf 'true' ;;
+    false|0|no|off|'') printf 'false' ;;
+    *) printf 'invalid' ;;
+  esac
+}
+
 return_check_interval_minutes() {
   runtime_value return_check_interval_minutes 5
 }
@@ -203,7 +211,8 @@ require_root() {
 }
 
 audit_values() {
-  enabled=$(return_check_enabled)
+  enabled_raw=$(return_check_enabled)
+  enabled=$(normalize_bool "$enabled_raw")
   interval=$(return_check_interval_minutes)
   target=$(return_check_target)
   mode=$(return_check_mode)
@@ -250,6 +259,7 @@ cmd_audit() {
   kv "runtime_config" "$runtime_config"
   kv "runtime_config_readable" "$([ -r "$runtime_config" ] && printf yes || printf no)"
   kv "return_check_enabled" "$enabled"
+  kv "return_check_enabled_raw" "$enabled_raw"
   kv "return_check_interval_minutes" "$interval"
   kv "return_check_target" "$target"
   kv "return_check_mode" "$mode"
@@ -290,6 +300,13 @@ cmd_run_once() {
   section "ap-return-check-run-once"
   kv "mode" "run-once"
   kv "log_file" "$log_file"
+  kv "runtime_config" "$runtime_config"
+  kv "runtime_config_readable" "$([ -r "$runtime_config" ] && printf yes || printf no)"
+  kv "return_check_enabled" "$enabled"
+  kv "return_check_enabled_raw" "$enabled_raw"
+  kv "return_check_target" "$target"
+  kv "target_connection" "${target_connection:-}"
+  kv "target_ssid" "${target_ssid:-}"
   kv "iface" "$iface"
   kv "connect_wait_seconds" "$connect_wait_seconds"
   kv "internet_probe" "$internet_probe"
