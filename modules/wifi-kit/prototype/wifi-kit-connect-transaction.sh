@@ -20,6 +20,7 @@ state_file=""
 ui_log_file="${WIFI_KIT_CONNECT_UI_LOG:-}"
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ap_setup_script="$script_dir/ap-setup-test.sh"
+runtime_config="${WIFI_KIT_RUNTIME_CONFIG:-}"
 
 usage() {
   cat <<'EOF'
@@ -152,6 +153,70 @@ find_tool() {
       return 0
     fi
   done
+  return 1
+}
+
+default_runtime_config_path() {
+  if [ -n "$runtime_config" ]; then
+    printf '%s\n' "$runtime_config"
+    return 0
+  fi
+  if [ -r "/etc/seed-kit/wifi-kit/runtime.conf" ]; then
+    printf '%s\n' "/etc/seed-kit/wifi-kit/runtime.conf"
+    return 0
+  fi
+  if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+    sudo_home=$(getent passwd "$SUDO_USER" 2>/dev/null | awk -F: '{ print $6 }' | sed -n '1p')
+    if [ -n "$sudo_home" ]; then
+      printf '%s\n' "$sudo_home/.config/wifi-kit/runtime.conf"
+      return 0
+    fi
+  fi
+  printf '%s\n' "${HOME:-/tmp}/.config/wifi-kit/runtime.conf"
+}
+
+runtime_config=$(default_runtime_config_path)
+
+set_runtime_config_value() {
+  key=$1
+  value=$2
+  path=$runtime_config
+  dir=${path%/*}
+  tmp="$dir/.runtime.conf.$$.$key.tmp"
+  mkdir -p "$dir" 2>/dev/null || return 1
+  chmod 700 "$dir" 2>/dev/null || true
+  if [ -r "$path" ]; then
+    awk -v key="$key" -v value="$value" '
+      BEGIN { done = 0 }
+      index($0, key "=") == 1 { print key "=" value; done = 1; next }
+      { print }
+      END { if (!done) print key "=" value }
+    ' "$path" >"$tmp" || return 1
+  else
+    {
+      printf '# Wifi-Kit prototype runtime config\n'
+      printf '# Stores AP recovery password only; never stores client Wi-Fi passwords.\n'
+      printf '%s=%s\n' "$key" "$value"
+    } >"$tmp" || return 1
+  fi
+  chmod 600 "$tmp" 2>/dev/null || true
+  mv "$tmp" "$path" || return 1
+  chmod 600 "$path" 2>/dev/null || true
+}
+
+persist_last_good() {
+  ssid=$1
+  connection=$2
+  [ -n "$ssid" ] || return 0
+  [ -n "$connection" ] || return 0
+  if set_runtime_config_value last_good_ssid "$ssid" &&
+    set_runtime_config_value last_good_connection "$connection"; then
+    log_event "last-good-persisted" "last_good_ssid=$(quote "$ssid") last_good_connection=$(quote "$connection")"
+    state_set "last_good_ssid" "$ssid"
+    state_set "last_good_connection" "$connection"
+    return 0
+  fi
+  log_event "last-good-persist-failed" "runtime_config=$(quote "$runtime_config")"
   return 1
 }
 
@@ -453,9 +518,15 @@ cmd_apply() {
   if "$nmcli" --wait 45 connection up "$connect_target" ifname "$iface" >>"$log_file" 2>&1; then
     reason=$(wait_validate "$target_ssid" "yes" "$tx_timeout_seconds" || true)
     if [ "$reason" = "validated" ]; then
+      connected_ssid=$(active_ssid || true)
+      [ -n "$connected_ssid" ] || connected_ssid=$target_ssid
+      connected_connection=$(active_connection || true)
+      [ -n "$connected_connection" ] && [ "$connected_connection" != "--" ] || connected_connection=$connect_target
+      persist_last_good "$connected_ssid" "$connected_connection" || true
       state_set "status" "success"
-      state_set "connected_ssid" "$target_ssid"
-      log_event "success" "connected_ssid=$(quote "$target_ssid")"
+      state_set "connected_ssid" "$connected_ssid"
+      state_set "connected_connection" "$connected_connection"
+      log_event "success" "connected_ssid=$(quote "$connected_ssid") connected_connection=$(quote "$connected_connection")"
       trap - EXIT INT TERM HUP
       exit 0
     fi
