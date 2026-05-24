@@ -113,6 +113,7 @@ prototype/wifi-kit-action-wrapper.sh
 prototype/ap-setup-test.sh
 prototype/wifi-kit-connect-transaction.sh
 prototype/wifi-kit-boot-guard.sh
+prototype/wifi-kit-ap-return-check.sh
 prototype/ui/serve-readonly.py
 prototype/ui/index.html
 EOF
@@ -280,7 +281,7 @@ cmd_plan() {
   cmd_audit
   section "wifi-kit-install-plan"
   kv "01.create_dirs" "$app_dir and $ui_dir root:root 0755"
-  kv "02.copy_runtime_files" "wrapper, AP helper, connect transaction, boot guard, UI backend, UI index"
+  kv "02.copy_runtime_files" "wrapper, AP helper, connect transaction, boot guard, AP return-check helper, UI backend, UI index"
   kv "03.runtime_config" "$runtime_config_dir 0700 and $runtime_config 0600 owned by $install_user"
   kv "04.sudoers" "$sudoers_path exact wrapper actions only; validate with visudo when available"
   kv "05.systemd_units" "$normal_unit_path and $boot_guard_unit_path"
@@ -311,6 +312,7 @@ cmd_install() {
   copy_file "prototype/ap-setup-test.sh" "$app_dir/ap-setup-test.sh" 0755
   copy_file "prototype/wifi-kit-connect-transaction.sh" "$app_dir/wifi-kit-connect-transaction.sh" 0755
   copy_file "prototype/wifi-kit-boot-guard.sh" "$app_dir/wifi-kit-boot-guard.sh" 0755
+  copy_file "prototype/wifi-kit-ap-return-check.sh" "$app_dir/wifi-kit-ap-return-check.sh" 0755
   copy_file "prototype/ui/serve-readonly.py" "$ui_dir/serve-readonly.py" 0755
   copy_file "prototype/ui/index.html" "$ui_dir/index.html" 0644
   kv "files" "installed"
