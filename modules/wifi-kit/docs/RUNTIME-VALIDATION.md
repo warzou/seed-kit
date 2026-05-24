@@ -235,6 +235,26 @@ in AP recovery it should clearly offer:
 2. retry the configured main Wi-Fi;
 3. stay in AP recovery.
 
+## AP return-check run-once validated
+
+The AP return-check `run-once` flow was validated on `pocket-node` from active
+AP recovery mode.
+
+Validated behavior:
+
+- `ap-return-check-once` stopped AP recovery.
+- Wifi-Kit reconnected to `GL-MT6000-d53`.
+- `wlan0` returned with IP `192.168.8.163/24`.
+- The default route returned through `192.168.8.1`.
+- The return-check log contained:
+  - `status=ap-stop-starting`
+  - `status=connect-starting`
+  - `status=success`
+- The normal UI on port `54321` was active after the return.
+- `/api/backend-status` returned OK.
+- The old preview server was stopped; the active backend was the installed
+  `/opt` service.
+
 ## AP recovery return-check option
 
 Permanent parallel AP+STA mode is not the target behavior for Raspberry Pi Zero
