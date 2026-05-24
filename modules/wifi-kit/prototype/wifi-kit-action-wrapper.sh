@@ -73,6 +73,9 @@ log_event() {
   if [ "$action" = "connect-wifi" ] && [ -n "$ui_connect_log" ]; then
     append_ui_connect_log "$line"
   fi
+  if [ "$action" = "connect-wifi" ]; then
+    printf '%s\n' "$line"
+  fi
 }
 
 runtime_config_value() {
@@ -236,6 +239,7 @@ case "$action" in
     if [ -n "$ui_connect_log" ]; then
       export WIFI_KIT_CONNECT_UI_LOG="$ui_connect_log"
     fi
+    export WIFI_KIT_CONNECT_STDOUT_LOG=1
     log_ui_connect_marker "wrapper-launching-transaction" "existing_connection=${connect_existing_connection:-none}"
     if [ -n "$connect_existing_connection" ]; then
       exec sh "$connect_transaction_script" apply \

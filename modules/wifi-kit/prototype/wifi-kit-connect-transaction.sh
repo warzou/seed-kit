@@ -114,6 +114,9 @@ log_event() {
   if [ -n "$ui_log_file" ]; then
     append_ui_log "$line"
   fi
+  if [ "${WIFI_KIT_CONNECT_STDOUT_LOG:-}" = "1" ]; then
+    printf '%s\n' "$line"
+  fi
 }
 
 state_init() {
