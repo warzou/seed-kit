@@ -259,9 +259,10 @@ cmd_plan() {
   section "boot-guard-plan"
   kv "01.try_last_good" "nmcli --wait $connect_wait_seconds connection up <last_good_connection> if present; validate default route plus ping $internet_probe"
   kv "02.persist_last_good" "after Internet success only: write last_good_connection and last_good_ssid"
-  kv "03.try_return_connection" "if last_good missing/failed, nmcli --wait $connect_wait_seconds connection up <return_connection>; Internet not required, but saved as last_good when route plus ping $internet_probe succeed"
+  kv "03.try_return_connection" "if last_good missing/failed, nmcli --wait $connect_wait_seconds connection up <return_connection>; LAN-only success is accepted, and saved as last_good only when route plus ping $internet_probe succeed"
   kv "04.start_ap_mode" "if both Wi-Fi attempts fail, run existing wrapper start-ap-mode"
   kv "05.ap_policy" "AP remains active until explicit return-default-network"
+  kv "criteria_not_checked" "DNS resolution, sshd health"
   kv "forbidden" "delete profiles, store client Wi-Fi passwords, reboot, loop forever"
 }
 

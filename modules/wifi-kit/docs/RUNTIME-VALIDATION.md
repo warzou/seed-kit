@@ -195,6 +195,18 @@ The minimal boot guard uses this order:
 2. Try `return_connection` / main Wi-Fi if last-good is missing or fails.
 3. Start AP recovery mode only if the Wi-Fi attempts fail.
 
+The validation criteria are intentionally narrow:
+
+- `last_good_connection` must restore NetworkManager connectivity and pass the
+  current Internet probe: default route plus ping.
+- `return_connection` may succeed as LAN-only. Internet is probed after the
+  connection, and a successful probe updates `last_good_connection` /
+  `last_good_ssid`, but failed Internet does not force AP recovery if the main
+  Wi-Fi profile connected.
+- DNS resolution and `sshd` health are not boot-guard criteria yet.
+- `wifi-kit-boot-guard.service` is a `oneshot` service. It is expected to be
+  `enabled` and then `inactive` after a completed run.
+
 AP recovery remains explicit and temporary. It stays active until the user asks
 Wifi-Kit to return to the main Wi-Fi.
 
