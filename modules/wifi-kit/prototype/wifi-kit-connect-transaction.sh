@@ -19,7 +19,7 @@ log_file=""
 state_file=""
 ui_log_file="${WIFI_KIT_CONNECT_UI_LOG:-}"
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-ap_setup_script="$script_dir/ap-setup-test.sh"
+action_wrapper="$script_dir/wifi-kit-action-wrapper.sh"
 runtime_config="${WIFI_KIT_RUNTIME_CONFIG:-}"
 
 usage() {
@@ -478,22 +478,13 @@ rollback_previous() {
 }
 
 start_ap_recovery() {
-  [ -r "$ap_setup_script" ] || {
-    log_event "recovery-failure" "error=ap-setup-test-missing"
+  [ -r "$action_wrapper" ] || {
+    log_event "recovery-failure" "error=action-wrapper-missing"
     return 1
   }
-  [ -n "${WIFI_KIT_AP_PSK:-}" ] || {
-    log_event "recovery-failure" "error=wifi-kit-ap-psk-required"
-    return 1
-  }
-  log_event "recovery-starting" "max_seconds=300"
-  # Do not append ap-setup-test output here: its plan text can include future
-  # commands with the runtime AP passphrase. Keep transaction logs secret-free.
-  sh "$ap_setup_script" apply-ap-recovery-manual-test \
-    --dangerous-real-apply \
-    --confirm "WIFI-KIT AP RECOVERY MANUAL TEST" \
-    --max-seconds 300 >/dev/null 2>&1 &
-  log_event "recovery-started" "status=background"
+  log_event "recovery-starting" "backend=nm-hotspot via=action-wrapper"
+  WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$action_wrapper" start-ap-mode >/dev/null 2>&1 &
+  log_event "recovery-started" "status=background backend=nm-hotspot hostapd=legacy-explicit-only"
 }
 
 cmd_audit() {
@@ -513,8 +504,8 @@ cmd_audit() {
     kv "gateway" "$(gateway || true)"
   fi
   kv "sshd_active" "$(sshd_active && printf yes || printf no)"
-  kv "ap_setup_script" "$ap_setup_script"
-  kv "ap_setup_present" "$([ -r "$ap_setup_script" ] && printf yes || printf no)"
+  kv "action_wrapper" "$action_wrapper"
+  kv "action_wrapper_present" "$([ -r "$action_wrapper" ] && printf yes || printf no)"
 }
 
 cmd_plan() {

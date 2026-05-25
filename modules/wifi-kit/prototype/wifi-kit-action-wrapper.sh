@@ -238,7 +238,12 @@ case "$action" in
       WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$ap_return_check_script" stop-loop >/dev/null 2>&1 || true
     fi
     log_event "$action" "started" "connection=$return_connection"
+    if [ -f "$nm_ap_lab_script" ]; then
+      log_event "$action" "cleanup" "backend=nm-hotspot nm_helper_path=$nm_ap_lab_script rollback=technical-only"
+      WIFI_KIT_RUNTIME_CONFIG="$runtime_config" WIFI_KIT_NM_AP_LAB_APPLY=1 sh "$nm_ap_lab_script" rollback >> "$log_file" 2>&1 || true
+    fi
     if [ -f "$ap_setup_script" ]; then
+      log_event "$action" "cleanup" "backend=hostapd legacy-explicit-only"
       sh "$ap_setup_script" stop >> "$log_file" 2>&1 || true
     fi
     exec nmcli connection up "$return_connection"
