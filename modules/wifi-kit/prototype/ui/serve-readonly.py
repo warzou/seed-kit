@@ -11,6 +11,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -46,6 +47,9 @@ RUNTIME_WATCHDOG_STATE = Path(os.environ.get("WIFI_KIT_RUNTIME_WATCHDOG_STATE", 
 RUNTIME_WATCHDOG_INSTABILITY = Path(
     os.environ.get("WIFI_KIT_RUNTIME_WATCHDOG_INSTABILITY", "/tmp/wifi-kit-actions/runtime-watchdog-instability")
 )
+UI_CLIENT_TTL_SECONDS = int(os.environ.get("WIFI_KIT_UI_CLIENT_TTL_SECONDS", "600"))
+UI_CLIENT_ACCESS: dict[str, float] = {}
+UI_CLIENT_ACCESS_LOCK = threading.Lock()
 
 
 def action_log_identity() -> str:
@@ -3142,6 +3146,30 @@ def ap_client_count() -> int | None:
     return len(clients) if observed_source else None
 
 
+def prune_ui_clients(now: float | None = None) -> None:
+    now = now or time.monotonic()
+    cutoff = now - UI_CLIENT_TTL_SECONDS
+    stale = [ip for ip, seen_at in UI_CLIENT_ACCESS.items() if seen_at < cutoff]
+    for ip in stale:
+        UI_CLIENT_ACCESS.pop(ip, None)
+
+
+def record_ui_client(ip: str) -> None:
+    ip = safe_label(ip)
+    if not ip:
+        return
+    now = time.monotonic()
+    with UI_CLIENT_ACCESS_LOCK:
+        prune_ui_clients(now)
+        UI_CLIENT_ACCESS[ip] = now
+
+
+def ui_client_count() -> int:
+    with UI_CLIENT_ACCESS_LOCK:
+        prune_ui_clients()
+        return len(UI_CLIENT_ACCESS)
+
+
 def system_info(diagnose: dict, recovery: dict | None = None) -> dict:
     recovery = recovery or {}
     config = read_runtime_config()
@@ -3175,6 +3203,8 @@ def system_info(diagnose: dict, recovery: dict | None = None) -> dict:
         "recovery_ssid": recovery_ssid,
         "recovery_ip": recovery.get("ip") or "192.168.50.1",
         "ap_client_count": recovery.get("ap_client_count"),
+        "ui_client_count": ui_client_count(),
+        "ui_client_window_seconds": UI_CLIENT_TTL_SECONDS,
         "normal_ui_port": NORMAL_UI_PORT,
         "recovery_ui_port": RECOVERY_UI_PORT,
         "recovery_ap_password_policy": "min-8-chars",
@@ -3249,11 +3279,17 @@ def ui_data(recovery: dict | None = None) -> dict:
         recovery_payload["runtime_watchdog"] = runtime_watchdog_status()
         recovery_payload["runtime_config_path"] = str(RUNTIME_CONFIG_PATH)
     recovery_payload["ap_client_count"] = ap_client_count() if recovery_active else None
+    current_ui_client_count = ui_client_count()
     return {
         "diagnose": diagnose,
         "snapshot": snapshot,
         "runtime_config": public_runtime_config(),
         "known_wifi_connections": wifi_connections,
+        "mode": "recovery" if recovery_active else "normal",
+        "recovery_active": recovery_active,
+        "ui_client_count": current_ui_client_count,
+        "ui_client_window_seconds": UI_CLIENT_TTL_SECONDS,
+        "ap_client_count": recovery_payload["ap_client_count"],
         "runtime_state": {
             "source": "serve-readonly.py state snapshot",
             "data": snapshot,
@@ -3392,6 +3428,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         return getattr(self.server, "wifi_kit_recovery", {})
 
     def do_POST(self) -> None:
+        record_ui_client(self.client_address[0] if self.client_address else "")
         parsed = urlparse(self.path)
         raw_path = parsed.path
         path = normalize_request_path(raw_path)
@@ -3492,6 +3529,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         self.do_POST()
 
     def do_GET(self) -> None:
+        record_ui_client(self.client_address[0] if self.client_address else "")
         parsed = urlparse(self.path)
         raw_path = parsed.path
         path = normalize_request_path(raw_path)

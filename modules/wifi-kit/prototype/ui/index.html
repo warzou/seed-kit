@@ -1664,7 +1664,7 @@
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Hostname</span><strong id="status-hostname">...</strong></div></div>
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-location"></use></svg></span><div><span>Adresse IP</span><strong id="status-ip">...</strong></div></div>
         <div id="status-wifi-card" class="status-mini wifi-status-normal"><span class="status-icon"><svg class="icon-svg"><use href="#icon-wifi"></use></svg></span><div><span id="status-wifi-label">Wi-Fi (normal)</span><strong id="status-ssid">...</strong></div></div>
-        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Clients AP</span><strong id="status-clients">...</strong></div></div>
+        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span id="status-clients-label">Clients AP</span><strong id="status-clients">...</strong></div></div>
       </div>
     </section>
 
@@ -2251,10 +2251,12 @@
         : resolveCurrentSsid();
       const wifiCard = document.getElementById('status-wifi-card');
       const wifiLabel = document.getElementById('status-wifi-label');
+      const clientsLabel = document.getElementById('status-clients-label');
       document.getElementById('status-hostname').textContent = hostname;
       document.getElementById('status-ip').textContent = formatIpSummary(ip);
       document.getElementById('status-ssid').textContent = ssid;
-      setText('status-clients', apClientLabel());
+      if (clientsLabel) clientsLabel.textContent = activeAp ? 'Clients AP' : 'Acces UI';
+      setText('status-clients', activeAp ? apClientLabel() : uiAccessLabel());
       if (wifiLabel) wifiLabel.textContent = transitioning ? 'Wi-Fi (transition)' : activeAp ? 'Wi-Fi (AP)' : 'Wi-Fi (normal)';
       if (wifiCard) {
         wifiCard.classList.toggle('wifi-status-normal', !activeAp && !transitioning);
@@ -2417,6 +2419,13 @@
       const numeric = Number(count);
       if (!Number.isFinite(numeric)) return '0 client connecte';
       return numeric === 1 ? '1 client connecte' : `${numeric} clients connectes`;
+    }
+
+    function uiAccessLabel() {
+      const count = data.ui_client_count ?? systemState().ui_client_count;
+      const numeric = Number(count);
+      const safeCount = Number.isFinite(numeric) ? numeric : 0;
+      return safeCount === 1 ? '1 acces' : `${safeCount} acces`;
     }
 
     function isRecoveryApNetwork(network) {
