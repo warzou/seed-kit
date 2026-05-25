@@ -1034,6 +1034,14 @@
       margin-bottom: 16px;
     }
 
+    #connect-status-banner:not([hidden]) {
+      position: sticky;
+      top: 8px;
+      z-index: 12;
+      margin-bottom: 14px;
+      box-shadow: 0 18px 36px rgba(8, 16, 31, 0.22);
+    }
+
     .recovery-panel {
       display: grid;
       gap: 12px;
@@ -1670,6 +1678,7 @@
           <button id="refresh" type="button" class="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-refresh"></use></svg>Scanner</button>
         </div>
         <span id="scan-spinner" class="scan-spinner" hidden>Scan en cours</span>
+        <div id="connect-status-banner" class="callout info" hidden></div>
         <div id="scan-message" class="callout" hidden></div>
         <div id="network-list" class="network-list"></div>
       </section>
@@ -3299,12 +3308,31 @@
       plan.hidden = false;
     }
 
+    function showConnectBanner(message, tone = 'info') {
+      const banner = document.getElementById('connect-status-banner');
+      if (!banner) return;
+      banner.textContent = message;
+      banner.classList.toggle('info', tone === 'info');
+      banner.hidden = false;
+    }
+
+    function waitForVisiblePaint(delayMs = 220) {
+      return new Promise((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            window.setTimeout(resolve, delayMs);
+          });
+        });
+      });
+    }
+
     function renderConnectStarting(ssid, plan) {
       lastConnectionAttempt = {
         ssid,
         status: 'started',
         timestamp: new Date().toISOString(),
       };
+      showConnectBanner('Connexion en cours. Cette page peut se fermer si le node rejoint le Wi-Fi.');
       renderConnectResponse({
         ok: true,
         status: 'started',
@@ -3333,6 +3361,7 @@
       button.disabled = true;
       button.textContent = 'Connexion en cours...';
       renderConnectStarting(ssid, plan);
+      await waitForVisiblePaint();
       const savedSecretUnchanged = passwordField.dataset.savedSecretIndicator === 'true'
         && passwordField.value === '********';
       const passwordPayload = savedSecretUnchanged
@@ -3372,6 +3401,7 @@
           timestamp: new Date().toISOString(),
           error: error.message,
         };
+        showConnectBanner('Connexion lancee. La page peut etre inaccessible pendant le changement de reseau.');
         renderConnectResponse({
           ok: true,
           status: 'started',
