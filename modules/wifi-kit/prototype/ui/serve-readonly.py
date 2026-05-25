@@ -104,8 +104,8 @@ CONNECT_WRAPPER_ACTION = "connect-wifi"
 START_AP_MODE_LOG = action_log_path("start-ap-mode")
 RETURN_DEFAULT_NETWORK_LOG = action_log_path("return-default-network")
 AP_RETURN_CHECK_ONCE_LOG = action_log_path("ap-return-check")
-SYSTEM_REBOOT_LOG = action_log_path("system-reboot")
-SYSTEM_SHUTDOWN_LOG = action_log_path("system-shutdown")
+SYSTEM_REBOOT_LOG = unique_action_log_path("system-reboot")
+SYSTEM_SHUTDOWN_LOG = unique_action_log_path("system-shutdown")
 UPDATE_INSTALL_LOG_ACTION = "update-install"
 SCAN_FROM_AP_LOG = action_log_path("scan-from-ap-recovery")
 SCAN_FROM_AP_CACHE = ACTION_LOG_DIR / "scan-from-ap-recovery-cache.json"
@@ -1337,6 +1337,16 @@ def privileged_actions_enabled() -> bool:
     return os.environ.get(PRIVILEGED_ACTIONS_ENV) == "1"
 
 
+def system_power_gate_enabled(action: str) -> bool:
+    if os.environ.get("WIFI_KIT_ENABLE_SYSTEM_POWER_ACTIONS") != "1":
+        return False
+    if action == "reboot-system":
+        return os.environ.get("WIFI_KIT_ENABLE_REBOOT_ACTION", "0") == "1"
+    if action == "shutdown-system":
+        return os.environ.get("WIFI_KIT_ENABLE_SHUTDOWN_ACTION", "0") == "1"
+    return False
+
+
 def is_root_process() -> bool:
     return hasattr(os, "geteuid") and os.geteuid() == 0
 
@@ -1372,8 +1382,8 @@ def backend_status(recovery: dict | None = None) -> dict[str, object]:
             "start_ap_mode": privileged_ready,
             "return_default_network": privileged_ready,
             "ap_return_check_once": privileged_ready,
-            "reboot_system": privileged_ready and os.environ.get("WIFI_KIT_ENABLE_SYSTEM_POWER_ACTIONS") == "1",
-            "shutdown_system": privileged_ready and os.environ.get("WIFI_KIT_ENABLE_SYSTEM_POWER_ACTIONS") == "1",
+            "reboot_system": privileged_ready and system_power_gate_enabled("reboot-system"),
+            "shutdown_system": privileged_ready and system_power_gate_enabled("shutdown-system"),
         },
         "runtime": {
             "config_exists": RUNTIME_CONFIG_PATH.exists(),
@@ -1795,7 +1805,7 @@ def system_power_action(payload: dict, action: str) -> tuple[dict, int]:
             "requested": "reboot_requested",
             "strict_command": "/sbin/reboot",
             "log": SYSTEM_REBOOT_LOG,
-            "message": "Redemarrage systeme demande.",
+            "message": "Le node va redemarrer. L'interface sera indisponible pendant quelques secondes.",
         },
         "shutdown-system": {
             "endpoint_action": "system-shutdown",
@@ -1809,7 +1819,7 @@ def system_power_action(payload: dict, action: str) -> tuple[dict, int]:
     dangerous_real_apply = bool_payload(payload.get("dangerous_real_apply"))
     user_confirmed = bool_payload(payload.get("user_confirmed")) or bool_payload(payload.get("confirmed"))
     confirm_ok = user_confirmed
-    real_power_enabled = os.environ.get("WIFI_KIT_ENABLE_SYSTEM_POWER_ACTIONS") == "1"
+    real_power_enabled = system_power_gate_enabled(action)
     log_path = spec["log"]
 
     if not confirm_ok:
@@ -1857,7 +1867,7 @@ def system_power_action(payload: dict, action: str) -> tuple[dict, int]:
             "strict_command": spec["strict_command"],
             "would_call": f"{action_wrapper_path()} {action}",
             "log": str(log_path),
-            "warning": "Architecture SAFE uniquement: aucune action systeme reelle sans gate explicite futur.",
+            "warning": "Action systeme non executee: dry-run, droits privilegies absents, apply manquant, ou gate specifique desactive.",
         }, 200
 
     command, error = privileged_action_command(action)

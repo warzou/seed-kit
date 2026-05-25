@@ -25,7 +25,9 @@ runtime_watchdog_unit_path="${WIFI_KIT_RUNTIME_WATCHDOG_UNIT_PATH:-/etc/systemd/
 ui_port="${WIFI_KIT_UI_PORT:-54321}"
 iface="${WIFI_KIT_BOOT_GUARD_IFACE:-wlan0}"
 internet_probe="${WIFI_KIT_BOOT_GUARD_PROBE:-1.1.1.1}"
-system_power_actions="${WIFI_KIT_ENABLE_SYSTEM_POWER_ACTIONS:-0}"
+system_power_actions="${WIFI_KIT_ENABLE_SYSTEM_POWER_ACTIONS:-1}"
+reboot_action="${WIFI_KIT_ENABLE_REBOOT_ACTION:-1}"
+shutdown_action="${WIFI_KIT_ENABLE_SHUTDOWN_ACTION:-0}"
 
 usage() {
   cat <<'EOF'
@@ -232,6 +234,8 @@ Group=$install_user
 WorkingDirectory=$app_dir
 Environment=WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS=1
 Environment=WIFI_KIT_ENABLE_SYSTEM_POWER_ACTIONS=$system_power_actions
+Environment=WIFI_KIT_ENABLE_REBOOT_ACTION=$reboot_action
+Environment=WIFI_KIT_ENABLE_SHUTDOWN_ACTION=$shutdown_action
 Environment=WIFI_KIT_RUNTIME_CONFIG=$runtime_config
 Environment=WIFI_KIT_REPO_DIR=$repo_dir
 Environment=WIFI_KIT_UI_PORT=$ui_port

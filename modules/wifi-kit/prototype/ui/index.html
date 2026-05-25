@@ -3036,7 +3036,7 @@
         const payload = await response.json();
         const requested = Boolean(payload.reboot_requested || payload.shutdown_requested);
         const requestedMessage = action === 'system-reboot'
-          ? "Le node va red\u00e9marrer proprement. L'interface sera indisponible pendant le red\u00e9marrage, puis devrait revenir sur le m\u00eame Wi-Fi."
+          ? "Le node va red\u00e9marrer. L'interface sera indisponible pendant quelques secondes."
           : "Le node va s'\u00e9teindre proprement. Il faudra le rallumer physiquement.";
         showSystemActionResult(action, requested
           ? requestedMessage
