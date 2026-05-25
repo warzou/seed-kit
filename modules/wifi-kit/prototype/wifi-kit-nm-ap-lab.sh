@@ -17,6 +17,8 @@ ui_pidfile="${WIFI_KIT_NM_AP_UI_PIDFILE:-/tmp/wifi-kit-nm-ap-lab-ui.pid}"
 test_ssid="${WIFI_KIT_NM_AP_TEST_SSID:-}"
 test_profile="${WIFI_KIT_NM_AP_TEST_PROFILE:-}"
 test_timeout="${WIFI_KIT_NM_AP_TEST_TIMEOUT:-30}"
+captive_conf_dir="${WIFI_KIT_NM_AP_CAPTIVE_CONF_DIR:-/etc/NetworkManager/dnsmasq-shared.d}"
+captive_conf_name="${WIFI_KIT_NM_AP_CAPTIVE_CONF_NAME:-wifi-kit-nm-hotspot-captive.conf}"
 apply="${WIFI_KIT_NM_AP_LAB_APPLY:-0}"
 
 usage() {
@@ -40,6 +42,11 @@ Concrete lab modes, dry-run by default:
   sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh rollback
   sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh return-last-good
   sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh return-primary
+
+Captive portal lab modes, dry-run/read-only only in this first lot:
+  sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-audit
+  sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-plan
+  sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-enable-dry-run
 
 By default this helper only prints commands. To run a concrete lab mode on a
 disposable node, set WIFI_KIT_NM_AP_LAB_APPLY=1 explicitly. It never stores
@@ -148,6 +155,36 @@ nm_read() {
   nmcli_bin=$(nmcli_path)
   [ -n "$nmcli_bin" ] || return 0
   "$nmcli_bin" "$@" 2>/dev/null || true
+}
+
+captive_ap_ip() {
+  printf '%s\n' "${ap_ip%%/*}"
+}
+
+captive_conf_path() {
+  printf '%s/%s\n' "$captive_conf_dir" "$captive_conf_name"
+}
+
+captive_domains() {
+  printf '%s\n' \
+    "www.msftconnecttest.com" \
+    "www.msftncsi.com" \
+    "captive.apple.com" \
+    "connectivitycheck.gstatic.com" \
+    "clients3.google.com"
+}
+
+print_captive_dnsmasq_config() {
+  ip=$(captive_ap_ip)
+  printf '%s\n' \
+    "# Wifi-Kit NM-hotspot captive DNS lab." \
+    "# Intended for NetworkManager shared-mode dnsmasq." \
+    "# Keep disabled until validated on the target node." \
+    "address=/www.msftconnecttest.com/$ip" \
+    "address=/www.msftncsi.com/$ip" \
+    "address=/captive.apple.com/$ip" \
+    "address=/connectivitycheck.gstatic.com/$ip" \
+    "address=/clients3.google.com/$ip"
 }
 
 pid_is_alive() {
@@ -390,6 +427,78 @@ cmd_plan() {
   kv "test_connect_success_path" "new Wi-Fi active, AP disappears only after explicit final switch"
   kv "test_connect_failure_path" "AP remains available and UI reports reason"
   kv "forbidden" "no reboot, no profile deletion outside $ap_profile, no fallback return_connection during runtime"
+}
+
+cmd_captive_audit() {
+  section "nm-ap-lab-captive-audit"
+  kv "status" "ok"
+  kv "mode" "captive-audit"
+  kv "network_writes" "false"
+  kv "apply_gate" "$apply"
+  kv "ap_profile" "$ap_profile"
+  kv "ap_ip" "$(captive_ap_ip)"
+  kv "ui_url" "http://$ui_host:$ui_port"
+  kv "backend_http_paths" "/generate_204,/gen_204,/hotspot-detect.html,/library/test/success.html,/connecttest.txt,/ncsi.txt"
+  kv "windows_probe_hosts" "www.msftconnecttest.com,www.msftncsi.com"
+  kv "android_probe_hosts" "connectivitycheck.gstatic.com,clients3.google.com"
+  kv "ios_probe_hosts" "captive.apple.com"
+  kv "dns_hijack_currently_configured_by_helper" "false"
+  kv "probable_windows_gap" "probe hostnames may not resolve to $ui_host in NM shared mode"
+  kv "candidate_conf_dir" "$captive_conf_dir"
+  kv "candidate_conf_path" "$(captive_conf_path)"
+  if [ -d "$captive_conf_dir" ]; then
+    kv "candidate_conf_dir_exists" "true"
+  else
+    kv "candidate_conf_dir_exists" "false"
+  fi
+  if [ -e "$(captive_conf_path)" ]; then
+    kv "candidate_conf_exists" "true"
+  else
+    kv "candidate_conf_exists" "false"
+  fi
+  kv "safe_first_lot" "audit-plan-only; start-hotspot does not enable captive DNS"
+}
+
+cmd_captive_plan() {
+  section "nm-ap-lab-captive-plan"
+  kv "status" "planned"
+  kv "network_writes" "false"
+  kv "apply_supported" "false-in-this-lot"
+  kv "goal" "make platform captive probe hostnames resolve to $(captive_ap_ip) while NM-hotspot recovery is active"
+  kv "candidate_conf_path" "$(captive_conf_path)"
+  kv "activation_policy" "manual-future-lot-only; not called by start-hotspot"
+  kv "rollback_policy" "remove only $(captive_conf_path), then restart/reconnect NM hotspot only after explicit validation"
+  kv "risk" "NetworkManager may require reconnecting the shared hotspot or reloading its dnsmasq child before the file is used"
+
+  section "target-hostnames"
+  captive_domains | while IFS= read -r domain; do
+    [ -n "$domain" ] || continue
+    kv "$domain" "$(captive_ap_ip)"
+  done
+
+  section "candidate-dnsmasq-shared-config"
+  print_captive_dnsmasq_config
+
+  section "future-apply-commands-not-run"
+  kv "01_create_dir" "install -d -m 0755 $captive_conf_dir"
+  kv "02_write_conf" "write the candidate config to $(captive_conf_path)"
+  kv "03_chmod" "chmod 0644 $(captive_conf_path)"
+  kv "04_validate" "reconnect NM hotspot in a controlled lab window, then test Windows captive prompt"
+}
+
+cmd_captive_enable_dry_run() {
+  section "nm-ap-lab-captive-enable-dry-run"
+  kv "status" "dry-run"
+  kv "network_writes" "false"
+  kv "apply_ignored" "$apply"
+  kv "reason" "first captive lot intentionally does not write system files"
+  kv "candidate_conf_path" "$(captive_conf_path)"
+  section "would-write"
+  print_captive_dnsmasq_config
+  section "would-test"
+  kv "windows" "connect to NM hotspot and verify Windows opens or flags captive portal for http://www.msftconnecttest.com/connecttest.txt"
+  kv "ios" "connect to NM hotspot and verify captive.apple.com probe reaches recovery UI"
+  kv "android" "connect to NM hotspot and verify generate_204/connectivitycheck probe reaches recovery UI"
 }
 
 cmd_simulate_test_connection() {
@@ -635,6 +744,9 @@ case "$1" in
   rollback) cmd_rollback ;;
   return-last-good) cmd_return_target last-good ;;
   return-primary) cmd_return_target primary ;;
+  captive-audit) cmd_captive_audit ;;
+  captive-plan) cmd_captive_plan ;;
+  captive-enable-dry-run) cmd_captive_enable_dry_run ;;
   -h|--help|help) usage ;;
   *)
     usage

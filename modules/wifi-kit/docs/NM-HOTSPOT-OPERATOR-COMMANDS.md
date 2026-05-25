@@ -307,6 +307,62 @@ Use when: stopping only the hotspot profile. In most operator flows, prefer
 Risk: stops/deletes `wifi-kit-recovery-ap`; it does not stop UI unless called
 through `rollback` or a return command.
 
+## Captive Portal Lab
+
+The recovery UI already handles common captive probe paths when clients reach
+`192.168.50.1:80`:
+
+- Android: `/generate_204`, `/gen_204`;
+- iOS: `/hotspot-detect.html`, `/library/test/success.html`;
+- Windows: `/connecttest.txt`, `/ncsi.txt`.
+
+The current NM-hotspot lab does not yet install captive DNS interception.
+Windows may request:
+
+- `www.msftconnecttest.com/connecttest.txt`;
+- `www.msftncsi.com/ncsi.txt`.
+
+If those hostnames do not resolve to `192.168.50.1`, the HTTP endpoints are
+never reached and Windows may not open the captive portal automatically.
+
+Read-only audit:
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-audit
+```
+
+Plan the candidate DNS mapping:
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-plan
+```
+
+Print the candidate config without writing it:
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-enable-dry-run
+```
+
+The first captive lab lot is intentionally dry-run only. It proposes a
+NetworkManager shared-mode dnsmasq snippet under:
+
+```sh
+/etc/NetworkManager/dnsmasq-shared.d/wifi-kit-nm-hotspot-captive.conf
+```
+
+with explicit mappings for:
+
+- `www.msftconnecttest.com`;
+- `www.msftncsi.com`;
+- `captive.apple.com`;
+- `connectivitycheck.gstatic.com`;
+- `clients3.google.com`.
+
+Do not enable the DNS snippet automatically with `start-hotspot` yet. A future
+controlled lab should write the file, reconnect the NM hotspot if required, and
+validate Windows/iOS/Android captive behavior before making it part of the
+normal NM-hotspot flow.
+
 ## NetworkManager Diagnostic Commands
 
 Read-only diagnostics:
