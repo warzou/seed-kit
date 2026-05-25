@@ -3,6 +3,7 @@ set -eu
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 module_dir=$script_dir
+repo_dir="${WIFI_KIT_REPO_DIR:-$(CDPATH= cd -- "$module_dir/../.." && pwd)}"
 
 install_user_source="default"
 if [ -n "${WIFI_KIT_INSTALL_USER:-}" ]; then
@@ -232,6 +233,7 @@ WorkingDirectory=$app_dir
 Environment=WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS=1
 Environment=WIFI_KIT_ENABLE_SYSTEM_POWER_ACTIONS=$system_power_actions
 Environment=WIFI_KIT_RUNTIME_CONFIG=$runtime_config
+Environment=WIFI_KIT_REPO_DIR=$repo_dir
 Environment=WIFI_KIT_UI_PORT=$ui_port
 ExecStart=/usr/bin/python3 ui/serve-readonly.py --host 0.0.0.0 --port \${WIFI_KIT_UI_PORT}
 Restart=on-failure

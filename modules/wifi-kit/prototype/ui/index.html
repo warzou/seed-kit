@@ -1890,6 +1890,14 @@
             <button id="system-shutdown-button" class="button danger" type="button" data-system-action="system-shutdown" disabled>Eteindre</button>
             <div id="system-shutdown-result" class="callout recovery-result" hidden></div>
           </div>
+          <div class="action-card">
+            <span class="chip">Updates</span>
+            <strong>Verifier les mises a jour</strong>
+            <p>Compare le commit local avec la branche distante. Aucune installation automatique n'est lancee.</p>
+            <button id="updates-check-button" class="button secondary" type="button">Verifier les mises a jour</button>
+            <button id="updates-install-button" class="button secondary" type="button" disabled>Installer la mise a jour</button>
+            <div id="updates-check-result" class="callout recovery-result" hidden></div>
+          </div>
         </div>
       </section>
     </div>
@@ -2608,6 +2616,14 @@
       target.hidden = false;
     }
 
+    function showUpdateCheckResult(message) {
+      const target = document.getElementById('updates-check-result');
+      if (!target) return;
+      target.style.whiteSpace = 'pre-line';
+      target.textContent = message;
+      target.hidden = false;
+    }
+
     function showConfigResult(message) {
       const target = document.getElementById('config-result');
       target.textContent = message;
@@ -3016,6 +3032,52 @@
           button.textContent = originalText;
         }
         updateSystemButtons();
+      }
+    }
+
+    function updateStatusLabel(status) {
+      if (status === 'up-to-date') return 'a jour';
+      if (status === 'update-available') return 'mise a jour disponible';
+      return 'erreur';
+    }
+
+    async function checkUpdates() {
+      const button = document.getElementById('updates-check-button');
+      const originalText = button ? button.textContent : '';
+      if (window.location.protocol === 'file:') {
+        showUpdateCheckResult('Verification des mises a jour indisponible depuis cette page locale.');
+        return;
+      }
+      try {
+        if (button) {
+          button.disabled = true;
+          button.textContent = 'Verification...';
+        }
+        const response = await fetch('/updates/check', {
+          cache: 'no-store',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ read_only: true })
+        });
+        const payload = await response.json();
+        const lines = [
+          `Statut: ${updateStatusLabel(payload.status)}`,
+          `Branche: ${payload.branch || 'inconnue'}`,
+          `Commit local: ${payload.local_commit_short || payload.local_commit || 'inconnu'}`,
+          `Remote: ${payload.remote || 'inconnu'}`,
+        ];
+        if (payload.remote_commit_short || payload.remote_commit) {
+          lines.push(`Commit distant: ${payload.remote_commit_short || payload.remote_commit}`);
+        }
+        lines.push(payload.message || (response.ok ? 'Verification terminee.' : 'Verification impossible.'));
+        showUpdateCheckResult(lines.join('\n'));
+      } catch (error) {
+        showUpdateCheckResult(`Verification des mises a jour indisponible: ${error.message}`);
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = originalText;
+        }
       }
     }
 
@@ -3726,6 +3788,7 @@
     document.querySelectorAll('[data-system-action]').forEach((button) => {
       button.addEventListener('click', () => triggerSystemAction(button.dataset.systemAction));
     });
+    document.getElementById('updates-check-button')?.addEventListener('click', checkUpdates);
     document.querySelectorAll('[data-network-plan]').forEach((button) => {
       button.addEventListener('click', () => showNetworkActionResult(networkActionPlan(button.dataset.networkPlan)));
     });

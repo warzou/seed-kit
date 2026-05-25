@@ -276,6 +276,141 @@ def run_text_command(args: list[str], timeout: float = 2.0) -> str:
     return result.stdout.strip()
 
 
+def redact_git_remote(remote: str) -> str:
+    return re.sub(r"(https?://)[^/@\s]+@", r"\1", safe_label(remote))
+
+
+def find_git_repo_dir() -> Path | None:
+    configured = safe_label(os.environ.get("WIFI_KIT_REPO_DIR", ""))
+    candidates = [Path(configured)] if configured else []
+    candidates.extend([SCRIPT_DIR, *SCRIPT_DIR.parents])
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            if (candidate / ".git").exists():
+                return candidate
+            result = subprocess.run(
+                ["git", "-C", str(candidate), "rev-parse", "--show-toplevel"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=2.0,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if result.returncode == 0:
+            repo = Path(result.stdout.strip())
+            if repo.exists():
+                return repo
+    return None
+
+
+def git_output(repo: Path, *args: str, timeout: float = 3.0) -> tuple[str, str]:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), *args],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except FileNotFoundError:
+        return "", "git-not-found"
+    except subprocess.TimeoutExpired:
+        return "", "git-timeout"
+    except OSError as exc:
+        return "", f"git-error: {exc}"
+    if result.returncode != 0:
+        return "", safe_label(result.stderr.strip() or result.stdout.strip(), fallback=f"git-exit-{result.returncode}")
+    return result.stdout.strip(), ""
+
+
+def update_check_status() -> tuple[dict, int]:
+    repo = find_git_repo_dir()
+    if not repo:
+        return {
+            "ok": False,
+            "status": "error",
+            "message": "Depot Git introuvable pour cette installation.",
+            "repo": "",
+            "branch": "",
+            "remote": "",
+            "local_commit": "",
+            "remote_commit": "",
+            "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }, 503
+
+    branch, branch_error = git_output(repo, "rev-parse", "--abbrev-ref", "HEAD")
+    local_commit, commit_error = git_output(repo, "rev-parse", "HEAD")
+    remote, remote_error = git_output(repo, "remote", "get-url", "origin")
+    if branch_error or commit_error or remote_error:
+        return {
+            "ok": False,
+            "status": "error",
+            "message": branch_error or commit_error or remote_error,
+            "repo": str(repo),
+            "branch": branch,
+            "remote": redact_git_remote(remote),
+            "local_commit": local_commit,
+            "local_commit_short": local_commit[:12],
+            "remote_commit": "",
+            "remote_commit_short": "",
+            "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }, 500
+
+    remote_ref = f"refs/heads/{branch}"
+    remote_result, remote_ls_error = git_output(repo, "ls-remote", "origin", remote_ref, timeout=8.0)
+    if remote_ls_error:
+        return {
+            "ok": False,
+            "status": "error",
+            "message": f"Verification distante impossible: {remote_ls_error}",
+            "repo": str(repo),
+            "branch": branch,
+            "remote": redact_git_remote(remote),
+            "local_commit": local_commit,
+            "local_commit_short": local_commit[:12],
+            "remote_commit": "",
+            "remote_commit_short": "",
+            "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }, 502
+
+    remote_commit = remote_result.split()[0] if remote_result.split() else ""
+    if not remote_commit:
+        return {
+            "ok": False,
+            "status": "error",
+            "message": f"Branche distante introuvable: origin/{branch}",
+            "repo": str(repo),
+            "branch": branch,
+            "remote": redact_git_remote(remote),
+            "local_commit": local_commit,
+            "local_commit_short": local_commit[:12],
+            "remote_commit": "",
+            "remote_commit_short": "",
+            "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }, 404
+
+    status = "up-to-date" if local_commit == remote_commit else "update-available"
+    message = "A jour." if status == "up-to-date" else "Mise a jour disponible sur la branche distante."
+    return {
+        "ok": True,
+        "status": status,
+        "message": message,
+        "repo": str(repo),
+        "branch": branch,
+        "remote": redact_git_remote(remote),
+        "local_commit": local_commit,
+        "local_commit_short": local_commit[:12],
+        "remote_commit": remote_commit,
+        "remote_commit_short": remote_commit[:12],
+        "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "install_available": False,
+        "install_message": "Installation automatique non disponible dans ce lot.",
+    }, 200
+
+
 def safe_label(value: str, *, fallback: str = "") -> str:
     cleaned = " ".join(str(value or "").strip().split())
     return cleaned or fallback
@@ -2989,6 +3124,11 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
             self.send_action_json("shutdown-system", payload, status=status)
             return
 
+        if path == "/updates/check":
+            payload, status = update_check_status()
+            self.send_json(payload, status=status)
+            return
+
         if path == "/api/runtime-config":
             payload, status = update_runtime_config(parse_post_payload(self))
             self.send_action_json("runtime-config", payload, status=status)
@@ -3092,6 +3232,11 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
                     "recovery": public_recovery_status(self.recovery),
                 }
             )
+            return
+
+        if path == "/updates/check":
+            payload, status = update_check_status()
+            self.send_json(payload, status=status)
             return
 
         if path == "/api/safe-diagnose":
