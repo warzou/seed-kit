@@ -38,11 +38,16 @@ Concrete lab modes, dry-run by default:
   sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh stop-ui
   sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh status
   sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh rollback
+  sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh return-last-good
+  sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh return-primary
 
 By default this helper only prints commands. To run a concrete lab mode on a
 disposable node, set WIFI_KIT_NM_AP_LAB_APPLY=1 explicitly. It never stores
 client Wi-Fi passwords, never deletes user profiles, never starts hostapd or
 dnsmasq, and never reboots.
+
+rollback is technical cleanup only. Use return-last-good to reconnect the last
+validated Wi-Fi, or return-primary to reconnect the configured primary Wi-Fi.
 EOF
 }
 
@@ -127,6 +132,18 @@ return_connection() {
   runtime_value return_connection ""
 }
 
+return_ssid() {
+  runtime_value return_ssid ""
+}
+
+last_good_connection() {
+  runtime_value last_good_connection ""
+}
+
+last_good_ssid() {
+  runtime_value last_good_ssid ""
+}
+
 nm_read() {
   nmcli_bin=$(nmcli_path)
   [ -n "$nmcli_bin" ] || return 0
@@ -165,6 +182,64 @@ port_is_listening() {
   [ -n "$ss_bin" ] || return 1
   "$ss_bin" -ltn 2>/dev/null |
     awk -v host="$ui_host" -v port=":$ui_port" '$4 ~ port { if ($4 ~ host || $4 ~ "0.0.0.0" || $4 ~ "\\[::\\]") found = 1 } END { exit found ? 0 : 1 }'
+}
+
+connection_exists() {
+  profile=$1
+  nmcli_bin=$(nmcli_path)
+  [ -n "$profile" ] || return 1
+  [ -n "$nmcli_bin" ] || return 1
+  "$nmcli_bin" connection show "$profile" >/dev/null 2>&1
+}
+
+ssid_for_connection() {
+  profile=$1
+  nmcli_bin=$(nmcli_path)
+  [ -n "$profile" ] || return 0
+  [ -n "$nmcli_bin" ] || return 0
+  "$nmcli_bin" -t --escape no -f 802-11-wireless.ssid connection show "$profile" 2>/dev/null |
+    awk -F: '$1 == "802-11-wireless.ssid" { print $2; exit }'
+}
+
+connection_for_ssid() {
+  target_ssid=$1
+  nmcli_bin=$(nmcli_path)
+  [ -n "$target_ssid" ] || return 0
+  [ -n "$nmcli_bin" ] || return 0
+  "$nmcli_bin" -t --escape no -f NAME,TYPE connection show 2>/dev/null |
+    while IFS=: read -r profile typ; do
+      [ "$typ" = "802-11-wireless" ] || [ "$typ" = "wifi" ] || continue
+      ssid=$(ssid_for_connection "$profile")
+      if [ "$ssid" = "$target_ssid" ]; then
+        printf '%s\n' "$profile"
+        return 0
+      fi
+    done
+}
+
+resolve_return_target() {
+  kind=$1
+  case "$kind" in
+    last-good)
+      configured_connection=$(last_good_connection)
+      configured_ssid=$(last_good_ssid)
+      ;;
+    primary)
+      configured_connection=$(return_connection)
+      configured_ssid=$(return_ssid)
+      ;;
+    *)
+      configured_connection=""
+      configured_ssid=""
+      ;;
+  esac
+  resolved_connection=""
+  if [ -n "$configured_connection" ] && connection_exists "$configured_connection"; then
+    resolved_connection=$configured_connection
+  elif [ -n "$configured_ssid" ]; then
+    resolved_connection=$(connection_for_ssid "$configured_ssid")
+  fi
+  printf '%s|%s|%s\n' "$configured_connection" "$configured_ssid" "$resolved_connection"
 }
 
 iw_valid_combinations() {
@@ -431,6 +506,17 @@ cmd_stop_ui() {
 }
 
 cmd_status() {
+  last_good_target=$(resolve_return_target last-good)
+  primary_target=$(resolve_return_target primary)
+  last_good_configured_connection=${last_good_target%%|*}
+  last_good_tail=${last_good_target#*|}
+  last_good_configured_ssid=${last_good_tail%%|*}
+  last_good_resolved_connection=${last_good_tail#*|}
+  primary_configured_connection=${primary_target%%|*}
+  primary_tail=${primary_target#*|}
+  primary_configured_ssid=${primary_tail%%|*}
+  primary_resolved_connection=${primary_tail#*|}
+
   section "nm-ap-lab-status"
   kv "status" "ok"
   kv "network_writes" "false"
@@ -454,26 +540,67 @@ cmd_status() {
   kv "ui_url" "http://$ui_host:$ui_port"
   kv "ui_pidfile" "$ui_pidfile"
   kv "ui_log" "$ui_log"
+  kv "last_good_ssid" "${last_good_configured_ssid:-missing}"
+  kv "last_good_connection" "${last_good_configured_connection:-missing}"
+  kv "last_good_nm_connection" "${last_good_resolved_connection:-missing}"
+  kv "primary_ssid" "${primary_configured_ssid:-missing}"
+  kv "primary_connection" "${primary_configured_connection:-missing}"
+  kv "primary_nm_connection" "${primary_resolved_connection:-missing}"
 }
 
 cmd_rollback() {
-  ret=$(return_connection)
   section "nm-ap-lab-rollback"
   kv "status" "$([ "$apply" = "1" ] && printf applying || printf dry-run)"
   kv "network_writes" "$([ "$apply" = "1" ] && printf true || printf false)"
   kv "command_01" "stop-ui"
   kv "command_02" "nmcli connection down $ap_profile"
   kv "command_03" "nmcli connection delete $ap_profile"
-  kv "command_04_optional_return" "${ret:-missing-return_connection}"
+  kv "return_policy" "cleanup-only; use return-last-good or return-primary to reconnect"
   if [ "$apply" = "1" ]; then
     cmd_stop_ui
     nmcli_bin=$(require_apply_tool nmcli)
     "$nmcli_bin" connection down "$ap_profile" 2>/dev/null || true
     "$nmcli_bin" connection delete "$ap_profile" 2>/dev/null || true
-    if [ -n "$ret" ]; then
-      "$nmcli_bin" connection up "$ret" ifname "$iface"
+    kv "result" "rollback-cleanup-requested"
+  fi
+}
+
+cmd_return_target() {
+  kind=$1
+  target=$(resolve_return_target "$kind")
+  configured_connection=${target%%|*}
+  tail=${target#*|}
+  configured_ssid=${tail%%|*}
+  resolved_connection=${tail#*|}
+
+  section "nm-ap-lab-return-$kind"
+  kv "status" "$([ "$apply" = "1" ] && printf applying || printf dry-run)"
+  kv "network_writes" "$([ "$apply" = "1" ] && printf true || printf false)"
+  kv "target_kind" "$kind"
+  kv "configured_ssid" "${configured_ssid:-missing}"
+  kv "configured_connection" "${configured_connection:-missing}"
+  kv "resolved_connection" "${resolved_connection:-missing}"
+  kv "command_01" "stop-ui"
+  kv "command_02" "nmcli connection down $ap_profile"
+  kv "command_03" "nmcli connection delete $ap_profile"
+  if [ -n "$resolved_connection" ]; then
+    kv "command_04_return" "nmcli connection up $resolved_connection ifname $iface"
+  else
+    kv "command_04_return" "refused: target connection unknown"
+  fi
+
+  if [ "$apply" = "1" ]; then
+    if [ -z "$resolved_connection" ]; then
+      kv "result" "refused"
+      kv "reason" "target-connection-unknown"
+      exit 1
     fi
-    kv "result" "rollback-requested"
+    cmd_stop_ui
+    nmcli_bin=$(require_apply_tool nmcli)
+    "$nmcli_bin" connection down "$ap_profile" 2>/dev/null || true
+    "$nmcli_bin" connection delete "$ap_profile" 2>/dev/null || true
+    "$nmcli_bin" connection up "$resolved_connection" ifname "$iface"
+    kv "result" "return-requested"
   fi
 }
 
@@ -506,6 +633,8 @@ case "$1" in
   stop-ui) cmd_stop_ui ;;
   status) cmd_status ;;
   rollback) cmd_rollback ;;
+  return-last-good) cmd_return_target last-good ;;
+  return-primary) cmd_return_target primary ;;
   -h|--help|help) usage ;;
   *)
     usage
