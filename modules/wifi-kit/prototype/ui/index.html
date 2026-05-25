@@ -1664,7 +1664,7 @@
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Hostname</span><strong id="status-hostname">...</strong></div></div>
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-location"></use></svg></span><div><span>Adresse IP</span><strong id="status-ip">...</strong></div></div>
         <div id="status-wifi-card" class="status-mini wifi-status-normal"><span class="status-icon"><svg class="icon-svg"><use href="#icon-wifi"></use></svg></span><div><span id="status-wifi-label">Wi-Fi (normal)</span><strong id="status-ssid">...</strong></div></div>
-        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Nb con.</span><strong id="status-clients">...</strong></div></div>
+        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Clients AP</span><strong id="status-clients">...</strong></div></div>
       </div>
     </section>
 
@@ -1874,9 +1874,10 @@
             <p>Redemarre proprement le node. Cette action coupera temporairement l'acces au node.</p>
             <label class="confirm-line">
               <input id="system-reboot-confirmed" type="checkbox">
-              Confirmer le redemarrage
+              Confirmer le red&eacute;marrage
             </label>
             <button id="system-reboot-button" class="button warn" type="button" data-system-action="system-reboot" disabled>Redemarrer</button>
+            <div id="system-reboot-result" class="callout recovery-result" hidden></div>
           </div>
           <div class="action-card">
             <span class="chip">Systeme</span>
@@ -1884,12 +1885,12 @@
             <p>Eteint proprement le node. Cette action coupera definitivement l'acces jusqu'au prochain demarrage physique.</p>
             <label class="confirm-line">
               <input id="system-shutdown-confirmed" type="checkbox">
-              Confirmer l'arret
+              Confirmer l'arr&ecirc;t
             </label>
             <button id="system-shutdown-button" class="button danger" type="button" data-system-action="system-shutdown" disabled>Eteindre</button>
+            <div id="system-shutdown-result" class="callout recovery-result" hidden></div>
           </div>
         </div>
-        <div id="system-action-result" class="callout recovery-result" hidden></div>
       </section>
     </div>
 
@@ -2599,8 +2600,10 @@
       if (globalTarget) globalTarget.hidden = true;
     }
 
-    function showSystemActionResult(message) {
-      const target = document.getElementById('system-action-result');
+    function showSystemActionResult(action, message) {
+      const targetId = action === 'system-shutdown' ? 'system-shutdown-result' : 'system-reboot-result';
+      const target = document.getElementById(targetId);
+      if (!target) return;
       target.textContent = message;
       target.hidden = false;
     }
@@ -2976,11 +2979,11 @@
       const confirmedId = action === 'system-reboot' ? 'system-reboot-confirmed' : 'system-shutdown-confirmed';
       const label = action === 'system-reboot' ? 'Redemarrage' : 'Extinction';
       if (!document.getElementById(confirmedId)?.checked) {
-        showSystemActionResult(`${label} refuse: coche la confirmation.`);
+        showSystemActionResult(action, `${label} refuse: coche la confirmation.`);
         return;
       }
       if (window.location.protocol === 'file:') {
-        showSystemActionResult(`${label}: plan-only dans cette page locale.`);
+        showSystemActionResult(action, `${label}: plan-only dans cette page locale.`);
         return;
       }
       try {
@@ -2999,11 +3002,14 @@
         });
         const payload = await response.json();
         const requested = Boolean(payload.reboot_requested || payload.shutdown_requested);
-        showSystemActionResult(requested
-          ? `${label} demande au backend.`
+        const requestedMessage = action === 'system-reboot'
+          ? "Le node va red\u00e9marrer proprement. L'interface sera indisponible pendant le red\u00e9marrage, puis devrait revenir sur le m\u00eame Wi-Fi."
+          : "Le node va s'\u00e9teindre proprement. Il faudra le rallumer physiquement.";
+        showSystemActionResult(action, requested
+          ? requestedMessage
           : `${label} non execute: ${payload.message || payload.error || payload.status}.`);
       } catch (error) {
-        showSystemActionResult(`${label} indisponible: ${error.message}`);
+        showSystemActionResult(action, `${label} indisponible: ${error.message}`);
       } finally {
         if (button) {
           button.disabled = false;

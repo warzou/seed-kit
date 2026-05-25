@@ -14,6 +14,8 @@ ap_test_psk="12345678"
 ap_ssid=""
 ap_timeout_seconds="300"
 connect_timeout_seconds="180"
+reboot_cmd="/sbin/reboot"
+shutdown_cmd="/sbin/poweroff"
 
 timestamp() {
   date -u +"%Y-%m-%dT%H:%M:%SZ"
@@ -174,6 +176,27 @@ read_connect_request() {
   done
 }
 
+read_system_power_request() {
+  system_power_confirmed="false"
+  system_power_dangerous_real_apply="false"
+  system_power_gate="false"
+  system_power_dry_run="false"
+  [ -t 0 ] && return 0
+  while IFS= read -r line; do
+    key=${line%%=*}
+    value=${line#*=}
+    [ "$key" != "$line" ] || continue
+    safe_line_value "$key" "$value"
+    case "$key" in
+      user_confirmed) system_power_confirmed=$value ;;
+      dangerous_real_apply) system_power_dangerous_real_apply=$value ;;
+      system_power_gate) system_power_gate=$value ;;
+      dry_run) system_power_dry_run=$value ;;
+      *) ;;
+    esac
+  done
+}
+
 require_root() {
   if [ "$(id -u)" != "0" ]; then
     log_event "$1" "refused" "root-required"
@@ -297,14 +320,58 @@ case "$action" in
     WIFI_KIT_RUNTIME_CONFIG="$runtime_config" exec sh "$ap_return_check_script" run-once
     ;;
   reboot-system)
+    read_system_power_request
     require_root "$action"
-    log_event "$action" "planned" "real-system-power-action-disabled-in-this-lot"
-    reply "planned" "$action" "real-system-power-action-disabled-in-this-lot"
+    if [ "$system_power_confirmed" != "true" ] && [ "$system_power_confirmed" != "1" ]; then
+      log_event "$action" "refused" "confirmation-required"
+      reply "refused" "$action" "confirmation-required"
+      exit 2
+    fi
+    if [ "$system_power_dangerous_real_apply" != "true" ] && [ "$system_power_dangerous_real_apply" != "1" ]; then
+      log_event "$action" "planned" "dangerous-real-apply-required"
+      reply "planned" "$action" "dangerous-real-apply-required"
+      exit 0
+    fi
+    if [ "$system_power_gate" != "true" ] && [ "$system_power_gate" != "1" ]; then
+      log_event "$action" "planned" "system-power-gate-disabled"
+      reply "planned" "$action" "system-power-gate-disabled"
+      exit 0
+    fi
+    if [ "$system_power_dry_run" = "true" ] || [ "$system_power_dry_run" = "1" ]; then
+      log_event "$action" "planned" "dry-run command=$reboot_cmd"
+      reply "planned" "$action" "command=$reboot_cmd"
+      exit 0
+    fi
+    [ -x "$reboot_cmd" ] || { log_event "$action" "failure" "command-missing=$reboot_cmd"; reply "failure" "$action" "command-missing=$reboot_cmd"; exit 1; }
+    log_event "$action" "requested" "command=$reboot_cmd"
+    exec "$reboot_cmd"
     ;;
   shutdown-system)
+    read_system_power_request
     require_root "$action"
-    log_event "$action" "planned" "real-system-power-action-disabled-in-this-lot"
-    reply "planned" "$action" "real-system-power-action-disabled-in-this-lot"
+    if [ "$system_power_confirmed" != "true" ] && [ "$system_power_confirmed" != "1" ]; then
+      log_event "$action" "refused" "confirmation-required"
+      reply "refused" "$action" "confirmation-required"
+      exit 2
+    fi
+    if [ "$system_power_dangerous_real_apply" != "true" ] && [ "$system_power_dangerous_real_apply" != "1" ]; then
+      log_event "$action" "planned" "dangerous-real-apply-required"
+      reply "planned" "$action" "dangerous-real-apply-required"
+      exit 0
+    fi
+    if [ "$system_power_gate" != "true" ] && [ "$system_power_gate" != "1" ]; then
+      log_event "$action" "planned" "system-power-gate-disabled"
+      reply "planned" "$action" "system-power-gate-disabled"
+      exit 0
+    fi
+    if [ "$system_power_dry_run" = "true" ] || [ "$system_power_dry_run" = "1" ]; then
+      log_event "$action" "planned" "dry-run command=$shutdown_cmd"
+      reply "planned" "$action" "command=$shutdown_cmd"
+      exit 0
+    fi
+    [ -x "$shutdown_cmd" ] || { log_event "$action" "failure" "command-missing=$shutdown_cmd"; reply "failure" "$action" "command-missing=$shutdown_cmd"; exit 1; }
+    log_event "$action" "requested" "command=$shutdown_cmd"
+    exec "$shutdown_cmd"
     ;;
   *)
     log_event "$action" "refused" "action-not-allowed"

@@ -24,6 +24,7 @@ runtime_watchdog_unit_path="${WIFI_KIT_RUNTIME_WATCHDOG_UNIT_PATH:-/etc/systemd/
 ui_port="${WIFI_KIT_UI_PORT:-54321}"
 iface="${WIFI_KIT_BOOT_GUARD_IFACE:-wlan0}"
 internet_probe="${WIFI_KIT_BOOT_GUARD_PROBE:-1.1.1.1}"
+system_power_actions="${WIFI_KIT_ENABLE_SYSTEM_POWER_ACTIONS:-0}"
 
 usage() {
   cat <<'EOF'
@@ -229,6 +230,7 @@ User=$install_user
 Group=$install_user
 WorkingDirectory=$app_dir
 Environment=WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS=1
+Environment=WIFI_KIT_ENABLE_SYSTEM_POWER_ACTIONS=$system_power_actions
 Environment=WIFI_KIT_RUNTIME_CONFIG=$runtime_config
 Environment=WIFI_KIT_UI_PORT=$ui_port
 ExecStart=/usr/bin/python3 ui/serve-readonly.py --host 0.0.0.0 --port \${WIFI_KIT_UI_PORT}

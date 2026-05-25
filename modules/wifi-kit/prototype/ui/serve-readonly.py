@@ -1361,12 +1361,14 @@ def system_power_action(payload: dict, action: str) -> tuple[dict, int]:
         "reboot-system": {
             "endpoint_action": "system-reboot",
             "requested": "reboot_requested",
+            "strict_command": "/sbin/reboot",
             "log": SYSTEM_REBOOT_LOG,
             "message": "Redemarrage systeme demande.",
         },
         "shutdown-system": {
             "endpoint_action": "system-shutdown",
             "requested": "shutdown_requested",
+            "strict_command": "/sbin/poweroff",
             "log": SYSTEM_SHUTDOWN_LOG,
             "message": "Extinction systeme demandee.",
         },
@@ -1420,6 +1422,8 @@ def system_power_action(payload: dict, action: str) -> tuple[dict, int]:
             "requires_user_confirmation": True,
             "confirmation_kind": "checkbox",
             "confirm_ok": True,
+            "strict_command": spec["strict_command"],
+            "would_call": f"{action_wrapper_path()} {action}",
             "log": str(log_path),
             "warning": "Architecture SAFE uniquement: aucune action systeme reelle sans gate explicite futur.",
         }, 200
@@ -1437,7 +1441,11 @@ def system_power_action(payload: dict, action: str) -> tuple[dict, int]:
                 command,
                 cwd=str(SCRIPT_DIR.parent),
                 check=False,
-                stdin=subprocess.DEVNULL,
+                input=(
+                    "user_confirmed=true\n"
+                    "dangerous_real_apply=true\n"
+                    "system_power_gate=true\n"
+                ),
                 stdout=handle,
                 stderr=subprocess.STDOUT,
                 text=True,
