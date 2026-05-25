@@ -11,7 +11,7 @@ WorkingDirectory=/opt/seed-kit/wifi-kit
 Environment=WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS=1
 Environment=WIFI_KIT_ENABLE_SYSTEM_POWER_ACTIONS=1
 Environment=WIFI_KIT_ENABLE_REBOOT_ACTION=1
-Environment=WIFI_KIT_ENABLE_SHUTDOWN_ACTION=0
+Environment=WIFI_KIT_ENABLE_SHUTDOWN_ACTION=1
 Environment=WIFI_KIT_RUNTIME_CONFIG=/home/warzy/.config/wifi-kit/runtime.conf
 Environment=WIFI_KIT_UI_PORT=54321
 ExecStart=/usr/bin/python3 ui/serve-readonly.py --host 0.0.0.0 --port ${WIFI_KIT_UI_PORT}

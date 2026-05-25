@@ -27,7 +27,7 @@ iface="${WIFI_KIT_BOOT_GUARD_IFACE:-wlan0}"
 internet_probe="${WIFI_KIT_BOOT_GUARD_PROBE:-1.1.1.1}"
 system_power_actions="${WIFI_KIT_ENABLE_SYSTEM_POWER_ACTIONS:-1}"
 reboot_action="${WIFI_KIT_ENABLE_REBOOT_ACTION:-1}"
-shutdown_action="${WIFI_KIT_ENABLE_SHUTDOWN_ACTION:-0}"
+shutdown_action="${WIFI_KIT_ENABLE_SHUTDOWN_ACTION:-1}"
 
 usage() {
   cat <<'EOF'
