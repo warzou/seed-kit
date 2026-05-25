@@ -2078,6 +2078,7 @@
     let data = JSON.parse(document.getElementById('wifi-kit-data').textContent);
     let selectedNetwork = null;
     let selectedNetworkKey = null;
+    let lastConnectionAttempt = null;
 
     function value(source, key) {
       return String(source?.[key] ?? 'inconnu');
@@ -3060,7 +3061,7 @@
         button.textContent = 'Connecté';
         button.disabled = true;
       } else {
-        button.textContent = 'Se connecter';
+        button.textContent = 'Connecter';
       }
 
       const summary = document.createElement('p');
@@ -3298,6 +3299,26 @@
       plan.hidden = false;
     }
 
+    function renderConnectStarting(ssid, plan) {
+      lastConnectionAttempt = {
+        ssid,
+        status: 'started',
+        timestamp: new Date().toISOString(),
+      };
+      renderConnectResponse({
+        ok: true,
+        status: 'started',
+        connect_started: true,
+        requested_ssid: ssid,
+        message: 'Connexion en cours. Cette page peut se fermer si le node rejoint le Wi-Fi. Si rien ne se passe, reconnectez-vous au SSID Wifi-Kit-pocket-node.',
+        connect_plan: [
+          'Connexion demandee depuis la page recovery.',
+          'Le node peut quitter l AP recovery si le Wi-Fi rejoint fonctionne.',
+          'En cas d echec, reconnectez-vous au SSID Wifi-Kit-pocket-node pour relire le statut.'
+        ]
+      }, plan);
+    }
+
     async function triggerWifiConnect(network, passwordField, plan, button) {
       const ssid = displaySsid(network);
       if (!ssid || ssid === 'Reseau masque') {
@@ -3309,21 +3330,9 @@
         return;
       }
       const originalText = button.textContent;
-      if (!confirmNetworkInterruption(`Se connecter a ${ssid} ?`)) {
-        renderConnectResponse({
-          status: 'planned',
-          requested_ssid: ssid,
-          secret_policy: 'Connexion annulee par l utilisateur. Aucun mot de passe transmis.',
-          connect_plan: [
-            'aucune mutation reseau',
-            'mot de passe non transmis',
-            'relancer la connexion depuis le bouton Se connecter'
-          ]
-        }, plan);
-        return;
-      }
       button.disabled = true;
       button.textContent = 'Connexion en cours...';
+      renderConnectStarting(ssid, plan);
       const savedSecretUnchanged = passwordField.dataset.savedSecretIndicator === 'true'
         && passwordField.value === '********';
       const passwordPayload = savedSecretUnchanged
@@ -3346,12 +3355,35 @@
         const payload = await response.json();
         passwordField.value = savedSecretUnchanged ? '********' : '';
         renderConnectResponse(payload, plan);
+        lastConnectionAttempt = {
+          ssid,
+          status: payload.status || (payload.ok ? 'done' : 'unknown'),
+          timestamp: new Date().toISOString(),
+          error: payload.error || null,
+        };
         if (!response.ok) {
-          button.textContent = 'Se connecter';
+          button.textContent = 'Connecter';
           return;
         }
       } catch (error) {
-        renderConnectResponse({ status: 'failure', error: error.message }, plan);
+        lastConnectionAttempt = {
+          ssid,
+          status: 'network-transition',
+          timestamp: new Date().toISOString(),
+          error: error.message,
+        };
+        renderConnectResponse({
+          ok: true,
+          status: 'started',
+          connect_started: true,
+          requested_ssid: ssid,
+          message: 'Connexion lancee. La page peut etre inaccessible pendant le changement de reseau.',
+          connect_plan: [
+            'La requete a pu etre interrompue par la bascule Wi-Fi.',
+            'Si le node rejoint le Wi-Fi, ouvrez l UI normale sur le reseau local.',
+            'Sinon reconnectez-vous au SSID Wifi-Kit-pocket-node et relisez le statut.'
+          ]
+        }, plan);
       } finally {
         button.disabled = false;
         button.textContent = originalText;
