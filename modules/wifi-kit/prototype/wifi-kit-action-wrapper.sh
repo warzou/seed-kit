@@ -192,18 +192,24 @@ action=$1
 return_connection="${WIFI_KIT_RETURN_CONNECTION:-$(runtime_config_value return_connection "$(runtime_config_value default_connection "$return_connection")")}"
 ap_test_psk="${WIFI_KIT_AP_PSK:-$(runtime_config_value ap_password "$ap_test_psk")}"
 ap_ssid="${WIFI_KIT_AP_SSID:-$(runtime_config_value ap_ssid "")}"
+ap_backend="${WIFI_KIT_AP_BACKEND:-nm-hotspot}"
 
 case "$action" in
   start-ap-mode)
     require_root "$action"
-    if [ "${WIFI_KIT_AP_BACKEND:-}" = "nm-hotspot" ]; then
+    if [ "$ap_backend" = "nm-hotspot" ]; then
       if [ ! -f "$nm_ap_lab_script" ]; then
-        log_event "$action" "failure" "nm-ap-lab-missing"
+        log_event "$action" "failure" "backend=nm-hotspot nm_helper_path=$nm_ap_lab_script nm-ap-lab-missing"
         reply "failure" "$action" "nm-ap-lab-missing"
         exit 1
       fi
-      log_event "$action" "started" "backend=nm-hotspot"
+      log_event "$action" "started" "backend=nm-hotspot nm_helper_path=$nm_ap_lab_script"
       WIFI_KIT_RUNTIME_CONFIG="$runtime_config" WIFI_KIT_NM_AP_LAB_APPLY=1 exec sh "$nm_ap_lab_script" start-hotspot
+    fi
+    if [ "$ap_backend" != "hostapd" ]; then
+      log_event "$action" "failure" "unsupported-backend=$ap_backend"
+      reply "failure" "$action" "unsupported-backend=$ap_backend"
+      exit 1
     fi
     if [ ! -f "$ap_setup_script" ]; then
       log_event "$action" "failure" "ap-setup-test-missing"

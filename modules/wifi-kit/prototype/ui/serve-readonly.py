@@ -25,6 +25,7 @@ CONNECT_TRANSACTION_SH = SCRIPT_DIR.parent / "wifi-kit-connect-transaction.sh"
 ACTION_WRAPPER_SH = SCRIPT_DIR.parent / "wifi-kit-action-wrapper.sh"
 INSTALLED_ACTION_WRAPPER_SH = Path(os.environ.get("WIFI_KIT_ACTION_WRAPPER", "/opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh"))
 INSTALLED_APP_DIR = INSTALLED_ACTION_WRAPPER_SH.parent
+INSTALLED_NM_AP_LAB_SH = INSTALLED_APP_DIR / "wifi-kit-nm-ap-lab.sh"
 SUDOERS_PATH = Path(os.environ.get("WIFI_KIT_SUDOERS_PATH", "/etc/sudoers.d/wifi-kit"))
 UI_SERVICE_NAME = os.environ.get("WIFI_KIT_UI_SERVICE", "wifi-kit-ui.service")
 BOOT_GUARD_SERVICE_NAME = os.environ.get("WIFI_KIT_BOOT_GUARD_SERVICE", "wifi-kit-boot-guard.service")
@@ -974,12 +975,14 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
     action = "start-ap-mode"
     config = read_runtime_config()
     backend = str(payload.get("backend") or AP_MODE_BACKEND or "nm-hotspot").strip()
+    nm_helper_path = INSTALLED_NM_AP_LAB_SH if INSTALLED_NM_AP_LAB_SH.exists() else SCRIPT_DIR.parent / "wifi-kit-nm-ap-lab.sh"
     if dry_run or not privileged_actions_enabled() or not dangerous_real_apply or not ap_confirmed:
         append_action_log(
             START_AP_MODE_LOG,
             action=action,
             status="planned",
             backend=backend,
+            nm_helper_path=str(nm_helper_path),
             max_seconds=AP_MODE_MAX_SECONDS,
             privileged_actions_enabled=privileged_actions_enabled(),
             dangerous_real_apply=dangerous_real_apply,
@@ -991,6 +994,7 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
             "action": action,
             "ap_started": False,
             "backend": backend,
+            "nm_helper_path": str(nm_helper_path),
             "dry_run": dry_run,
             "privileged_actions_enabled": privileged_actions_enabled(),
             "dangerous_real_apply": dangerous_real_apply,
@@ -1018,7 +1022,14 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
         env["WIFI_KIT_RUNTIME_CONFIG"] = str(RUNTIME_CONFIG_PATH)
         env["WIFI_KIT_AP_PSK"] = config["ap_password"]
         env["WIFI_KIT_AP_SSID"] = config["ap_ssid"]
-        append_action_log(START_AP_MODE_LOG, action=action, status="starting", backend=backend, ap_ssid=config["ap_ssid"])
+        append_action_log(
+            START_AP_MODE_LOG,
+            action=action,
+            status="starting",
+            backend=backend,
+            nm_helper_path=str(nm_helper_path),
+            ap_ssid=config["ap_ssid"],
+        )
         try:
             with open_action_log(START_AP_MODE_LOG) as handle:
                 result = subprocess.run(
@@ -1032,11 +1043,19 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
                     env=env,
                 )
         except (OSError, subprocess.TimeoutExpired) as exc:
-            append_action_log(START_AP_MODE_LOG, action=action, status="failure", backend=backend, error=f"start-failed: {exc}")
+            append_action_log(
+                START_AP_MODE_LOG,
+                action=action,
+                status="failure",
+                backend=backend,
+                nm_helper_path=str(nm_helper_path),
+                error=f"start-failed: {exc}",
+            )
             return {
                 "status": "failure",
                 "action": action,
                 "backend": backend,
+                "nm_helper_path": str(nm_helper_path),
                 "error": f"start-failed: {exc}",
                 "ap_started": False,
                 "log": str(START_AP_MODE_LOG),
@@ -1049,6 +1068,7 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
             action=action,
             status="done" if success else "failure",
             backend=backend,
+            nm_helper_path=str(nm_helper_path),
             returncode=result.returncode,
             hotspot_active=status["hotspot_active"],
             ui_recovery_active=status["ui_recovery_active"],
@@ -1059,6 +1079,7 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
                 "status": "done",
                 "action": action,
                 "backend": backend,
+                "nm_helper_path": str(nm_helper_path),
                 "ap_started": True,
                 "ssid": config["ap_ssid"],
                 "hotspot_active": True,
@@ -1073,6 +1094,7 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
             "status": "failure",
             "action": action,
             "backend": backend,
+            "nm_helper_path": str(nm_helper_path),
             "error": "ap-recovery-not-active-after-start",
             "ap_started": False,
             "hotspot_active": status["hotspot_active"],
