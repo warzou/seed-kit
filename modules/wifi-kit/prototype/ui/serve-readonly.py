@@ -106,6 +106,7 @@ RETURN_DEFAULT_NETWORK_LOG = action_log_path("return-default-network")
 AP_RETURN_CHECK_ONCE_LOG = action_log_path("ap-return-check")
 SYSTEM_REBOOT_LOG = action_log_path("system-reboot")
 SYSTEM_SHUTDOWN_LOG = action_log_path("system-shutdown")
+UPDATE_INSTALL_LOG_ACTION = "update-install"
 SCAN_FROM_AP_LOG = action_log_path("scan-from-ap-recovery")
 SCAN_FROM_AP_CACHE = ACTION_LOG_DIR / "scan-from-ap-recovery-cache.json"
 SCAN_FROM_AP_RESTART_ATTEMPTS = 3
@@ -160,6 +161,7 @@ ACTION_PATHS = {
     "/api/ap-return-check-once": "ap-return-check-once",
     "/system-reboot": "reboot-system",
     "/system-shutdown": "shutdown-system",
+    "/updates/install": "updates-install",
     "/exit-recovery": "exit-recovery",
     "/reboot-recovery": "reboot-recovery",
     "/set-recovery-password": "set-recovery-password",
@@ -326,6 +328,38 @@ def git_output(repo: Path, *args: str, timeout: float = 3.0) -> tuple[str, str]:
     return result.stdout.strip(), ""
 
 
+def git_run_logged(repo: Path, log_path: Path, *args: str, timeout: float = 30.0) -> tuple[int, str]:
+    command_label = "git " + " ".join(args)
+    append_action_log(log_path, action=UPDATE_INSTALL_LOG_ACTION, status="command-start", command=command_label)
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), *args],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except FileNotFoundError:
+        append_action_log(log_path, action=UPDATE_INSTALL_LOG_ACTION, status="command-failed", command=command_label, error="git-not-found")
+        return 127, "git-not-found"
+    except subprocess.TimeoutExpired:
+        append_action_log(log_path, action=UPDATE_INSTALL_LOG_ACTION, status="command-failed", command=command_label, error="git-timeout")
+        return 124, "git-timeout"
+    except OSError as exc:
+        append_action_log(log_path, action=UPDATE_INSTALL_LOG_ACTION, status="command-failed", command=command_label, error=exc)
+        return 1, f"git-error: {exc}"
+    output = safe_label(result.stderr.strip() or result.stdout.strip())
+    append_action_log(
+        log_path,
+        action=UPDATE_INSTALL_LOG_ACTION,
+        status="command-done" if result.returncode == 0 else "command-failed",
+        command=command_label,
+        returncode=result.returncode,
+        output=output[:500],
+    )
+    return result.returncode, output
+
+
 def update_check_status() -> tuple[dict, int]:
     repo = find_git_repo_dir()
     if not repo:
@@ -409,6 +443,194 @@ def update_check_status() -> tuple[dict, int]:
         "install_available": False,
         "install_message": "Installation automatique non disponible dans ce lot.",
     }, 200
+
+
+def update_install(payload: dict) -> tuple[dict, int]:
+    action = "updates-install"
+    log_path = unique_action_log_path(UPDATE_INSTALL_LOG_ACTION)
+    user_confirmed = bool_payload(payload.get("user_confirmed")) or bool_payload(payload.get("confirmed"))
+    if not user_confirmed:
+        append_action_log(log_path, action=action, status="refused", reason="confirmation-required")
+        return {
+            "status": "refused",
+            "action": action,
+            "error": "confirmation-required",
+            "message": "Confirmation requise avant installation de mise a jour.",
+            "requires_user_confirmation": True,
+            "confirmation_kind": "checkbox",
+            "update_started": False,
+            "log": str(log_path),
+        }, 403
+
+    repo = find_git_repo_dir()
+    if not repo:
+        append_action_log(log_path, action=action, status="failure", reason="repo-not-found")
+        return {
+            "status": "failure",
+            "action": action,
+            "error": "repo-not-found",
+            "message": "Depot Git introuvable pour cette installation.",
+            "update_started": False,
+            "log": str(log_path),
+        }, 503
+
+    branch, branch_error = git_output(repo, "rev-parse", "--abbrev-ref", "HEAD")
+    local_before, commit_error = git_output(repo, "rev-parse", "HEAD")
+    remote, remote_error = git_output(repo, "remote", "get-url", "origin")
+    if branch_error or commit_error or remote_error or not branch or branch == "HEAD":
+        error = branch_error or commit_error or remote_error or "branch-unknown"
+        append_action_log(log_path, action=action, status="refused", reason=error, repo=repo)
+        return {
+            "status": "refused",
+            "action": action,
+            "error": error,
+            "message": "Branche Git courante inconnue ou non installable.",
+            "repo": str(repo),
+            "branch": branch,
+            "remote": redact_git_remote(remote),
+            "local_commit": local_before,
+            "local_commit_short": local_before[:12],
+            "update_started": False,
+            "log": str(log_path),
+        }, 409
+
+    dirty, dirty_error = git_output(repo, "status", "--porcelain")
+    if dirty_error:
+        append_action_log(log_path, action=action, status="failure", reason=dirty_error, repo=repo, branch=branch)
+        return {
+            "status": "failure",
+            "action": action,
+            "error": dirty_error,
+            "message": "Impossible de verifier l'etat propre du depot.",
+            "repo": str(repo),
+            "branch": branch,
+            "remote": redact_git_remote(remote),
+            "local_commit": local_before,
+            "local_commit_short": local_before[:12],
+            "update_started": False,
+            "log": str(log_path),
+        }, 500
+    if dirty:
+        append_action_log(log_path, action=action, status="refused", reason="repo-dirty", repo=repo, branch=branch)
+        return {
+            "status": "refused",
+            "action": action,
+            "error": "repo-dirty",
+            "message": "Depot local modifie: mise a jour refusee pour eviter d'ecraser du travail local.",
+            "repo": str(repo),
+            "branch": branch,
+            "remote": redact_git_remote(remote),
+            "local_commit": local_before,
+            "local_commit_short": local_before[:12],
+            "update_started": False,
+            "log": str(log_path),
+        }, 409
+
+    append_action_log(log_path, action=action, status="starting", repo=repo, branch=branch, local_commit=local_before[:12])
+    fetch_code, fetch_output = git_run_logged(repo, log_path, "fetch", "origin", branch, timeout=45.0)
+    if fetch_code != 0:
+        return {
+            "status": "failure",
+            "action": action,
+            "error": "git-fetch-failed",
+            "message": fetch_output or "git fetch a echoue.",
+            "repo": str(repo),
+            "branch": branch,
+            "remote": redact_git_remote(remote),
+            "local_commit": local_before,
+            "local_commit_short": local_before[:12],
+            "update_started": False,
+            "log": str(log_path),
+        }, 502
+
+    remote_commit, remote_error = git_output(repo, "rev-parse", f"origin/{branch}")
+    if remote_error:
+        return {
+            "status": "failure",
+            "action": action,
+            "error": remote_error,
+            "message": f"Impossible de lire origin/{branch} apres fetch.",
+            "repo": str(repo),
+            "branch": branch,
+            "remote": redact_git_remote(remote),
+            "local_commit": local_before,
+            "local_commit_short": local_before[:12],
+            "remote_commit": "",
+            "remote_commit_short": "",
+            "update_started": False,
+            "log": str(log_path),
+        }, 502
+
+    if local_before == remote_commit:
+        append_action_log(log_path, action=action, status="already-up-to-date", repo=repo, branch=branch, commit=local_before[:12])
+        return {
+            "status": "success",
+            "action": action,
+            "update_status": "already-up-to-date",
+            "message": "Depot deja a jour.",
+            "repo": str(repo),
+            "branch": branch,
+            "remote": redact_git_remote(remote),
+            "local_commit": local_before,
+            "local_commit_short": local_before[:12],
+            "remote_commit": remote_commit,
+            "remote_commit_short": remote_commit[:12],
+            "update_started": False,
+            "needs_reinstall": False,
+            "log": str(log_path),
+        }, 200
+
+    pull_code, pull_output = git_run_logged(repo, log_path, "pull", "--ff-only", "origin", branch, timeout=90.0)
+    local_after, after_error = git_output(repo, "rev-parse", "HEAD")
+    if pull_code != 0 or after_error:
+        return {
+            "status": "failure",
+            "action": action,
+            "error": "git-pull-ff-only-failed" if pull_code != 0 else after_error,
+            "message": pull_output or after_error or "git pull --ff-only a echoue.",
+            "repo": str(repo),
+            "branch": branch,
+            "remote": redact_git_remote(remote),
+            "local_commit_before": local_before,
+            "local_commit_before_short": local_before[:12],
+            "local_commit": local_after,
+            "local_commit_short": local_after[:12],
+            "remote_commit": remote_commit,
+            "remote_commit_short": remote_commit[:12],
+            "update_started": True,
+            "log": str(log_path),
+        }, 500
+
+    append_action_log(
+        log_path,
+        action=action,
+        status="updated",
+        repo=repo,
+        branch=branch,
+        before=local_before[:12],
+        after=local_after[:12],
+        needs_reinstall=True,
+    )
+    return {
+        "status": "success",
+        "action": action,
+        "update_status": "updated",
+        "message": "Mise a jour Git installee. Reinstallation runtime requise pour appliquer le nouveau backend /opt.",
+        "repo": str(repo),
+        "branch": branch,
+        "remote": redact_git_remote(remote),
+        "local_commit_before": local_before,
+        "local_commit_before_short": local_before[:12],
+        "local_commit": local_after,
+        "local_commit_short": local_after[:12],
+        "remote_commit": remote_commit,
+        "remote_commit_short": remote_commit[:12],
+        "update_started": True,
+        "needs_reinstall": True,
+        "reinstall_status": "planned",
+        "reinstall_message": "sudo reinstall non execute dans ce lot SAFE; lancer sh seed-kit.sh install wifi-kit pour deployer /opt.",
+        "log": str(log_path),
+    }, 202
 
 
 def safe_label(value: str, *, fallback: str = "") -> str:
@@ -3129,6 +3351,11 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
             self.send_json(payload, status=status)
             return
 
+        if path == "/updates/install":
+            payload, status = update_install(parse_post_payload(self))
+            self.send_action_json("updates-install", payload, status=status)
+            return
+
         if path == "/api/runtime-config":
             payload, status = update_runtime_config(parse_post_payload(self))
             self.send_action_json("runtime-config", payload, status=status)
@@ -3222,7 +3449,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
 
         if path in ACTION_PATHS:
             action = ACTION_PATHS[path]
-            runtime_actions = {"reconnect-previous", "start-ap-mode", "return-default-network", "ap-return-check-once", "reboot-system", "shutdown-system"}
+            runtime_actions = {"reconnect-previous", "start-ap-mode", "return-default-network", "ap-return-check-once", "reboot-system", "shutdown-system", "updates-install"}
             self.send_json(
                 {
                     "status": "runtime-gated" if action in runtime_actions else "unavailable",

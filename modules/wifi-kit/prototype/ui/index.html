@@ -1895,6 +1895,10 @@
             <strong>Verifier les mises a jour</strong>
             <p>Compare le commit local avec la branche distante. Aucune installation automatique n'est lancee.</p>
             <button id="updates-check-button" class="button secondary" type="button">Verifier les mises a jour</button>
+            <label class="confirm-line">
+              <input id="updates-install-confirmed" type="checkbox" disabled>
+              Confirmer l'installation de la mise a jour
+            </label>
             <button id="updates-install-button" class="button secondary" type="button" disabled>Installer la mise a jour</button>
             <div id="updates-check-result" class="callout recovery-result" hidden></div>
           </div>
@@ -2096,6 +2100,7 @@
     let selectedNetwork = null;
     let selectedNetworkKey = null;
     let lastConnectionAttempt = null;
+    let lastUpdateCheck = null;
 
     function value(source, key) {
       return String(source?.[key] ?? 'inconnu');
@@ -2659,6 +2664,18 @@
       if (shutdownButton) shutdownButton.disabled = !shutdownOk;
     }
 
+    function updateInstallButton() {
+      const updateAvailable = lastUpdateCheck?.status === 'update-available';
+      const checkbox = document.getElementById('updates-install-confirmed');
+      const button = document.getElementById('updates-install-button');
+      const confirmed = Boolean(checkbox?.checked);
+      if (checkbox) {
+        checkbox.disabled = !updateAvailable;
+        if (!updateAvailable) checkbox.checked = false;
+      }
+      if (button) button.disabled = !(updateAvailable && confirmed);
+    }
+
     function returnConnectionLabel(connection, fallbackProfile = '') {
       const profile = connection?.profile || fallbackProfile || 'non configure';
       const ssid = connection?.ssid || runtimeConfig().return_ssid || profile;
@@ -3060,6 +3077,7 @@
           body: JSON.stringify({ read_only: true })
         });
         const payload = await response.json();
+        lastUpdateCheck = payload;
         const lines = [
           `Statut: ${updateStatusLabel(payload.status)}`,
           `Branche: ${payload.branch || 'inconnue'}`,
@@ -3071,13 +3089,78 @@
         }
         lines.push(payload.message || (response.ok ? 'Verification terminee.' : 'Verification impossible.'));
         showUpdateCheckResult(lines.join('\n'));
+        updateInstallButton();
       } catch (error) {
+        lastUpdateCheck = null;
         showUpdateCheckResult(`Verification des mises a jour indisponible: ${error.message}`);
+        updateInstallButton();
       } finally {
         if (button) {
           button.disabled = false;
           button.textContent = originalText;
         }
+      }
+    }
+
+    async function installUpdate() {
+      const button = document.getElementById('updates-install-button');
+      const originalText = button ? button.textContent : '';
+      if (window.location.protocol === 'file:') {
+        showUpdateCheckResult('Installation indisponible depuis cette page locale.');
+        return;
+      }
+      if (lastUpdateCheck?.status !== 'update-available') {
+        showUpdateCheckResult('Aucune mise a jour disponible verifiee. Relance la verification avant installation.');
+        updateInstallButton();
+        return;
+      }
+      if (!document.getElementById('updates-install-confirmed')?.checked) {
+        showUpdateCheckResult('Installation refusee: coche la confirmation.');
+        updateInstallButton();
+        return;
+      }
+      showUpdateCheckResult("Installation de la mise a jour. L'interface peut redemarrer.");
+      try {
+        if (button) {
+          button.disabled = true;
+          button.textContent = 'Installation...';
+        }
+        const response = await fetch('/updates/install', {
+          cache: 'no-store',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_confirmed: true,
+            expected_status: lastUpdateCheck.status,
+            expected_branch: lastUpdateCheck.branch || '',
+            expected_remote_commit: lastUpdateCheck.remote_commit || '',
+          })
+        });
+        const payload = await response.json();
+        const lines = [
+          payload.message || (response.ok ? 'Installation terminee.' : 'Installation refusee.'),
+          `Statut: ${payload.update_status || payload.status || 'inconnu'}`,
+          `Branche: ${payload.branch || lastUpdateCheck.branch || 'inconnue'}`,
+        ];
+        if (payload.local_commit_before_short) lines.push(`Avant: ${payload.local_commit_before_short}`);
+        if (payload.local_commit_short) lines.push(`Local: ${payload.local_commit_short}`);
+        if (payload.remote_commit_short) lines.push(`Distant: ${payload.remote_commit_short}`);
+        if (payload.needs_reinstall) lines.push(payload.reinstall_message || 'Reinstallation runtime requise.');
+        if (payload.log) lines.push(`Log: ${payload.log}`);
+        showUpdateCheckResult(lines.join('\n'));
+        if (payload.update_status === 'already-up-to-date') {
+          lastUpdateCheck = { ...lastUpdateCheck, status: 'up-to-date', local_commit: payload.local_commit, local_commit_short: payload.local_commit_short };
+        } else if (payload.update_status === 'updated') {
+          lastUpdateCheck = { ...lastUpdateCheck, status: 'up-to-date', local_commit: payload.local_commit, local_commit_short: payload.local_commit_short };
+        }
+      } catch (error) {
+        showUpdateCheckResult('Mise a jour lancee. Recharge la page dans quelques secondes.');
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = originalText;
+        }
+        updateInstallButton();
       }
     }
 
@@ -3761,6 +3844,8 @@
         node.addEventListener('input', updateSystemButtons);
       }
     });
+    document.getElementById('updates-install-confirmed')?.addEventListener('change', updateInstallButton);
+    document.getElementById('updates-install-confirmed')?.addEventListener('input', updateInstallButton);
     document.getElementById('recovery-save-config').addEventListener('click', saveRecoveryConfig);
     document.getElementById('recovery-return-dropdown-button').addEventListener('click', (event) => {
       event.stopPropagation();
@@ -3789,6 +3874,7 @@
       button.addEventListener('click', () => triggerSystemAction(button.dataset.systemAction));
     });
     document.getElementById('updates-check-button')?.addEventListener('click', checkUpdates);
+    document.getElementById('updates-install-button')?.addEventListener('click', installUpdate);
     document.querySelectorAll('[data-network-plan]').forEach((button) => {
       button.addEventListener('click', () => showNetworkActionResult(networkActionPlan(button.dataset.networkPlan)));
     });
