@@ -512,6 +512,15 @@
       background: linear-gradient(180deg, rgba(83, 220, 98, 0.09), rgba(35, 86, 80, 0.12));
     }
 
+    .network.ap-active {
+      border-color: rgba(68, 212, 230, 0.34);
+      background: linear-gradient(180deg, rgba(68, 212, 230, 0.1), rgba(32, 95, 186, 0.12));
+    }
+
+    .network.ap-active .network-name {
+      color: #9eeaf2;
+    }
+
     .network.selected { box-shadow: inset 0 0 0 1px rgba(68, 212, 230, 0.2); }
 
     .network.selected .network-main {
@@ -1670,6 +1679,7 @@
           <div class="metric"><span>DHCP</span><strong id="recovery-dhcp">...</strong></div>
           <div class="metric"><span>DNS captive</span><strong id="recovery-dns">...</strong></div>
           <div class="metric"><span>Interface</span><strong id="recovery-ui">...</strong></div>
+          <div class="metric"><span>Clients AP</span><strong id="recovery-clients">...</strong></div>
         </div>
         <div class="recovery-settings" aria-label="Configuration recovery">
           <div class="recovery-reassurance">
@@ -2307,6 +2317,72 @@
       return network?.ssid_hidden ? 'Reseau masque' : (network?.ssid || 'Reseau masque');
     }
 
+    function activeApSsid() {
+      const system = systemState();
+      const recovery = recoveryState();
+      return runtimeConfig().ap_ssid || recovery.ssid || system.recovery_ssid || 'Wifi-Kit-pocket-node';
+    }
+
+    function apClientLabel() {
+      const count = recoveryState().ap_client_count ?? systemState().ap_client_count;
+      if (count === null || count === undefined || count === '') return 'clients inconnus';
+      const numeric = Number(count);
+      if (!Number.isFinite(numeric)) return 'clients inconnus';
+      return numeric === 1 ? '1 client connecte' : `${numeric} clients connectes`;
+    }
+
+    function isRecoveryApNetwork(network) {
+      const system = systemState();
+      const recovery = recoveryState();
+      if (!Boolean(system.recovery_active || recovery.active)) return false;
+      return displaySsid(network) === activeApSsid();
+    }
+
+    function buildActiveApCard() {
+      const row = document.createElement('div');
+      row.className = 'network ap-active current';
+      const main = document.createElement('div');
+      const left = document.createElement('div');
+      const center = document.createElement('div');
+      const right = document.createElement('div');
+      const orb = document.createElement('span');
+      const title = document.createElement('div');
+      const ssidText = document.createElement('span');
+      const connectedRow = document.createElement('div');
+      const connected = document.createElement('span');
+      const meta = document.createElement('p');
+      const state = document.createElement('strong');
+      const hint = document.createElement('div');
+
+      main.className = 'network-main has-active';
+      left.className = 'network-left';
+      center.className = 'network-center';
+      right.className = 'network-right';
+      orb.className = 'network-orb low';
+      orb.appendChild(makeIcon('shield'));
+      title.className = 'network-text';
+      ssidText.className = 'network-name';
+      ssidText.textContent = activeApSsid();
+      connectedRow.className = 'connected-row';
+      connected.className = 'network-connected-badge';
+      connected.textContent = 'AP actif';
+      connectedRow.appendChild(connected);
+      title.append(ssidText, connectedRow);
+      meta.className = 'network-meta';
+      meta.append(`Adresse ${recoveryState().ip || systemState().recovery_ip || '192.168.50.1'}`, document.createElement('span'));
+      meta.lastChild.textContent = apClientLabel();
+      state.textContent = 'Recovery';
+      hint.className = 'signal-quality';
+      hint.textContent = 'Wi-Fi temporaire du node';
+
+      center.append(title, meta);
+      left.append(orb);
+      right.append(state, hint);
+      main.append(left, center, right);
+      row.append(main);
+      return row;
+    }
+
     function securityRequiresPassword(security) {
       const normalized = String(security || '').trim().toLowerCase();
       return !['', 'open', 'none', '--', 'unknown', 'inconnu'].includes(normalized);
@@ -2338,6 +2414,7 @@
       document.getElementById('recovery-dhcp').textContent = serviceLabel(recovery.dhcp);
       document.getElementById('recovery-dns').textContent = serviceLabel(recovery.dns);
       document.getElementById('recovery-ui').textContent = `${serviceLabel(recovery.ui)}:${recovery.ui_port || 80}`;
+      setText('recovery-clients', apClientLabel());
       setInputValue('recovery-ap-ssid-input', apSsid);
       setInputValue('recovery-ap-password-input', apPassword);
       const returnCheckEnabled = String(config.return_check_enabled || 'false') === 'true';
@@ -3183,10 +3260,13 @@
       const target = document.getElementById('network-list');
       const message = document.getElementById('scan-message');
       const scan = data.scan || {};
-      const networks = displayedScanNetworks(scan);
+      const activeAp = Boolean(systemState().recovery_active || recoveryState().active);
+      const networks = displayedScanNetworks(scan).filter((network) => !isRecoveryApNetwork(network));
+      setText('network-title', activeAp ? 'Wi-Fi disponibles' : 'Se connecter a un Wi-Fi');
       document.getElementById('scan-source').textContent = describeScanBackend(scan);
       document.getElementById('scan-status').textContent = describeScanStatus(scan, networks);
       target.innerHTML = '';
+      if (activeAp) target.append(buildActiveApCard());
 
       if (networks.length === 0) {
         message.hidden = false;
@@ -3198,7 +3278,9 @@
         const body = document.createElement('p');
         title.textContent = 'Aucun reseau affiche';
         body.className = 'empty';
-        body.textContent = 'La connexion actuelle reste preservee. Scanne plus tard ou ouvre les diagnostics.';
+        body.textContent = activeAp
+          ? "Aucun autre Wi-Fi affiche. L'AP recovery reste actif; relance le scan si besoin."
+          : 'La connexion actuelle reste preservee. Scanne plus tard ou ouvre les diagnostics.';
         placeholder.append(title, body);
         target.append(placeholder);
         target.append(buildHiddenNetworkPanel());

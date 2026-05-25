@@ -2481,6 +2481,36 @@ def wlan_connection() -> str:
     return "unknown"
 
 
+def ap_client_count() -> int | None:
+    clients: set[str] = set()
+    observed_source = False
+    lease_paths = [
+        Path("/var/lib/NetworkManager/dnsmasq-wlan0.leases"),
+        Path("/var/lib/NetworkManager/dnsmasq-wifi-kit-recovery-ap.leases"),
+        Path("/tmp/wifi-kit-dnsmasq-test.leases"),
+    ]
+    for path in lease_paths:
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            observed_source = True
+            for line in lines:
+                parts = line.split()
+                if len(parts) >= 3:
+                    clients.add(parts[1].lower())
+        except OSError:
+            continue
+    try:
+        lines = Path("/proc/net/arp").read_text(encoding="utf-8", errors="replace").splitlines()[1:]
+        observed_source = True
+        for line in lines:
+            parts = line.split()
+            if len(parts) >= 4 and parts[0].startswith("192.168.50.") and parts[3] != "00:00:00:00:00:00":
+                clients.add(parts[3].lower())
+    except OSError:
+        pass
+    return len(clients) if observed_source else None
+
+
 def system_info(diagnose: dict, recovery: dict | None = None) -> dict:
     recovery = recovery or {}
     config = read_runtime_config()
@@ -2513,6 +2543,7 @@ def system_info(diagnose: dict, recovery: dict | None = None) -> dict:
         "ui_state": recovery.get("ui") or "read-only",
         "recovery_ssid": recovery_ssid,
         "recovery_ip": recovery.get("ip") or "192.168.50.1",
+        "ap_client_count": recovery.get("ap_client_count"),
         "normal_ui_port": NORMAL_UI_PORT,
         "recovery_ui_port": RECOVERY_UI_PORT,
         "recovery_ap_password_policy": "min-8-chars",
@@ -2586,6 +2617,7 @@ def ui_data(recovery: dict | None = None) -> dict:
         recovery_payload["runtime_recovery_instability_threshold"] = config.get("runtime_recovery_instability_threshold", "3")
         recovery_payload["runtime_watchdog"] = runtime_watchdog_status()
         recovery_payload["runtime_config_path"] = str(RUNTIME_CONFIG_PATH)
+    recovery_payload["ap_client_count"] = ap_client_count() if recovery_active else None
     return {
         "diagnose": diagnose,
         "snapshot": snapshot,
