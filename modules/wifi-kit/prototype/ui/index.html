@@ -209,7 +209,7 @@
 
     .overview-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 8px;
       align-items: stretch;
     }
@@ -1664,6 +1664,7 @@
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Hostname</span><strong id="status-hostname">...</strong></div></div>
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-location"></use></svg></span><div><span>Adresse IP</span><strong id="status-ip">...</strong></div></div>
         <div id="status-wifi-card" class="status-mini wifi-status-normal"><span class="status-icon"><svg class="icon-svg"><use href="#icon-wifi"></use></svg></span><div><span id="status-wifi-label">Wi-Fi (normal)</span><strong id="status-ssid">...</strong></div></div>
+        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Clients connect&eacute;s</span><strong id="status-clients">...</strong></div></div>
       </div>
     </section>
 
@@ -2247,6 +2248,7 @@
       document.getElementById('status-hostname').textContent = hostname;
       document.getElementById('status-ip').textContent = formatIpSummary(ip);
       document.getElementById('status-ssid').textContent = ssid;
+      setText('status-clients', apClientLabel());
       if (wifiLabel) wifiLabel.textContent = transitioning ? 'Wi-Fi (transition)' : activeAp ? 'Wi-Fi (AP)' : 'Wi-Fi (normal)';
       if (wifiCard) {
         wifiCard.classList.toggle('wifi-status-normal', !activeAp && !transitioning);
