@@ -105,6 +105,7 @@ SCAN_FROM_AP_LOG = action_log_path("scan-from-ap-recovery")
 SCAN_FROM_AP_CACHE = ACTION_LOG_DIR / "scan-from-ap-recovery-cache.json"
 SCAN_FROM_AP_RESTART_ATTEMPTS = 3
 SCAN_FROM_AP_RESTART_DELAY_SECONDS = 3
+NM_AP_LAB_PROFILE = "wifi-kit-recovery-ap"
 DEFAULT_NETWORK_CONNECTION = "netplan-wlan0-GL-MT6000-d53"
 AP_MODE_MAX_SECONDS = 300
 PRIVILEGED_ACTIONS_ENV = "WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS"
@@ -1290,6 +1291,10 @@ def scan(refresh: bool = False) -> dict:
 
 
 def nmcli_wifi_list(nmcli_bin: str) -> tuple[list[dict], str]:
+    return nmcli_wifi_list_with_rescan(nmcli_bin, rescan="no")
+
+
+def nmcli_wifi_list_with_rescan(nmcli_bin: str, *, rescan: str) -> tuple[list[dict], str]:
     result = subprocess.run(
         [
             nmcli_bin,
@@ -1302,7 +1307,7 @@ def nmcli_wifi_list(nmcli_bin: str) -> tuple[list[dict], str]:
             "wifi",
             "list",
             "--rescan",
-            "no",
+            rescan,
         ],
         check=False,
         capture_output=True,
@@ -1420,6 +1425,108 @@ def networkmanager_scan(refresh: bool = True) -> dict:
         "refresh_status": "ok" if refresh else "not-requested",
         "networks": networks,
     }
+
+
+def nm_hotspot_recovery_active() -> bool:
+    if os.environ.get("WIFI_KIT_RECOVERY_BACKEND") == "nm-hotspot" or os.environ.get("WIFI_KIT_NM_AP_LAB") == "1":
+        return True
+    output = run_text_command(
+        ["nmcli", "-t", "--escape", "no", "-f", "NAME,TYPE,DEVICE", "connection", "show", "--active"],
+        timeout=3.0,
+    )
+    for line in output.splitlines():
+        name, typ, device = (line.split(":") + ["", "", ""])[:3]
+        if name == NM_AP_LAB_PROFILE and typ in {"wifi", "802-11-wireless"} and device == "wlan0":
+            return True
+    return False
+
+
+def nm_hotspot_scan(refresh: bool = True) -> dict:
+    action = "scan-from-ap-recovery"
+    nmcli_bin = find_tool("nmcli") or "nmcli"
+    append_action_log(
+        SCAN_FROM_AP_LOG,
+        action=action,
+        status="nmcli-scan-start",
+        scan_mode="nm-hotspot-nondisruptive",
+        no_ap_stop=True,
+        refresh=refresh,
+    )
+    try:
+        networks, error = nmcli_wifi_list_with_rescan(nmcli_bin, rescan="yes" if refresh else "no")
+    except subprocess.TimeoutExpired as exc:
+        append_action_log(
+            SCAN_FROM_AP_LOG,
+            action=action,
+            status="nmcli-scan-failed",
+            scan_mode="nm-hotspot-nondisruptive",
+            no_ap_stop=True,
+            error=exc,
+        )
+        return {
+            "status": "unavailable",
+            "backend": "networkmanager-hotspot",
+            "scan_mode": "nm-hotspot-nondisruptive",
+            "reason": "nmcli-scan-timeout",
+            "stderr": str(exc),
+            "refresh_attempted": refresh,
+            "refresh_status": "failed",
+            "ap_recovery_scan": True,
+            "ap_recovery_interrupted": False,
+            "ap_recovery_disconnects_clients": False,
+            "no_ap_stop": True,
+            "networks": [],
+        }
+    if error:
+        append_action_log(
+            SCAN_FROM_AP_LOG,
+            action=action,
+            status="nmcli-scan-failed",
+            scan_mode="nm-hotspot-nondisruptive",
+            no_ap_stop=True,
+            error=error,
+        )
+        return {
+            "status": "unavailable",
+            "backend": "networkmanager-hotspot",
+            "scan_mode": "nm-hotspot-nondisruptive",
+            "reason": "nmcli-scan-failed",
+            "stderr": error,
+            "refresh_attempted": refresh,
+            "refresh_status": "failed",
+            "ap_recovery_scan": True,
+            "ap_recovery_interrupted": False,
+            "ap_recovery_disconnects_clients": False,
+            "no_ap_stop": True,
+            "networks": [],
+        }
+    payload = {
+        "status": "ok",
+        "backend": "networkmanager-hotspot",
+        "scan_mode": "nm-hotspot-nondisruptive",
+        "reason": "nm-hotspot-scan-ok",
+        "interface": "wlan0",
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "refresh_attempted": refresh,
+        "refresh_status": "ok" if refresh else "not-requested",
+        "ap_recovery_scan": True,
+        "ap_recovery_interrupted": False,
+        "ap_recovery_disconnects_clients": False,
+        "no_ap_stop": True,
+        "message": "Scan experimental sans coupure AP. Si l'AP disparait, c'est probablement une limite driver/NM, pas un stop volontaire du backend.",
+        "log": str(SCAN_FROM_AP_LOG),
+        "networks": networks,
+    }
+    write_json_file(SCAN_FROM_AP_CACHE, payload)
+    append_action_log(
+        SCAN_FROM_AP_LOG,
+        action=action,
+        status="nmcli-scan-result",
+        scan_mode="nm-hotspot-nondisruptive",
+        no_ap_stop=True,
+        network_count=len(networks),
+    )
+    return payload
 
 
 def ap_scan_worker_env() -> dict[str, str]:
@@ -1598,6 +1705,8 @@ def start_ap_recovery_scan() -> dict:
 
 def wifi_scan(refresh: bool = True, recovery_active: bool = False) -> dict:
     if recovery_active:
+        if nm_hotspot_recovery_active():
+            return nm_hotspot_scan(refresh=refresh)
         if refresh:
             return start_ap_recovery_scan()
         cached = read_scan_from_ap_cache()
