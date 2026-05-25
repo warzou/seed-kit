@@ -2762,6 +2762,78 @@ def render_index(recovery: dict | None = None) -> str:
     return f"{before}{start}\n{data}\n  {end}{after}"
 
 
+def render_portal(recovery: dict | None = None) -> str:
+    recovery = recovery or {}
+    recovery_ip = recovery.get("ip") or "192.168.50.1"
+    recovery_url = f"http://{recovery_ip}/recovery"
+    return f"""<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wifi-Kit</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f4f7fb;
+      color: #142033;
+    }}
+    body {{
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      box-sizing: border-box;
+    }}
+    main {{
+      width: min(100%, 420px);
+      display: grid;
+      gap: 16px;
+      text-align: center;
+    }}
+    h1 {{
+      margin: 0;
+      font-size: 2rem;
+      line-height: 1.05;
+    }}
+    p {{
+      margin: 0;
+      color: #4d5b70;
+      font-size: 1rem;
+      line-height: 1.45;
+    }}
+    a.button {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      border-radius: 8px;
+      background: #1769e0;
+      color: white;
+      padding: 0 18px;
+      font-weight: 800;
+      text-decoration: none;
+    }}
+    a.link {{
+      color: #1769e0;
+      overflow-wrap: anywhere;
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Wifi-Kit</h1>
+    <p>Configure le Wi-Fi de ce node.</p>
+    <a class="button" href="{recovery_url}">Ouvrir la configuration Wi-Fi</a>
+    <p><a class="link" href="{recovery_url}">{recovery_url}</a></p>
+  </main>
+</body>
+</html>
+"""
+
+
 class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
     server_version = "wifi-kit-readonly/0"
 
@@ -2794,7 +2866,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def send_captive_redirect(self, raw_path: str, path: str) -> None:
-        target = "/recovery"
+        target = "/portal"
         log_route("captive-route-hit", raw_path, f"{path}->{target}")
         self.send_redirect(target)
 
@@ -2901,6 +2973,10 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
 
         if path in CAPTIVE_PATHS:
             self.send_captive_redirect(raw_path, path)
+            return
+
+        if path == "/portal":
+            self.send_bytes(200, "text/html; charset=utf-8", render_portal(self.recovery).encode("utf-8"))
             return
 
         if path in ("/", "/index.html", "/recovery"):
