@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -1787,6 +1788,196 @@ def connect_wrapper_stdin_lines(
     return lines
 
 
+def safe_nm_profile_name(ssid: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", ssid).strip("-._")
+    return f"wifi-kit-known-{safe[:48] or 'wifi'}"
+
+
+def classify_nmcli_connect_error(text: str) -> str:
+    lowered = text.lower()
+    if "secrets were required" in lowered or "no secrets" in lowered or "password" in lowered:
+        return "wrong-password"
+    if "not found" in lowered or "no network with ssid" in lowered or "ssid" in lowered:
+        return "network-not-found"
+    if "timeout" in lowered or "timed out" in lowered:
+        return "timeout"
+    return "nmcli-error"
+
+
+def restore_nm_hotspot_after_connect_failure(log_path: Path) -> bool:
+    nmcli_bin = find_tool("nmcli") or "nmcli"
+    append_action_log(
+        log_path,
+        action="nm-hotspot-connect",
+        status="nm-hotspot-restore-start",
+        hotspot_profile=NM_AP_LAB_PROFILE,
+    )
+    try:
+        result = subprocess.run(
+            [nmcli_bin, "connection", "up", NM_AP_LAB_PROFILE, "ifname", "wlan0"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=25,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        append_action_log(
+            log_path,
+            action="nm-hotspot-connect",
+            status="nm-hotspot-restore-failed",
+            error=exc,
+        )
+        return False
+    restored = result.returncode == 0
+    append_action_log(
+        log_path,
+        action="nm-hotspot-connect",
+        status="nm-hotspot-restored-after-failure" if restored else "nm-hotspot-restore-failed",
+        returncode=result.returncode,
+        detail=short_command_error(result),
+    )
+    return restored
+
+
+def nm_hotspot_wifi_connect(payload: dict) -> tuple[dict, int]:
+    connect_log = unique_action_log_path("nm-hotspot-connect")
+
+    def refused(error: str, http_status: int = 400, **extra: object) -> tuple[dict, int]:
+        append_action_log(connect_log, action="nm-hotspot-connect", status="refused", error=error)
+        response = {
+            "status": "failure",
+            "action": "nm-hotspot-connect",
+            "error": error,
+            "connect_started": False,
+            "log": str(connect_log),
+        }
+        response.update(extra)
+        return response, http_status
+
+    if payload.get("_error"):
+        return refused(str(payload["_error"]))
+    ssid = str(payload.get("ssid", "")).strip()
+    password = str(payload.get("password", ""))
+    known_profile = str(payload.get("known_profile", "")).strip()
+    security = str(payload.get("security", "")).strip()
+    user_confirmed = bool_payload(payload.get("user_confirmed")) or bool_payload(payload.get("confirmed"))
+    if not ssid:
+        return refused("missing-ssid")
+    if len(ssid.encode("utf-8")) > 32:
+        return refused("ssid-too-long", requested_ssid=ssid)
+    if not user_confirmed:
+        return refused("user-confirmation-required", requested_ssid=ssid, recovery_mode="nm-hotspot")
+    known_connection = known_connection_for_ssid(ssid, known_profile) if known_profile else None
+    existing_connection = str(known_connection.get("profile", "")) if known_connection else ""
+    if security_requires_password(security) and not password and not existing_connection:
+        return refused("missing-password", requested_ssid=ssid)
+    if password == SAVED_NM_SECRET_PLACEHOLDER:
+        return refused("saved-secret-placeholder-requires-known-profile", requested_ssid=ssid)
+    if password and len(password) < 8:
+        return refused("password-too-short", requested_ssid=ssid)
+
+    nmcli_bin = find_tool("nmcli") or "nmcli"
+    target_connection = existing_connection or safe_nm_profile_name(ssid)
+    command = (
+        [nmcli_bin, "connection", "up", existing_connection, "ifname", "wlan0"]
+        if existing_connection
+        else [nmcli_bin, "--wait", "30", "device", "wifi", "connect", ssid, "ifname", "wlan0", "name", target_connection]
+    )
+    if not existing_connection and security_requires_password(security):
+        command.extend(["password", password])
+
+    append_action_log(
+        connect_log,
+        action="nm-hotspot-connect",
+        status="nm-hotspot-connect-start",
+        ssid=ssid,
+        connection=target_connection,
+        existing_connection=existing_connection or "none",
+        secret_policy="runtime-only-or-existing-profile; secret not logged",
+    )
+    try:
+        result = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=45,
+        )
+    except subprocess.TimeoutExpired as exc:
+        append_action_log(connect_log, action="nm-hotspot-connect", status="nm-hotspot-connect-failed", error="timeout")
+        restored = restore_nm_hotspot_after_connect_failure(connect_log)
+        return {
+            "status": "failure",
+            "action": "nm-hotspot-connect",
+            "error": "timeout",
+            "requested_ssid": ssid,
+            "connection": target_connection,
+            "connect_started": True,
+            "hotspot_restored": restored,
+            "log": str(connect_log),
+            "message": "Connexion timeout; le hotspot NM recovery a ete relance.",
+            "connect_plan": [
+                "NM hotspot recovery actif",
+                "test de connexion NetworkManager vers le SSID demande",
+                "timeout: relance du profil hotspot recovery",
+            ],
+        }, 504
+    if result.returncode == 0:
+        append_action_log(
+            connect_log,
+            action="nm-hotspot-connect",
+            status="nm-hotspot-connect-success",
+            ssid=ssid,
+            connection=target_connection,
+        )
+        return {
+            "status": "done",
+            "action": "nm-hotspot-connect",
+            "requested_ssid": ssid,
+            "connection": target_connection,
+            "connect_started": True,
+            "hotspot_expected_to_disappear": True,
+            "log": str(connect_log),
+            "message": f"Connexion reussie vers {ssid}. Le hotspot recovery peut disparaitre, c'est attendu.",
+            "connect_plan": [
+                "NM hotspot recovery actif",
+                "test de connexion NetworkManager vers le SSID demande",
+                "succes: bascule en mode client normal",
+            ],
+        }, 200
+
+    detail = short_command_error(result)
+    error = classify_nmcli_connect_error(detail)
+    append_action_log(
+        connect_log,
+        action="nm-hotspot-connect",
+        status="nm-hotspot-connect-failed",
+        ssid=ssid,
+        connection=target_connection,
+        error=error,
+        returncode=result.returncode,
+        detail=detail,
+    )
+    restored = restore_nm_hotspot_after_connect_failure(connect_log)
+    return {
+        "status": "failure",
+        "action": "nm-hotspot-connect",
+        "error": error,
+        "requested_ssid": ssid,
+        "connection": target_connection,
+        "connect_started": True,
+        "hotspot_restored": restored,
+        "stderr": detail,
+        "log": str(connect_log),
+        "message": f"Connexion impossible ({error}); le hotspot NM recovery reste disponible.",
+        "connect_plan": [
+            "NM hotspot recovery actif",
+            "test de connexion NetworkManager vers le SSID demande",
+            "echec: relance du profil hotspot recovery",
+        ],
+    }, 502
+
+
 def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[dict, int]:
     connect_transaction_log = unique_action_log_path("connect-transaction-ui")
 
@@ -2342,7 +2533,12 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         path = normalize_request_path(raw_path)
         log_route("post", raw_path, path)
         if path == "/wifi/connect":
-            payload, status = start_recovery_wifi_connect(parse_post_payload(self), bool(self.recovery.get("active")))
+            post_payload = parse_post_payload(self)
+            if bool(self.recovery.get("active")) and nm_hotspot_recovery_active():
+                payload, status = nm_hotspot_wifi_connect(post_payload)
+                self.send_action_json("nm-hotspot-connect", payload, status=status)
+                return
+            payload, status = start_recovery_wifi_connect(post_payload, bool(self.recovery.get("active")))
             self.send_action_json("wifi-connect-transaction", payload, status=status)
             return
 

@@ -3059,11 +3059,13 @@
     function renderConnectResponse(payload, plan) {
       plan.replaceChildren();
       const title = document.createElement('strong');
-      title.textContent = payload.connect_started
+      title.textContent = payload.status === 'done' || payload.ok === true
+        ? `Connexion reussie: ${payload.requested_ssid || 'SSID inconnu'}`
+        : payload.connect_started
         ? `Connexion en cours: ${payload.requested_ssid || 'SSID inconnu'}`
         : payload.status === 'planned'
         ? `Connexion planifiee: ${payload.requested_ssid || 'SSID inconnu'}`
-        : `Connexion refusee: ${payload.message || payload.error || payload.status}`;
+        : `Connexion impossible: ${payload.message || payload.error || payload.status}`;
       const list = document.createElement('ul');
       list.className = 'safe-lines';
       const lines = payload.connect_plan || [
@@ -3082,7 +3084,9 @@
       });
       const note = document.createElement('p');
       note.className = 'field-hint';
-      note.textContent = payload.connect_started
+      note.textContent = payload.status === 'done' || payload.ok === true
+        ? (payload.message || 'Connexion reussie. Le portail recovery peut disparaitre.')
+        : payload.connect_started
         ? "Tentative de connexion en cours... si la connexion réussit, le portail disparaîtra. En cas d'echec, le mode recovery revient pour une nouvelle tentative."
         : payload.message || payload.secret_policy || payload.warning_if_recovery_active || 'Connexion non validée, le mode recovery reste actif.';
       plan.append(title, list, note);
