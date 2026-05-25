@@ -6,6 +6,7 @@ ap_setup_script="$script_dir/ap-setup-test.sh"
 connect_transaction_script="$script_dir/wifi-kit-connect-transaction.sh"
 ap_return_check_script="$script_dir/wifi-kit-ap-return-check.sh"
 nm_ap_lab_script="$script_dir/wifi-kit-nm-ap-lab.sh"
+repo_dir_file="$script_dir/repo-dir"
 log_file="/tmp/wifi-kit-action-wrapper.log"
 ui_connect_log="${WIFI_KIT_CONNECT_UI_LOG:-}"
 runtime_config="${WIFI_KIT_RUNTIME_CONFIG:-}"
@@ -16,6 +17,24 @@ ap_timeout_seconds="300"
 connect_timeout_seconds="180"
 reboot_cmd="/sbin/reboot"
 shutdown_cmd="/sbin/poweroff"
+
+default_repo_dir() {
+  if [ -r "$repo_dir_file" ]; then
+    repo_value=$(sed -n '1p' "$repo_dir_file" 2>/dev/null || true)
+    if [ -n "$repo_value" ]; then
+      printf '%s\n' "$repo_value"
+      return 0
+    fi
+  fi
+  if [ -n "${WIFI_KIT_REPO_DIR:-}" ]; then
+    printf '%s\n' "$WIFI_KIT_REPO_DIR"
+    return 0
+  fi
+  printf '%s\n' "$script_dir"
+}
+
+repo_dir=$(default_repo_dir)
+runtime_installer="$repo_dir/modules/wifi-kit/install-wifi-kit-runtime.sh"
 
 timestamp() {
   date -u +"%Y-%m-%dT%H:%M:%SZ"
@@ -197,6 +216,34 @@ read_system_power_request() {
   done
 }
 
+read_reinstall_runtime_request() {
+  reinstall_confirmed="false"
+  reinstall_dangerous_real_apply="false"
+  reinstall_dry_run="false"
+  [ -t 0 ] && return 0
+  while IFS= read -r line; do
+    key=${line%%=*}
+    value=${line#*=}
+    [ "$key" != "$line" ] || continue
+    safe_line_value "$key" "$value"
+    case "$key" in
+      user_confirmed) reinstall_confirmed=$value ;;
+      dangerous_real_apply) reinstall_dangerous_real_apply=$value ;;
+      dry_run) reinstall_dry_run=$value ;;
+      *) ;;
+    esac
+  done
+}
+
+validate_runtime_installer() {
+  case "$repo_dir" in
+    /*) ;;
+    *) log_event "$1" "refused" "repo-dir-not-absolute"; reply "refused" "$1" "repo-dir-not-absolute"; exit 2 ;;
+  esac
+  [ -d "$repo_dir" ] || { log_event "$1" "failure" "repo-dir-missing=$repo_dir"; reply "failure" "$1" "repo-dir-missing"; exit 1; }
+  [ -f "$runtime_installer" ] || { log_event "$1" "failure" "runtime-installer-missing=$runtime_installer"; reply "failure" "$1" "runtime-installer-missing"; exit 1; }
+}
+
 require_root() {
   if [ "$(id -u)" != "0" ]; then
     log_event "$1" "refused" "root-required"
@@ -207,7 +254,7 @@ require_root() {
 
 if [ "$#" -ne 1 ]; then
   log_event "unknown" "refused" "usage"
-  reply "refused" "unknown" "usage: wifi-kit-action-wrapper.sh start-ap-mode|return-default-network|connect-wifi|ap-return-check-once|reboot-system|shutdown-system"
+  reply "refused" "unknown" "usage: wifi-kit-action-wrapper.sh start-ap-mode|return-default-network|connect-wifi|ap-return-check-once|reboot-system|shutdown-system|reinstall-runtime"
   exit 2
 fi
 
@@ -318,6 +365,28 @@ case "$action" in
     WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$ap_return_check_script" stop-loop >/dev/null 2>&1 || true
     log_event "$action" "started" "mode=run-once"
     WIFI_KIT_RUNTIME_CONFIG="$runtime_config" exec sh "$ap_return_check_script" run-once
+    ;;
+  reinstall-runtime)
+    read_reinstall_runtime_request
+    require_root "$action"
+    if [ "$reinstall_confirmed" != "true" ] && [ "$reinstall_confirmed" != "1" ]; then
+      log_event "$action" "refused" "confirmation-required"
+      reply "refused" "$action" "confirmation-required"
+      exit 2
+    fi
+    if [ "$reinstall_dangerous_real_apply" != "true" ] && [ "$reinstall_dangerous_real_apply" != "1" ]; then
+      log_event "$action" "planned" "dangerous-real-apply-required"
+      reply "planned" "$action" "dangerous-real-apply-required"
+      exit 0
+    fi
+    validate_runtime_installer "$action"
+    if [ "$reinstall_dry_run" = "true" ] || [ "$reinstall_dry_run" = "1" ]; then
+      log_event "$action" "planned" "repo_dir=$repo_dir installer=$runtime_installer"
+      reply "planned" "$action" "repo_dir=$repo_dir installer=$runtime_installer"
+      exit 0
+    fi
+    log_event "$action" "started" "repo_dir=$repo_dir installer=$runtime_installer"
+    exec sh "$runtime_installer" install --reinstall
     ;;
   reboot-system)
     read_system_power_request

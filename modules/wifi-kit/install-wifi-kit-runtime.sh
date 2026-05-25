@@ -214,7 +214,7 @@ render_sudoers() {
 # Wifi-Kit runtime sudoers.
 # Managed by install-wifi-kit-runtime.sh.
 # No shell, wildcard, nmcli, systemctl, hostapd, dnsmasq, or direct reboot grant.
-$install_user ALL=(root) NOPASSWD: $app_dir/wifi-kit-action-wrapper.sh start-ap-mode, $app_dir/wifi-kit-action-wrapper.sh return-default-network, $app_dir/wifi-kit-action-wrapper.sh connect-wifi, $app_dir/wifi-kit-action-wrapper.sh ap-return-check-once, $app_dir/wifi-kit-action-wrapper.sh reboot-system, $app_dir/wifi-kit-action-wrapper.sh shutdown-system
+$install_user ALL=(root) NOPASSWD: $app_dir/wifi-kit-action-wrapper.sh start-ap-mode, $app_dir/wifi-kit-action-wrapper.sh return-default-network, $app_dir/wifi-kit-action-wrapper.sh connect-wifi, $app_dir/wifi-kit-action-wrapper.sh ap-return-check-once, $app_dir/wifi-kit-action-wrapper.sh reboot-system, $app_dir/wifi-kit-action-wrapper.sh shutdown-system, $app_dir/wifi-kit-action-wrapper.sh reinstall-runtime
 EOF
 }
 
@@ -382,6 +382,9 @@ cmd_install() {
   copy_file "prototype/wifi-kit-nm-ap-lab.sh" "$app_dir/wifi-kit-nm-ap-lab.sh" 0755
   copy_file "prototype/ui/serve-readonly.py" "$ui_dir/serve-readonly.py" 0755
   copy_file "prototype/ui/index.html" "$ui_dir/index.html" 0644
+  printf '%s\n' "$repo_dir" > "$app_dir/repo-dir"
+  chown root:root "$app_dir/repo-dir"
+  chmod 0644 "$app_dir/repo-dir"
   kv "files" "installed"
 
   ensure_runtime_config

@@ -445,6 +445,73 @@ def update_check_status() -> tuple[dict, int]:
     }, 200
 
 
+def run_runtime_reinstall(log_path: Path) -> tuple[dict[str, object], int]:
+    action = "reinstall-runtime"
+    if not privileged_actions_enabled():
+        append_action_log(log_path, action=action, status="planned", reason="privileged-actions-disabled")
+        return {
+            "reinstall_status": "planned",
+            "reinstall_message": "Reinstallation runtime non executee: actions privilegiees desactivees.",
+            "reinstall_started": False,
+        }, 200
+
+    command, error = privileged_action_command(action)
+    if error:
+        append_action_log(log_path, action=action, status="failure", error=error)
+        return {
+            "reinstall_status": "failed",
+            "reinstall_error": error,
+            "reinstall_message": privileged_error_response(action, error)["message"],
+            "reinstall_started": False,
+        }, 403 if error == "wifi-kit-network-rights-not-installed" else 500
+
+    append_action_log(log_path, action=action, status="starting")
+    try:
+        with open_action_log(log_path) as handle:
+            result = subprocess.run(
+                command,
+                cwd=str(SCRIPT_DIR.parent),
+                check=False,
+                input=(
+                    "user_confirmed=true\n"
+                    "dangerous_real_apply=true\n"
+                ),
+                stdout=handle,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=180,
+            )
+    except subprocess.TimeoutExpired:
+        append_action_log(log_path, action=action, status="failure", error="reinstall-timeout")
+        return {
+            "reinstall_status": "failed",
+            "reinstall_error": "reinstall-timeout",
+            "reinstall_message": "Reinstallation runtime timeout.",
+            "reinstall_started": True,
+        }, 504
+    except OSError as exc:
+        append_action_log(log_path, action=action, status="failure", error=f"start-failed: {exc}")
+        return {
+            "reinstall_status": "failed",
+            "reinstall_error": f"start-failed: {exc}",
+            "reinstall_message": "Impossible de lancer la reinstallation runtime.",
+            "reinstall_started": False,
+        }, 500
+
+    reinstall_status = "success" if result.returncode == 0 else "failed"
+    append_action_log(log_path, action=action, status=reinstall_status, returncode=result.returncode)
+    return {
+        "reinstall_status": reinstall_status,
+        "reinstall_returncode": result.returncode,
+        "reinstall_started": True,
+        "reinstall_message": (
+            "Runtime reinstalle; l'interface peut redemarrer."
+            if result.returncode == 0
+            else "Reinstallation runtime refusee ou echouee; voir le log."
+        ),
+    }, 200 if result.returncode == 0 else 500
+
+
 def update_install(payload: dict) -> tuple[dict, int]:
     action = "updates-install"
     log_path = unique_action_log_path(UPDATE_INSTALL_LOG_ACTION)
@@ -563,11 +630,16 @@ def update_install(payload: dict) -> tuple[dict, int]:
 
     if local_before == remote_commit:
         append_action_log(log_path, action=action, status="already-up-to-date", repo=repo, branch=branch, commit=local_before[:12])
+        reinstall_payload, reinstall_http_status = run_runtime_reinstall(log_path)
         return {
-            "status": "success",
+            "status": "success" if reinstall_http_status == 200 else "failure",
             "action": action,
             "update_status": "already-up-to-date",
-            "message": "Depot deja a jour.",
+            "message": (
+                "Depot deja a jour, runtime reinstalle."
+                if reinstall_payload.get("reinstall_status") == "success"
+                else "Depot deja a jour; reinstallation runtime non terminee."
+            ),
             "repo": str(repo),
             "branch": branch,
             "remote": redact_git_remote(remote),
@@ -576,9 +648,9 @@ def update_install(payload: dict) -> tuple[dict, int]:
             "remote_commit": remote_commit,
             "remote_commit_short": remote_commit[:12],
             "update_started": False,
-            "needs_reinstall": False,
             "log": str(log_path),
-        }, 200
+            **reinstall_payload,
+        }, 200 if reinstall_http_status == 200 else reinstall_http_status
 
     pull_code, pull_output = git_run_logged(repo, log_path, "pull", "--ff-only", "origin", branch, timeout=90.0)
     local_after, after_error = git_output(repo, "rev-parse", "HEAD")
@@ -611,11 +683,16 @@ def update_install(payload: dict) -> tuple[dict, int]:
         after=local_after[:12],
         needs_reinstall=True,
     )
+    reinstall_payload, reinstall_http_status = run_runtime_reinstall(log_path)
     return {
-        "status": "success",
+        "status": "success" if reinstall_http_status == 200 else "failure",
         "action": action,
         "update_status": "updated",
-        "message": "Mise a jour Git installee. Reinstallation runtime requise pour appliquer le nouveau backend /opt.",
+        "message": (
+            "Mise a jour installee et runtime reinstalle."
+            if reinstall_payload.get("reinstall_status") == "success"
+            else "Mise a jour Git installee; reinstallation runtime non terminee."
+        ),
         "repo": str(repo),
         "branch": branch,
         "remote": redact_git_remote(remote),
@@ -626,11 +703,9 @@ def update_install(payload: dict) -> tuple[dict, int]:
         "remote_commit": remote_commit,
         "remote_commit_short": remote_commit[:12],
         "update_started": True,
-        "needs_reinstall": True,
-        "reinstall_status": "planned",
-        "reinstall_message": "sudo reinstall non execute dans ce lot SAFE; lancer sh seed-kit.sh install wifi-kit pour deployer /opt.",
         "log": str(log_path),
-    }, 202
+        **reinstall_payload,
+    }, 202 if reinstall_http_status == 200 else reinstall_http_status
 
 
 def safe_label(value: str, *, fallback: str = "") -> str:

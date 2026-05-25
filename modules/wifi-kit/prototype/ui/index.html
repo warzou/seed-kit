@@ -3145,6 +3145,8 @@
         if (payload.local_commit_before_short) lines.push(`Avant: ${payload.local_commit_before_short}`);
         if (payload.local_commit_short) lines.push(`Local: ${payload.local_commit_short}`);
         if (payload.remote_commit_short) lines.push(`Distant: ${payload.remote_commit_short}`);
+        if (payload.reinstall_status) lines.push(`Reinstallation runtime: ${payload.reinstall_status}`);
+        if (payload.reinstall_message) lines.push(payload.reinstall_message);
         if (payload.needs_reinstall) lines.push(payload.reinstall_message || 'Reinstallation runtime requise.');
         if (payload.log) lines.push(`Log: ${payload.log}`);
         showUpdateCheckResult(lines.join('\n'));
