@@ -343,8 +343,37 @@ Print the candidate config without writing it:
 sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-enable-dry-run
 ```
 
-The first captive lab lot is intentionally dry-run only. It proposes a
-NetworkManager shared-mode dnsmasq snippet under:
+Check installed captive DNS state:
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-status
+```
+
+Prepare activation. Dry-run is the default:
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-enable
+```
+
+Real apply is explicit:
+
+```sh
+WIFI_KIT_NM_AP_LAB_APPLY=1 sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-enable
+```
+
+Disable the Wifi-Kit-generated file. Dry-run is the default:
+
+```sh
+sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-disable
+```
+
+Real disable is explicit:
+
+```sh
+WIFI_KIT_NM_AP_LAB_APPLY=1 sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-disable
+```
+
+The captive lab uses a NetworkManager shared-mode dnsmasq snippet under:
 
 ```sh
 /etc/NetworkManager/dnsmasq-shared.d/wifi-kit-nm-hotspot-captive.conf
@@ -358,10 +387,17 @@ with explicit mappings for:
 - `connectivitycheck.gstatic.com`;
 - `clients3.google.com`.
 
-Do not enable the DNS snippet automatically with `start-hotspot` yet. A future
-controlled lab should write the file, reconnect the NM hotspot if required, and
-validate Windows/iOS/Android captive behavior before making it part of the
-normal NM-hotspot flow.
+`captive-enable` creates the directory if needed, writes the file, and backs up
+an existing different file before replacement. It does not restart
+NetworkManager and does not reconnect the hotspot automatically.
+
+`captive-disable` only renames the target file when it contains the Wifi-Kit
+marker. It refuses to move an unrelated file.
+
+Do not enable the DNS snippet automatically with `start-hotspot` yet. After a
+real `captive-enable`, reconnect the NM hotspot only in a controlled lab window
+and then validate Windows/iOS/Android captive behavior before making it part of
+the normal NM-hotspot flow.
 
 ## NetworkManager Diagnostic Commands
 

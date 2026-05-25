@@ -47,6 +47,9 @@ Captive portal lab modes, dry-run/read-only only in this first lot:
   sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-audit
   sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-plan
   sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-enable-dry-run
+  sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-enable
+  sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-disable
+  sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-status
 
 By default this helper only prints commands. To run a concrete lab mode on a
 disposable node, set WIFI_KIT_NM_AP_LAB_APPLY=1 explicitly. It never stores
@@ -185,6 +188,43 @@ print_captive_dnsmasq_config() {
     "address=/captive.apple.com/$ip" \
     "address=/connectivitycheck.gstatic.com/$ip" \
     "address=/clients3.google.com/$ip"
+}
+
+captive_conf_generated() {
+  path=$(captive_conf_path)
+  [ -r "$path" ] || return 1
+  grep -q "Wifi-Kit NM-hotspot captive DNS lab" "$path" 2>/dev/null
+}
+
+captive_conf_expected_ok() {
+  path=$(captive_conf_path)
+  ip=$(captive_ap_ip)
+  [ -r "$path" ] || return 1
+  grep -qxF "# Wifi-Kit NM-hotspot captive DNS lab." "$path" 2>/dev/null || return 1
+  captive_domains | while IFS= read -r domain; do
+    [ -n "$domain" ] || continue
+    grep -qxF "address=/$domain/$ip" "$path" 2>/dev/null || exit 1
+  done
+}
+
+captive_disabled_count() {
+  path=$(captive_conf_path)
+  count=0
+  for disabled in "$path".disabled*; do
+    [ -e "$disabled" ] || continue
+    count=$((count + 1))
+  done
+  printf '%s\n' "$count"
+}
+
+captive_backup_path() {
+  path=$(captive_conf_path)
+  printf '%s.backup.%s\n' "$path" "$(date -u +%Y%m%dT%H%M%SZ)"
+}
+
+captive_disabled_path() {
+  path=$(captive_conf_path)
+  printf '%s.disabled.%s\n' "$path" "$(date -u +%Y%m%dT%H%M%SZ)"
 }
 
 pid_is_alive() {
@@ -501,6 +541,123 @@ cmd_captive_enable_dry_run() {
   kv "android" "connect to NM hotspot and verify generate_204/connectivitycheck probe reaches recovery UI"
 }
 
+cmd_captive_status() {
+  path=$(captive_conf_path)
+  section "nm-ap-lab-captive-status"
+  kv "status" "ok"
+  kv "network_writes" "false"
+  kv "candidate_conf_dir" "$captive_conf_dir"
+  kv "candidate_conf_path" "$path"
+  if [ -d "$captive_conf_dir" ]; then
+    kv "candidate_conf_dir_exists" "true"
+  else
+    kv "candidate_conf_dir_exists" "false"
+  fi
+  if [ -e "$path" ]; then
+    kv "candidate_conf_exists" "true"
+  else
+    kv "candidate_conf_exists" "false"
+  fi
+  if captive_conf_generated; then
+    kv "candidate_conf_generated_by_wifi_kit" "true"
+  else
+    kv "candidate_conf_generated_by_wifi_kit" "false"
+  fi
+  if captive_conf_expected_ok; then
+    kv "candidate_conf_expected_content" "ok"
+  else
+    kv "candidate_conf_expected_content" "missing-or-different"
+  fi
+  kv "disabled_versions_count" "$(captive_disabled_count)"
+  kv "activation_note" "NetworkManager shared-mode dnsmasq will see this only after the NM hotspot is started or reconnected"
+  kv "global_restart" "not-required-and-not-performed"
+}
+
+cmd_captive_enable() {
+  path=$(captive_conf_path)
+  tmp="$path.tmp.$$"
+  section "nm-ap-lab-captive-enable"
+  kv "status" "$([ "$apply" = "1" ] && printf applying || printf dry-run)"
+  kv "network_writes" "$([ "$apply" = "1" ] && printf true || printf false)"
+  kv "candidate_conf_dir" "$captive_conf_dir"
+  kv "candidate_conf_path" "$path"
+  if [ -d "$captive_conf_dir" ]; then
+    kv "candidate_conf_dir_exists" "true"
+  else
+    kv "candidate_conf_dir_exists" "false"
+  fi
+  if [ -e "$path" ]; then
+    kv "candidate_conf_exists" "true"
+  else
+    kv "candidate_conf_exists" "false"
+  fi
+  if captive_conf_expected_ok; then
+    kv "candidate_conf_expected_content" "ok"
+  else
+    kv "candidate_conf_expected_content" "missing-or-different"
+  fi
+  kv "command_01" "mkdir -p $captive_conf_dir"
+  kv "command_02" "write Wifi-Kit captive dnsmasq config to $path"
+  kv "command_03" "chmod 0644 $path"
+  kv "networkmanager_restart" "no"
+  kv "hotspot_reconnect" "no"
+  section "would-write"
+  print_captive_dnsmasq_config
+
+  if [ "$apply" = "1" ]; then
+    mkdir -p "$captive_conf_dir"
+    print_captive_dnsmasq_config > "$tmp"
+    chmod 0644 "$tmp"
+    if [ -e "$path" ] && ! cmp -s "$path" "$tmp"; then
+      backup=$(captive_backup_path)
+      cp -p "$path" "$backup"
+      kv "backup" "$backup"
+    fi
+    mv "$tmp" "$path"
+    chmod 0644 "$path"
+    kv "result" "captive-conf-installed"
+    kv "next_step" "restart or reconnect only the NM hotspot in a controlled lab window"
+  fi
+}
+
+cmd_captive_disable() {
+  path=$(captive_conf_path)
+  section "nm-ap-lab-captive-disable"
+  kv "status" "$([ "$apply" = "1" ] && printf applying || printf dry-run)"
+  kv "network_writes" "$([ "$apply" = "1" ] && printf true || printf false)"
+  kv "candidate_conf_path" "$path"
+  if [ -e "$path" ]; then
+    kv "candidate_conf_exists" "true"
+  else
+    kv "candidate_conf_exists" "false"
+  fi
+  if captive_conf_generated; then
+    kv "candidate_conf_generated_by_wifi_kit" "true"
+  else
+    kv "candidate_conf_generated_by_wifi_kit" "false"
+  fi
+  kv "command" "rename $path to ${path}.disabled.<timestamp> only if generated by Wifi-Kit"
+  kv "networkmanager_restart" "no"
+  kv "hotspot_reconnect" "no"
+
+  if [ "$apply" = "1" ]; then
+    if [ ! -e "$path" ]; then
+      kv "result" "already-disabled"
+      return 0
+    fi
+    if ! captive_conf_generated; then
+      kv "result" "refused"
+      kv "reason" "existing-file-not-generated-by-wifi-kit"
+      exit 1
+    fi
+    disabled=$(captive_disabled_path)
+    mv "$path" "$disabled"
+    kv "result" "captive-conf-disabled"
+    kv "disabled_path" "$disabled"
+    kv "next_step" "restart or reconnect only the NM hotspot in a controlled lab window"
+  fi
+}
+
 cmd_simulate_test_connection() {
   section "nm-ap-lab-simulate-test-connection"
   kv "status" "planned"
@@ -747,6 +904,9 @@ case "$1" in
   captive-audit) cmd_captive_audit ;;
   captive-plan) cmd_captive_plan ;;
   captive-enable-dry-run) cmd_captive_enable_dry_run ;;
+  captive-enable) cmd_captive_enable ;;
+  captive-disable) cmd_captive_disable ;;
+  captive-status) cmd_captive_status ;;
   -h|--help|help) usage ;;
   *)
     usage
