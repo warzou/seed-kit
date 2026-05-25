@@ -706,6 +706,10 @@ cmd_start_hotspot() {
   kv "follow_up_command" "$(ui_start_command "$ssid")"
   if [ "$apply" = "1" ]; then
     nmcli_bin=$(require_apply_tool nmcli)
+    if ! connection_exists "$ap_profile"; then
+      kv "profile" "missing-create-before-start"
+      cmd_create_profile
+    fi
     "$nmcli_bin" connection up "$ap_profile" ifname "$iface"
     kv "result" "hotspot-start-requested"
     cmd_start_ui

@@ -36,6 +36,7 @@ RECOVERY_AP_TEST_PASSWORD = "12345678"
 AP_ONLY_NM_STATE = Path("/tmp/wifi-kit-ap-only-nm-state")
 RECOVERY_UI_PID = Path("/tmp/wifi-kit-ui-recovery.pid")
 RECOVERY_HOSTAPD_PID = Path("/tmp/wifi-kit-hostapd-test.pid")
+NM_AP_LAB_UI_PID = Path("/tmp/wifi-kit-nm-ap-lab-ui.pid")
 RUNTIME_CONFIG_PATH = Path(
     os.environ.get("WIFI_KIT_RUNTIME_CONFIG", str(Path.home() / ".config" / "wifi-kit" / "runtime.conf"))
 )
@@ -107,6 +108,7 @@ SCAN_FROM_AP_CACHE = ACTION_LOG_DIR / "scan-from-ap-recovery-cache.json"
 SCAN_FROM_AP_RESTART_ATTEMPTS = 3
 SCAN_FROM_AP_RESTART_DELAY_SECONDS = 3
 NM_AP_LAB_PROFILE = "wifi-kit-recovery-ap"
+AP_MODE_BACKEND = os.environ.get("WIFI_KIT_AP_BACKEND", "nm-hotspot")
 DEFAULT_NETWORK_CONNECTION = "netplan-wlan0-GL-MT6000-d53"
 AP_MODE_MAX_SECONDS = 300
 PRIVILEGED_ACTIONS_ENV = "WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS"
@@ -966,11 +968,13 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
     ap_confirmed = bool_payload(payload.get("ap_confirmed")) or bool_payload(payload.get("confirm"))
     action = "start-ap-mode"
     config = read_runtime_config()
+    backend = str(payload.get("backend") or AP_MODE_BACKEND or "nm-hotspot").strip()
     if dry_run or not privileged_actions_enabled() or not dangerous_real_apply or not ap_confirmed:
         append_action_log(
             START_AP_MODE_LOG,
             action=action,
             status="planned",
+            backend=backend,
             max_seconds=AP_MODE_MAX_SECONDS,
             privileged_actions_enabled=privileged_actions_enabled(),
             dangerous_real_apply=dangerous_real_apply,
@@ -981,6 +985,7 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
             "status": "planned",
             "action": action,
             "ap_started": False,
+            "backend": backend,
             "dry_run": dry_run,
             "privileged_actions_enabled": privileged_actions_enabled(),
             "dangerous_real_apply": dangerous_real_apply,
@@ -1000,6 +1005,78 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
         payload = privileged_error_response(action, error)
         payload.update({"ap_started": False, "log": str(START_AP_MODE_LOG)})
         return payload, 403 if error == "wifi-kit-network-rights-not-installed" else 500
+
+    if backend == "nm-hotspot":
+        env = os.environ.copy()
+        env["WIFI_KIT_AP_BACKEND"] = "nm-hotspot"
+        env["WIFI_KIT_NM_AP_LAB_APPLY"] = "1"
+        env["WIFI_KIT_RUNTIME_CONFIG"] = str(RUNTIME_CONFIG_PATH)
+        env["WIFI_KIT_AP_PSK"] = config["ap_password"]
+        env["WIFI_KIT_AP_SSID"] = config["ap_ssid"]
+        append_action_log(START_AP_MODE_LOG, action=action, status="starting", backend=backend, ap_ssid=config["ap_ssid"])
+        try:
+            with open_action_log(START_AP_MODE_LOG) as handle:
+                result = subprocess.run(
+                    command,
+                    cwd=str(SCRIPT_DIR.parent),
+                    check=False,
+                    stdout=handle,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    timeout=70,
+                    env=env,
+                )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            append_action_log(START_AP_MODE_LOG, action=action, status="failure", backend=backend, error=f"start-failed: {exc}")
+            return {
+                "status": "failure",
+                "action": action,
+                "backend": backend,
+                "error": f"start-failed: {exc}",
+                "ap_started": False,
+                "log": str(START_AP_MODE_LOG),
+            }, 500
+
+        status = nm_hotspot_recovery_status()
+        success = result.returncode == 0 and bool(status["hotspot_active"]) and bool(status["ui_recovery_active"]) and bool(status["port_80_listening"])
+        append_action_log(
+            START_AP_MODE_LOG,
+            action=action,
+            status="done" if success else "failure",
+            backend=backend,
+            returncode=result.returncode,
+            hotspot_active=status["hotspot_active"],
+            ui_recovery_active=status["ui_recovery_active"],
+            port_80_listening=status["port_80_listening"],
+        )
+        if success:
+            return {
+                "status": "done",
+                "action": action,
+                "backend": backend,
+                "ap_started": True,
+                "ssid": config["ap_ssid"],
+                "hotspot_active": True,
+                "ui_recovery_active": True,
+                "port_80_listening": True,
+                "recovery_url": "http://192.168.50.1:80",
+                "expected_behavior": "nm-hotspot-recovery-ui-active",
+                "secret_policy": "AP password is supplied from runtime config and not logged by this endpoint",
+                "log": str(START_AP_MODE_LOG),
+            }, 200
+        return {
+            "status": "failure",
+            "action": action,
+            "backend": backend,
+            "error": "ap-recovery-not-active-after-start",
+            "ap_started": False,
+            "hotspot_active": status["hotspot_active"],
+            "ui_recovery_active": status["ui_recovery_active"],
+            "port_80_listening": status["port_80_listening"],
+            "returncode": result.returncode,
+            "message": "Mode AP non confirme par l'etat runtime reel.",
+            "log": str(START_AP_MODE_LOG),
+        }, 502
 
     try:
         env = os.environ.copy()
@@ -1024,10 +1101,11 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
             "log": str(START_AP_MODE_LOG),
         }, 500
 
-    append_action_log(START_AP_MODE_LOG, action=action, status="started", max_seconds=AP_MODE_MAX_SECONDS, ap_ssid=config["ap_ssid"])
+    append_action_log(START_AP_MODE_LOG, action=action, status="started", backend=backend, max_seconds=AP_MODE_MAX_SECONDS, ap_ssid=config["ap_ssid"])
     return {
         "status": "started",
         "action": action,
+        "backend": backend,
         "ap_started": True,
         "ssid": config["ap_ssid"],
         "timeout_seconds": AP_MODE_MAX_SECONDS,
@@ -1441,6 +1519,24 @@ def nm_hotspot_recovery_active() -> bool:
         if name == NM_AP_LAB_PROFILE and typ in {"wifi", "802-11-wireless"} and device == "wlan0":
             return True
     return False
+
+
+def tcp_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def nm_hotspot_recovery_status() -> dict[str, bool]:
+    port_80_listening = tcp_port_open("192.168.50.1", 80)
+    ui_recovery_active = pid_is_alive(NM_AP_LAB_UI_PID, ("serve-readonly.py", "--recovery-mode")) or port_80_listening
+    return {
+        "hotspot_active": nm_hotspot_recovery_active(),
+        "ui_recovery_active": ui_recovery_active,
+        "port_80_listening": port_80_listening,
+    }
 
 
 def nm_hotspot_scan(refresh: bool = True) -> dict:

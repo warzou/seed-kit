@@ -2757,7 +2757,7 @@
         }
         if (action === 'start-ap-mode') {
           showNetworkActionResult(responsePayload.ap_started
-            ? `Mode AP en cours de demarrage: ${responsePayload.ssid || 'Wifi-Kit-node'}. Cette page normale peut devenir inaccessible.`
+            ? `Mode AP valide: ${responsePayload.ssid || 'Wifi-Kit-node'} actif, UI recovery disponible sur ${responsePayload.recovery_url || 'http://192.168.50.1:80'}.`
             : `Mode AP non lance: ${responsePayload.message || responsePayload.error || responsePayload.status}.`);
           return;
         }

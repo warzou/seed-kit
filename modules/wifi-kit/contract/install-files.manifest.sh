@@ -35,6 +35,7 @@ prototype/wifi-kit-recovery-guard.sh|/opt/seed-kit/wifi-kit/wifi-kit-recovery-gu
 prototype/wifi-kit-action-wrapper.sh|/opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh|root:root|0755|privileged-action-wrapper
 prototype/wifi-kit-ap-return-check.sh|/opt/seed-kit/wifi-kit/wifi-kit-ap-return-check.sh|root:root|0755|ap-return-check-helper
 prototype/wifi-kit-runtime-watchdog.sh|/opt/seed-kit/wifi-kit/wifi-kit-runtime-watchdog.sh|root:root|0755|runtime-recovery-watchdog
+prototype/wifi-kit-nm-ap-lab.sh|/opt/seed-kit/wifi-kit/wifi-kit-nm-ap-lab.sh|root:root|0755|networkmanager-ap-lab-helper
 '
 
 WIFI_KIT_INSTALL_CONFIG_POLICY='

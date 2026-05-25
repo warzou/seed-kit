@@ -5,6 +5,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ap_setup_script="$script_dir/ap-setup-test.sh"
 connect_transaction_script="$script_dir/wifi-kit-connect-transaction.sh"
 ap_return_check_script="$script_dir/wifi-kit-ap-return-check.sh"
+nm_ap_lab_script="$script_dir/wifi-kit-nm-ap-lab.sh"
 log_file="/tmp/wifi-kit-action-wrapper.log"
 ui_connect_log="${WIFI_KIT_CONNECT_UI_LOG:-}"
 runtime_config="${WIFI_KIT_RUNTIME_CONFIG:-}"
@@ -195,6 +196,15 @@ ap_ssid="${WIFI_KIT_AP_SSID:-$(runtime_config_value ap_ssid "")}"
 case "$action" in
   start-ap-mode)
     require_root "$action"
+    if [ "${WIFI_KIT_AP_BACKEND:-}" = "nm-hotspot" ]; then
+      if [ ! -f "$nm_ap_lab_script" ]; then
+        log_event "$action" "failure" "nm-ap-lab-missing"
+        reply "failure" "$action" "nm-ap-lab-missing"
+        exit 1
+      fi
+      log_event "$action" "started" "backend=nm-hotspot"
+      WIFI_KIT_RUNTIME_CONFIG="$runtime_config" WIFI_KIT_NM_AP_LAB_APPLY=1 exec sh "$nm_ap_lab_script" start-hotspot
+    fi
     if [ ! -f "$ap_setup_script" ]; then
       log_event "$action" "failure" "ap-setup-test-missing"
       reply "failure" "$action" "ap-setup-test-missing"
