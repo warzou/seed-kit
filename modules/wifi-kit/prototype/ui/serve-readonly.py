@@ -965,7 +965,12 @@ def privileged_error_response(action: str, error: str) -> dict[str, object]:
 def start_ap_mode(payload: dict) -> tuple[dict, int]:
     dry_run = bool_payload(payload.get("dry_run"))
     dangerous_real_apply = bool_payload(payload.get("dangerous_real_apply"))
-    ap_confirmed = bool_payload(payload.get("ap_confirmed")) or bool_payload(payload.get("confirm"))
+    ap_confirmed = (
+        bool_payload(payload.get("ap_confirmed"))
+        or bool_payload(payload.get("user_confirmed"))
+        or bool_payload(payload.get("confirmed"))
+        or bool_payload(payload.get("confirm"))
+    )
     action = "start-ap-mode"
     config = read_runtime_config()
     backend = str(payload.get("backend") or AP_MODE_BACKEND or "nm-hotspot").strip()

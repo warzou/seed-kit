@@ -2754,6 +2754,7 @@
           }
           requestPayload.dangerous_real_apply = true;
           requestPayload.ap_confirmed = true;
+          requestPayload.user_confirmed = true;
         }
         const response = await fetch(`/${action}`, {
           cache: 'no-store',
