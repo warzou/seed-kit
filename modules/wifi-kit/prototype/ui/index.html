@@ -905,6 +905,12 @@
       font-weight: 750;
     }
 
+    .prep-summary.saved-secret-warning {
+      border-color: rgba(242, 121, 121, 0.24);
+      background: rgba(242, 121, 121, 0.08);
+      color: #ffd1d1;
+    }
+
     .password-local {
       width: 100%;
       min-height: 48px;
@@ -2188,6 +2194,16 @@
       return 'inconnu';
     }
 
+    function formatConnectAttemptDate(value) {
+      if (!value) return '';
+      const timestamp = Date.parse(value);
+      if (!Number.isFinite(timestamp)) return '';
+      return new Intl.DateTimeFormat('fr-FR', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }).format(new Date(timestamp));
+    }
+
     function setText(id, text) {
       const node = document.getElementById(id);
       if (node) node.textContent = String(text ?? 'inconnu');
@@ -3041,6 +3057,8 @@
       const ssid = displaySsid(network);
       const knownConnection = connectionBySsid(ssid);
       const knownProfileHasSecret = Boolean(knownConnection && securityRequiresPassword(network.security || ''));
+      const lastConnectFailed = Boolean(knownConnection?.last_connect_failed);
+      const lastConnectDate = formatConnectAttemptDate(knownConnection?.last_connect_timestamp || '');
 
       const passwordLabel = document.createElement('label');
       passwordLabel.className = 'field-label';
@@ -3048,8 +3066,8 @@
       const passwordHint = document.createElement('span');
       passwordHint.className = `field-hint${knownProfileHasSecret ? ' saved-secret' : ''}`;
       passwordHint.textContent = knownProfileHasSecret
-        ? 'Mot de passe déjà enregistré.'
-        : 'Runtime-only: non journalise, non persiste.';
+        ? 'Mot de passe d\u00e9j\u00e0 enregistr\u00e9.'
+        : 'Runtime-only: non journalis\u00e9, non persist\u00e9.';
       passwordLabel.appendChild(passwordHint);
       const password = document.createElement('input');
       password.className = 'password-local';
@@ -3074,10 +3092,18 @@
       }
 
       const summary = document.createElement('p');
-      summary.className = 'prep-summary';
-      summary.textContent = knownProfileHasSecret
-        ? `Mot de passe deja enregistre pour ce reseau. Laisse les asterisques pour reutiliser le profil ${knownConnection.profile}.`
-        : "Saisis le mot de passe au moment de la connexion. Il n'est pas stocke par Wifi-Kit.";
+      summary.className = `prep-summary${lastConnectFailed ? ' saved-secret-warning' : ''}`;
+      if (knownProfileHasSecret && lastConnectFailed) {
+        summary.textContent = [
+          'Mot de passe d\u00e9j\u00e0 enregistr\u00e9 pour ce r\u00e9seau.',
+          `Attention : la derni\u00e8re tentative de connexion a \u00e9chou\u00e9${lastConnectDate ? ` (${lastConnectDate})` : ''}.`,
+          `Tu peux r\u00e9utiliser le mot de passe enregistr\u00e9 (********) via le profil ${knownConnection.profile}, ou en saisir un nouveau.`,
+        ].join(' ');
+      } else {
+        summary.textContent = knownProfileHasSecret
+          ? `Mot de passe d\u00e9j\u00e0 enregistr\u00e9 pour ce r\u00e9seau. Laisse les ast\u00e9risques pour r\u00e9utiliser le profil ${knownConnection.profile}, ou saisis un nouveau mot de passe.`
+          : "Saisis le mot de passe au moment de la connexion. Il n'est pas stock\u00e9 par Wifi-Kit.";
+      }
 
       const planDetails = document.createElement('details');
       planDetails.className = 'inline-plan';
@@ -3105,7 +3131,7 @@
           password.value = '';
           password.dataset.savedSecretEditing = 'true';
           passwordHint.classList.remove('saved-secret');
-          passwordHint.textContent = 'Nouveau mot de passe runtime-only, non journalise.';
+          passwordHint.textContent = 'Nouveau mot de passe runtime-only, non journalis\u00e9.';
         }
       });
       password.addEventListener('blur', () => {
@@ -3114,7 +3140,7 @@
           password.dataset.savedSecretIndicator = 'true';
           delete password.dataset.savedSecretEditing;
           passwordHint.classList.add('saved-secret');
-          passwordHint.textContent = 'Mot de passe déjà enregistré.';
+          passwordHint.textContent = 'Mot de passe d\u00e9j\u00e0 enregistr\u00e9.';
         }
       });
       password.addEventListener('input', () => {

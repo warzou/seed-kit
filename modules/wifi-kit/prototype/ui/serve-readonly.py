@@ -783,6 +783,73 @@ def append_action_log(path: Path, *, action: str, status: str, **fields: object)
         pass
 
 
+def parse_log_value(raw: str) -> str:
+    raw = raw.strip()
+    if not raw:
+        return ""
+    if raw[0] == '"':
+        try:
+            return str(json.loads(raw))
+        except json.JSONDecodeError:
+            return raw.strip('"')
+    return raw.strip("'\"")
+
+
+def parse_action_log_line(line: str) -> dict[str, str]:
+    parsed: dict[str, str] = {}
+    for match in re.finditer(r"([A-Za-z0-9_]+)=('(?:[^']*)'|\"(?:\\.|[^\"])*\"|[^ ]+)", line):
+        parsed[match.group(1)] = parse_log_value(match.group(2))
+    return parsed
+
+
+def wifi_connect_attempts_by_ssid() -> dict[str, dict[str, str]]:
+    attempts: dict[str, dict[str, str]] = {}
+    failure_statuses = {
+        "failure",
+        "failed",
+        "refused",
+        "validation-failed",
+        "connect-failed",
+        "nm-hotspot-connect-failed",
+    }
+    success_statuses = {"success", "done", "nm-hotspot-connect-success"}
+    try:
+        log_paths = list(ACTION_LOG_DIR.glob("*connect*.log"))
+    except OSError:
+        return attempts
+
+    def log_mtime(path: Path) -> float:
+        try:
+            return path.stat().st_mtime
+        except OSError:
+            return 0.0
+
+    for path in sorted(log_paths, key=log_mtime):
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            fields = parse_action_log_line(line)
+            action = fields.get("action", "")
+            if action not in {"wifi-connect-transaction", "connect-transaction", "nm-hotspot-connect"}:
+                continue
+            ssid = fields.get("ssid") or fields.get("requested_ssid") or fields.get("target_ssid")
+            if not ssid or ssid == "unknown":
+                continue
+            status = fields.get("status", "")
+            if status not in failure_statuses and status not in success_statuses:
+                continue
+            attempts[ssid] = {
+                "last_connect_status": status,
+                "last_connect_failed": "true" if status in failure_statuses else "false",
+                "last_connect_error": fields.get("error") or fields.get("reason") or fields.get("detail") or "",
+                "last_connect_timestamp": fields.get("timestamp", ""),
+                "last_connect_log": str(path),
+            }
+    return attempts
+
+
 def write_json_file(path: Path, payload: dict) -> None:
     ensure_action_log_parent(path)
     tmp_path = path.with_suffix(path.suffix + ".tmp")
@@ -2521,6 +2588,7 @@ def known_wifi_connections(scan: dict | None = None) -> list[dict[str, object]]:
         timeout=4.0,
     )
     visible_ssids = scan_visible_ssids(scan)
+    connect_attempts = wifi_connect_attempts_by_ssid()
     connections: list[dict[str, object]] = []
     for line in output.splitlines():
         parts = line.split(":", 5)
@@ -2545,6 +2613,7 @@ def known_wifi_connections(scan: dict | None = None) -> list[dict[str, object]]:
                 ssid = nmcli_unescape(value)
                 break
         display_ssid = ssid or name
+        connect_attempt = connect_attempts.get(display_ssid, {})
         connections.append(
             {
                 "profile": name,
@@ -2558,6 +2627,10 @@ def known_wifi_connections(scan: dict | None = None) -> list[dict[str, object]]:
                 "active_bool": active.lower() == "yes",
                 "visible": display_ssid in visible_ssids if visible_ssids else False,
                 "visible_known": bool(visible_ssids),
+                "last_connect_failed": connect_attempt.get("last_connect_failed") == "true",
+                "last_connect_status": connect_attempt.get("last_connect_status", ""),
+                "last_connect_error": connect_attempt.get("last_connect_error", ""),
+                "last_connect_timestamp": connect_attempt.get("last_connect_timestamp", ""),
             }
         )
     return sorted(connections, key=lambda item: (str(item["ssid"]).lower(), str(item["profile"]).lower()))
