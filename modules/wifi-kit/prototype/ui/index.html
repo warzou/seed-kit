@@ -2665,15 +2665,20 @@
     }
 
     function updateInstallButton() {
-      const updateAvailable = lastUpdateCheck?.status === 'update-available';
+      const updateReady = ['update-available', 'up-to-date'].includes(lastUpdateCheck?.status);
       const checkbox = document.getElementById('updates-install-confirmed');
       const button = document.getElementById('updates-install-button');
       const confirmed = Boolean(checkbox?.checked);
       if (checkbox) {
-        checkbox.disabled = !updateAvailable;
-        if (!updateAvailable) checkbox.checked = false;
+        checkbox.disabled = !updateReady;
+        if (!updateReady) checkbox.checked = false;
       }
-      if (button) button.disabled = !(updateAvailable && confirmed);
+      if (button) {
+        button.textContent = lastUpdateCheck?.status === 'up-to-date'
+          ? 'Reinstaller le runtime'
+          : 'Installer la mise a jour';
+        button.disabled = !(updateReady && confirmed);
+      }
     }
 
     function returnConnectionLabel(connection, fallbackProfile = '') {
@@ -3109,8 +3114,8 @@
         showUpdateCheckResult('Installation indisponible depuis cette page locale.');
         return;
       }
-      if (lastUpdateCheck?.status !== 'update-available') {
-        showUpdateCheckResult('Aucune mise a jour disponible verifiee. Relance la verification avant installation.');
+      if (!['update-available', 'up-to-date'].includes(lastUpdateCheck?.status)) {
+        showUpdateCheckResult('Aucun etat de mise a jour installable. Relance la verification avant installation.');
         updateInstallButton();
         return;
       }
