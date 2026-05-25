@@ -139,6 +139,7 @@ RUNTIME_CONFIG_KEYS = {
 CAPTIVE_PATHS = {
     "/generate_204",
     "/gen_204",
+    "/redirect",
     "/hotspot-detect.html",
     "/library/test/success.html",
     "/connecttest.txt",
@@ -2523,6 +2524,11 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_captive_redirect(self, raw_path: str, path: str) -> None:
+        target = "/recovery"
+        log_route("captive-route-hit", raw_path, f"{path}->{target}")
+        self.send_redirect(target)
+
     @property
     def recovery(self) -> dict:
         return getattr(self.server, "wifi_kit_recovery", {})
@@ -2615,7 +2621,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         log_route("get", raw_path, path)
 
         if path in CAPTIVE_PATHS:
-            self.send_redirect("/recovery")
+            self.send_captive_redirect(raw_path, path)
             return
 
         if path in ("/", "/index.html", "/recovery"):
