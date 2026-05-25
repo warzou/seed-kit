@@ -104,6 +104,8 @@ CONNECT_WRAPPER_ACTION = "connect-wifi"
 START_AP_MODE_LOG = action_log_path("start-ap-mode")
 RETURN_DEFAULT_NETWORK_LOG = action_log_path("return-default-network")
 AP_RETURN_CHECK_ONCE_LOG = action_log_path("ap-return-check")
+SYSTEM_REBOOT_LOG = action_log_path("system-reboot")
+SYSTEM_SHUTDOWN_LOG = action_log_path("system-shutdown")
 SCAN_FROM_AP_LOG = action_log_path("scan-from-ap-recovery")
 SCAN_FROM_AP_CACHE = ACTION_LOG_DIR / "scan-from-ap-recovery-cache.json"
 SCAN_FROM_AP_RESTART_ATTEMPTS = 3
@@ -115,6 +117,8 @@ AP_MODE_MAX_SECONDS = 300
 PRIVILEGED_ACTIONS_ENV = "WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS"
 AP_RECOVERY_CONFIRM = "WIFI-KIT AP RECOVERY MANUAL TEST"
 CONNECT_TRANSACTION_CONFIRM = "WIFI-KIT CONNECT SAFE TRANSACTION"
+SYSTEM_REBOOT_CONFIRM = "REBOOT WIFI-KIT NODE"
+SYSTEM_SHUTDOWN_CONFIRM = "SHUTDOWN WIFI-KIT NODE"
 SAVED_NM_SECRET_SENTINEL = "__WIFI_KIT_USE_SAVED_NM_SECRET__"
 SAVED_NM_SECRET_PLACEHOLDER = "********"
 RUNTIME_CONFIG_KEYS = {
@@ -156,6 +160,8 @@ ACTION_PATHS = {
     "/return-default-network": "return-default-network",
     "/ap-return-check-once": "ap-return-check-once",
     "/api/ap-return-check-once": "ap-return-check-once",
+    "/system-reboot": "reboot-system",
+    "/system-shutdown": "shutdown-system",
     "/exit-recovery": "exit-recovery",
     "/reboot-recovery": "reboot-recovery",
     "/set-recovery-password": "set-recovery-password",
@@ -869,6 +875,8 @@ def backend_status(recovery: dict | None = None) -> dict[str, object]:
             "start_ap_mode": privileged_ready,
             "return_default_network": privileged_ready,
             "ap_return_check_once": privileged_ready,
+            "reboot_system": privileged_ready and os.environ.get("WIFI_KIT_ENABLE_SYSTEM_POWER_ACTIONS") == "1",
+            "shutdown_system": privileged_ready and os.environ.get("WIFI_KIT_ENABLE_SYSTEM_POWER_ACTIONS") == "1",
         },
         "runtime": {
             "config_exists": RUNTIME_CONFIG_PATH.exists(),
@@ -1281,6 +1289,112 @@ def ap_return_check_once(payload: dict) -> tuple[dict, int]:
         "expected_behavior": "AP recovery stops briefly; known Wi-Fi is tried once; success stays normal; failure restarts AP recovery.",
         "log": str(AP_RETURN_CHECK_ONCE_LOG),
     }, 202
+
+
+def system_power_action(payload: dict, action: str) -> tuple[dict, int]:
+    spec = {
+        "reboot-system": {
+            "endpoint_action": "system-reboot",
+            "requested": "reboot_requested",
+            "confirm": SYSTEM_REBOOT_CONFIRM,
+            "log": SYSTEM_REBOOT_LOG,
+            "message": "Redemarrage systeme demande.",
+        },
+        "shutdown-system": {
+            "endpoint_action": "system-shutdown",
+            "requested": "shutdown_requested",
+            "confirm": SYSTEM_SHUTDOWN_CONFIRM,
+            "log": SYSTEM_SHUTDOWN_LOG,
+            "message": "Extinction systeme demandee.",
+        },
+    }[action]
+    dry_run = bool_payload(payload.get("dry_run"))
+    dangerous_real_apply = bool_payload(payload.get("dangerous_real_apply"))
+    user_confirmed = bool_payload(payload.get("user_confirmed")) or bool_payload(payload.get("confirmed"))
+    confirm_phrase = str(payload.get("confirm") or payload.get("confirm_phrase") or "").strip()
+    confirm_ok = user_confirmed and confirm_phrase == spec["confirm"]
+    real_power_enabled = os.environ.get("WIFI_KIT_ENABLE_SYSTEM_POWER_ACTIONS") == "1"
+    log_path = spec["log"]
+
+    if not confirm_ok:
+        append_action_log(
+            log_path,
+            action=action,
+            status="refused",
+            reason="confirmation-required",
+            dangerous_real_apply=dangerous_real_apply,
+            confirm_ok=confirm_ok,
+        )
+        return {
+            "status": "refused",
+            "action": action,
+            spec["requested"]: False,
+            "requires_user_confirmation": True,
+            "confirmation_kind": "strong",
+            "confirm_ok": False,
+            "expected_confirmation": spec["confirm"],
+            "log": str(log_path),
+            "error": "confirmation-required",
+            "message": "Confirmation forte requise avant action systeme.",
+        }, 403
+
+    if dry_run or not privileged_actions_enabled() or not dangerous_real_apply or not real_power_enabled:
+        append_action_log(
+            log_path,
+            action=action,
+            status="planned",
+            dangerous_real_apply=dangerous_real_apply,
+            privileged_actions_enabled=privileged_actions_enabled(),
+            real_power_enabled=real_power_enabled,
+            confirm_ok=confirm_ok,
+        )
+        return {
+            "status": "planned",
+            "action": action,
+            spec["requested"]: False,
+            "dry_run": dry_run,
+            "privileged_actions_enabled": privileged_actions_enabled(),
+            "dangerous_real_apply": dangerous_real_apply,
+            "real_power_enabled": real_power_enabled,
+            "requires_user_confirmation": True,
+            "confirmation_kind": "strong",
+            "confirm_ok": True,
+            "log": str(log_path),
+            "warning": "Architecture SAFE uniquement: aucune action systeme reelle sans gate explicite futur.",
+        }, 200
+
+    command, error = privileged_action_command(action)
+    if error:
+        append_action_log(log_path, action=action, status="failure", error=error)
+        response = privileged_error_response(action, error)
+        response.update({spec["requested"]: False, "log": str(log_path)})
+        return response, 403 if error == "wifi-kit-network-rights-not-installed" else 500
+
+    try:
+        with open_action_log(log_path) as handle:
+            result = subprocess.run(
+                command,
+                cwd=str(SCRIPT_DIR.parent),
+                check=False,
+                stdin=subprocess.DEVNULL,
+                stdout=handle,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=5,
+            )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        append_action_log(log_path, action=action, status="failure", error=f"start-failed: {exc}")
+        return {"status": "failure", "action": action, "error": f"start-failed: {exc}", spec["requested"]: False, "log": str(log_path)}, 500
+
+    append_action_log(log_path, action=action, status="requested", returncode=result.returncode)
+    return {
+        "status": "started" if result.returncode == 0 else "failure",
+        "action": action,
+        spec["requested"]: result.returncode == 0,
+        "message": spec["message"] if result.returncode == 0 else "Action systeme refusee par le wrapper.",
+        "returncode": result.returncode,
+        "log": str(log_path),
+    }, 202 if result.returncode == 0 else 500
 
 
 def start_reconnect_previous() -> dict:
@@ -2718,6 +2832,16 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
             self.send_action_json("ap-return-check-once", payload, status=status)
             return
 
+        if path == "/system-reboot":
+            payload, status = system_power_action(parse_post_payload(self), "reboot-system")
+            self.send_action_json("reboot-system", payload, status=status)
+            return
+
+        if path == "/system-shutdown":
+            payload, status = system_power_action(parse_post_payload(self), "shutdown-system")
+            self.send_action_json("shutdown-system", payload, status=status)
+            return
+
         if path == "/api/runtime-config":
             payload, status = update_runtime_config(parse_post_payload(self))
             self.send_action_json("runtime-config", payload, status=status)
@@ -2807,7 +2931,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
 
         if path in ACTION_PATHS:
             action = ACTION_PATHS[path]
-            runtime_actions = {"reconnect-previous", "start-ap-mode", "return-default-network", "ap-return-check-once"}
+            runtime_actions = {"reconnect-previous", "start-ap-mode", "return-default-network", "ap-return-check-once", "reboot-system", "shutdown-system"}
             self.send_json(
                 {
                     "status": "runtime-gated" if action in runtime_actions else "unavailable",

@@ -184,7 +184,7 @@ require_root() {
 
 if [ "$#" -ne 1 ]; then
   log_event "unknown" "refused" "usage"
-  reply "refused" "unknown" "usage: wifi-kit-action-wrapper.sh start-ap-mode|return-default-network|connect-wifi|ap-return-check-once"
+  reply "refused" "unknown" "usage: wifi-kit-action-wrapper.sh start-ap-mode|return-default-network|connect-wifi|ap-return-check-once|reboot-system|shutdown-system"
   exit 2
 fi
 
@@ -295,6 +295,16 @@ case "$action" in
     WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$ap_return_check_script" stop-loop >/dev/null 2>&1 || true
     log_event "$action" "started" "mode=run-once"
     WIFI_KIT_RUNTIME_CONFIG="$runtime_config" exec sh "$ap_return_check_script" run-once
+    ;;
+  reboot-system)
+    require_root "$action"
+    log_event "$action" "planned" "real-system-power-action-disabled-in-this-lot"
+    reply "planned" "$action" "real-system-power-action-disabled-in-this-lot"
+    ;;
+  shutdown-system)
+    require_root "$action"
+    log_event "$action" "planned" "real-system-power-action-disabled-in-this-lot"
+    reply "planned" "$action" "real-system-power-action-disabled-in-this-lot"
     ;;
   *)
     log_event "$action" "refused" "action-not-allowed"

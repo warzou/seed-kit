@@ -211,8 +211,8 @@ render_sudoers() {
   cat <<EOF
 # Wifi-Kit runtime sudoers.
 # Managed by install-wifi-kit-runtime.sh.
-# No shell, wildcard, nmcli, systemctl, hostapd, dnsmasq, or reboot grant.
-$install_user ALL=(root) NOPASSWD: $app_dir/wifi-kit-action-wrapper.sh start-ap-mode, $app_dir/wifi-kit-action-wrapper.sh return-default-network, $app_dir/wifi-kit-action-wrapper.sh connect-wifi, $app_dir/wifi-kit-action-wrapper.sh ap-return-check-once
+# No shell, wildcard, nmcli, systemctl, hostapd, dnsmasq, or direct reboot grant.
+$install_user ALL=(root) NOPASSWD: $app_dir/wifi-kit-action-wrapper.sh start-ap-mode, $app_dir/wifi-kit-action-wrapper.sh return-default-network, $app_dir/wifi-kit-action-wrapper.sh connect-wifi, $app_dir/wifi-kit-action-wrapper.sh ap-return-check-once, $app_dir/wifi-kit-action-wrapper.sh reboot-system, $app_dir/wifi-kit-action-wrapper.sh shutdown-system
 EOF
 }
 
