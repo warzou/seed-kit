@@ -1664,7 +1664,7 @@
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Hostname</span><strong id="status-hostname">...</strong></div></div>
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-location"></use></svg></span><div><span>Adresse IP</span><strong id="status-ip">...</strong></div></div>
         <div id="status-wifi-card" class="status-mini wifi-status-normal"><span class="status-icon"><svg class="icon-svg"><use href="#icon-wifi"></use></svg></span><div><span id="status-wifi-label">Wi-Fi (normal)</span><strong id="status-ssid">...</strong></div></div>
-        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Clients connect&eacute;s</span><strong id="status-clients">...</strong></div></div>
+        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Nb con.</span><strong id="status-clients">...</strong></div></div>
       </div>
     </section>
 
@@ -1874,11 +1874,7 @@
             <p>Redemarre proprement le node. Cette action coupera temporairement l'acces au node.</p>
             <label class="confirm-line">
               <input id="system-reboot-confirmed" type="checkbox">
-              Je confirme vouloir redemarrer ce node.
-            </label>
-            <label class="field-label">
-              Confirmation forte
-              <input id="system-reboot-phrase" class="password-local" type="text" autocomplete="off" placeholder="REBOOT WIFI-KIT NODE">
+              Confirmer le redemarrage
             </label>
             <button id="system-reboot-button" class="button warn" type="button" data-system-action="system-reboot" disabled>Redemarrer</button>
           </div>
@@ -1888,11 +1884,7 @@
             <p>Eteint proprement le node. Cette action coupera definitivement l'acces jusqu'au prochain demarrage physique.</p>
             <label class="confirm-line">
               <input id="system-shutdown-confirmed" type="checkbox">
-              Je confirme vouloir eteindre ce node.
-            </label>
-            <label class="field-label">
-              Confirmation forte
-              <input id="system-shutdown-phrase" class="password-local" type="text" autocomplete="off" placeholder="SHUTDOWN WIFI-KIT NODE">
+              Confirmer l'arret
             </label>
             <button id="system-shutdown-button" class="button danger" type="button" data-system-action="system-shutdown" disabled>Eteindre</button>
           </div>
@@ -2407,9 +2399,9 @@
 
     function apClientLabel() {
       const count = recoveryState().ap_client_count ?? systemState().ap_client_count;
-      if (count === null || count === undefined || count === '') return 'clients inconnus';
+      if (count === null || count === undefined || count === '') return '0 client connecte';
       const numeric = Number(count);
-      if (!Number.isFinite(numeric)) return 'clients inconnus';
+      if (!Number.isFinite(numeric)) return '0 client connecte';
       return numeric === 1 ? '1 client connecte' : `${numeric} clients connectes`;
     }
 
@@ -2640,10 +2632,8 @@
     }
 
     function updateSystemButtons() {
-      const rebootOk = Boolean(document.getElementById('system-reboot-confirmed')?.checked)
-        && document.getElementById('system-reboot-phrase')?.value.trim() === 'REBOOT WIFI-KIT NODE';
-      const shutdownOk = Boolean(document.getElementById('system-shutdown-confirmed')?.checked)
-        && document.getElementById('system-shutdown-phrase')?.value.trim() === 'SHUTDOWN WIFI-KIT NODE';
+      const rebootOk = Boolean(document.getElementById('system-reboot-confirmed')?.checked);
+      const shutdownOk = Boolean(document.getElementById('system-shutdown-confirmed')?.checked);
       const rebootButton = document.getElementById('system-reboot-button');
       const shutdownButton = document.getElementById('system-shutdown-button');
       if (rebootButton) rebootButton.disabled = !rebootOk;
@@ -2983,12 +2973,10 @@
     async function triggerSystemAction(action) {
       const button = document.querySelector(`[data-system-action="${action}"]`);
       const originalText = button ? button.textContent : '';
-      const phraseId = action === 'system-reboot' ? 'system-reboot-phrase' : 'system-shutdown-phrase';
       const confirmedId = action === 'system-reboot' ? 'system-reboot-confirmed' : 'system-shutdown-confirmed';
-      const expectedPhrase = action === 'system-reboot' ? 'REBOOT WIFI-KIT NODE' : 'SHUTDOWN WIFI-KIT NODE';
       const label = action === 'system-reboot' ? 'Redemarrage' : 'Extinction';
-      if (!document.getElementById(confirmedId)?.checked || document.getElementById(phraseId)?.value.trim() !== expectedPhrase) {
-        showSystemActionResult(`${label} refuse: coche la confirmation et tape la phrase exacte.`);
+      if (!document.getElementById(confirmedId)?.checked) {
+        showSystemActionResult(`${label} refuse: coche la confirmation.`);
         return;
       }
       if (window.location.protocol === 'file:') {
@@ -3007,7 +2995,6 @@
           body: JSON.stringify({
             dangerous_real_apply: true,
             user_confirmed: true,
-            confirm: expectedPhrase,
           })
         });
         const payload = await response.json();
@@ -3699,7 +3686,7 @@
 
     document.getElementById('refresh').addEventListener('click', refreshScanFromServer);
     document.getElementById('ap-confirmed').addEventListener('change', updateRecoveryButtons);
-    ['system-reboot-confirmed', 'system-reboot-phrase', 'system-shutdown-confirmed', 'system-shutdown-phrase'].forEach((id) => {
+    ['system-reboot-confirmed', 'system-shutdown-confirmed'].forEach((id) => {
       const node = document.getElementById(id);
       if (node) {
         node.addEventListener('change', updateSystemButtons);

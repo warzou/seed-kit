@@ -117,8 +117,6 @@ AP_MODE_MAX_SECONDS = 300
 PRIVILEGED_ACTIONS_ENV = "WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS"
 AP_RECOVERY_CONFIRM = "WIFI-KIT AP RECOVERY MANUAL TEST"
 CONNECT_TRANSACTION_CONFIRM = "WIFI-KIT CONNECT SAFE TRANSACTION"
-SYSTEM_REBOOT_CONFIRM = "REBOOT WIFI-KIT NODE"
-SYSTEM_SHUTDOWN_CONFIRM = "SHUTDOWN WIFI-KIT NODE"
 SAVED_NM_SECRET_SENTINEL = "__WIFI_KIT_USE_SAVED_NM_SECRET__"
 SAVED_NM_SECRET_PLACEHOLDER = "********"
 RUNTIME_CONFIG_KEYS = {
@@ -1363,14 +1361,12 @@ def system_power_action(payload: dict, action: str) -> tuple[dict, int]:
         "reboot-system": {
             "endpoint_action": "system-reboot",
             "requested": "reboot_requested",
-            "confirm": SYSTEM_REBOOT_CONFIRM,
             "log": SYSTEM_REBOOT_LOG,
             "message": "Redemarrage systeme demande.",
         },
         "shutdown-system": {
             "endpoint_action": "system-shutdown",
             "requested": "shutdown_requested",
-            "confirm": SYSTEM_SHUTDOWN_CONFIRM,
             "log": SYSTEM_SHUTDOWN_LOG,
             "message": "Extinction systeme demandee.",
         },
@@ -1378,8 +1374,7 @@ def system_power_action(payload: dict, action: str) -> tuple[dict, int]:
     dry_run = bool_payload(payload.get("dry_run"))
     dangerous_real_apply = bool_payload(payload.get("dangerous_real_apply"))
     user_confirmed = bool_payload(payload.get("user_confirmed")) or bool_payload(payload.get("confirmed"))
-    confirm_phrase = str(payload.get("confirm") or payload.get("confirm_phrase") or "").strip()
-    confirm_ok = user_confirmed and confirm_phrase == spec["confirm"]
+    confirm_ok = user_confirmed
     real_power_enabled = os.environ.get("WIFI_KIT_ENABLE_SYSTEM_POWER_ACTIONS") == "1"
     log_path = spec["log"]
 
@@ -1397,12 +1392,11 @@ def system_power_action(payload: dict, action: str) -> tuple[dict, int]:
             "action": action,
             spec["requested"]: False,
             "requires_user_confirmation": True,
-            "confirmation_kind": "strong",
+            "confirmation_kind": "checkbox",
             "confirm_ok": False,
-            "expected_confirmation": spec["confirm"],
             "log": str(log_path),
             "error": "confirmation-required",
-            "message": "Confirmation forte requise avant action systeme.",
+            "message": "Confirmation requise avant action systeme.",
         }, 403
 
     if dry_run or not privileged_actions_enabled() or not dangerous_real_apply or not real_power_enabled:
@@ -1424,7 +1418,7 @@ def system_power_action(payload: dict, action: str) -> tuple[dict, int]:
             "dangerous_real_apply": dangerous_real_apply,
             "real_power_enabled": real_power_enabled,
             "requires_user_confirmation": True,
-            "confirmation_kind": "strong",
+            "confirmation_kind": "checkbox",
             "confirm_ok": True,
             "log": str(log_path),
             "warning": "Architecture SAFE uniquement: aucune action systeme reelle sans gate explicite futur.",
