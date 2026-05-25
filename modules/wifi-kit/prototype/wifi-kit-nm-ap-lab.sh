@@ -36,6 +36,7 @@ Concrete lab modes, dry-run by default:
   sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh stop-hotspot
   sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh start-ui
   sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh stop-ui
+  sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh status
   sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh rollback
 
 By default this helper only prints commands. To run a concrete lab mode on a
@@ -102,6 +103,10 @@ python_path() {
   find_tool python3 2>/dev/null || find_tool python 2>/dev/null || true
 }
 
+ss_path() {
+  find_tool ss 2>/dev/null || true
+}
+
 effective_ap_ssid() {
   if [ -n "$ap_ssid" ]; then
     printf '%s\n' "$ap_ssid"
@@ -126,6 +131,40 @@ nm_read() {
   nmcli_bin=$(nmcli_path)
   [ -n "$nmcli_bin" ] || return 0
   "$nmcli_bin" "$@" 2>/dev/null || true
+}
+
+pid_is_alive() {
+  pid=$1
+  case "$pid" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  kill -0 "$pid" 2>/dev/null
+}
+
+ui_pid() {
+  if [ -r "$ui_pidfile" ]; then
+    IFS= read -r pid < "$ui_pidfile" 2>/dev/null || true
+    printf '%s\n' "${pid:-}"
+  fi
+}
+
+ui_is_active() {
+  pid=$(ui_pid)
+  [ -n "$pid" ] && pid_is_alive "$pid"
+}
+
+hotspot_is_active() {
+  nmcli_bin=$(nmcli_path)
+  [ -n "$nmcli_bin" ] || return 1
+  "$nmcli_bin" -t --escape no -f NAME,TYPE,DEVICE connection show --active 2>/dev/null |
+    awk -F: -v profile="$ap_profile" -v iface="$iface" '$1 == profile && ($2 == "wifi" || $2 == "802-11-wireless") && $3 == iface { found = 1 } END { exit found ? 0 : 1 }'
+}
+
+port_is_listening() {
+  ss_bin=$(ss_path)
+  [ -n "$ss_bin" ] || return 1
+  "$ss_bin" -ltn 2>/dev/null |
+    awk -v host="$ui_host" -v port=":$ui_port" '$4 ~ port { if ($4 ~ host || $4 ~ "0.0.0.0" || $4 ~ "\\[::\\]") found = 1 } END { exit found ? 0 : 1 }'
 }
 
 iw_valid_combinations() {
@@ -182,6 +221,11 @@ create_profile_commands() {
   kv "04_ipv4" "nmcli connection modify $ap_profile ipv4.method shared ipv4.addresses $ap_ip"
   kv "05_ipv6" "nmcli connection modify $ap_profile ipv6.method ignore"
   kv "06_autoconnect" "nmcli connection modify $ap_profile connection.autoconnect no"
+}
+
+ui_start_command() {
+  ssid=$1
+  printf '%s\n' "nohup env WIFI_KIT_RECOVERY_BACKEND=nm-hotspot WIFI_KIT_NM_AP_LAB=1 WIFI_KIT_RUNTIME_CONFIG=$runtime_config python3 $ui_script --host $ui_host --port $ui_port --recovery-mode --recovery-ssid $(shell_quote "$ssid") --recovery-ip $ui_host >$ui_log 2>&1 &"
 }
 
 cmd_audit() {
@@ -312,14 +356,18 @@ cmd_create_profile() {
 }
 
 cmd_start_hotspot() {
+  ssid=$(effective_ap_ssid)
   section "nm-ap-lab-start-hotspot"
   kv "status" "$([ "$apply" = "1" ] && printf applying || printf dry-run)"
   kv "network_writes" "$([ "$apply" = "1" ] && printf true || printf false)"
   kv "command" "nmcli connection up $ap_profile ifname $iface"
+  kv "follow_up" "start-ui"
+  kv "follow_up_command" "$(ui_start_command "$ssid")"
   if [ "$apply" = "1" ]; then
     nmcli_bin=$(require_apply_tool nmcli)
     "$nmcli_bin" connection up "$ap_profile" ifname "$iface"
     kv "result" "hotspot-start-requested"
+    cmd_start_ui
   fi
 }
 
@@ -344,10 +392,19 @@ cmd_start_ui() {
   kv "network_writes" "false"
   kv "ui_pidfile" "$ui_pidfile"
   kv "ui_log" "$ui_log"
-  kv "command" "python3 $ui_script --host $ui_host --port $ui_port --recovery-mode --recovery-ssid $(shell_quote "$ssid") --recovery-ip $ui_host"
+  kv "env" "WIFI_KIT_RECOVERY_BACKEND=nm-hotspot WIFI_KIT_NM_AP_LAB=1 WIFI_KIT_RUNTIME_CONFIG=$runtime_config"
+  kv "command" "$(ui_start_command "$ssid")"
   if [ "$apply" = "1" ]; then
     python_bin=$(require_apply_tool python3)
-    nohup "$python_bin" "$ui_script" --host "$ui_host" --port "$ui_port" --recovery-mode --recovery-ssid "$ssid" --recovery-ip "$ui_host" >"$ui_log" 2>&1 &
+    if ui_is_active; then
+      kv "result" "ui-already-running"
+      kv "pid" "$(ui_pid)"
+      return 0
+    fi
+    WIFI_KIT_RECOVERY_BACKEND=nm-hotspot \
+    WIFI_KIT_NM_AP_LAB=1 \
+    WIFI_KIT_RUNTIME_CONFIG="$runtime_config" \
+      nohup "$python_bin" "$ui_script" --host "$ui_host" --port "$ui_port" --recovery-mode --recovery-ssid "$ssid" --recovery-ip "$ui_host" >"$ui_log" 2>&1 &
     printf '%s\n' "$!" > "$ui_pidfile"
     kv "result" "ui-started"
     kv "pid" "$!"
@@ -371,6 +428,32 @@ cmd_stop_ui() {
       kv "result" "ui-not-running"
     fi
   fi
+}
+
+cmd_status() {
+  section "nm-ap-lab-status"
+  kv "status" "ok"
+  kv "network_writes" "false"
+  if hotspot_is_active; then
+    kv "hotspot_active" "true"
+  else
+    kv "hotspot_active" "false"
+  fi
+  if ui_is_active; then
+    kv "ui_recovery_active" "true"
+    kv "ui_pid" "$(ui_pid)"
+  else
+    kv "ui_recovery_active" "false"
+    kv "ui_pid" "${ui_pid:-missing}"
+  fi
+  if port_is_listening; then
+    kv "port_80_listening" "true"
+  else
+    kv "port_80_listening" "false"
+  fi
+  kv "ui_url" "http://$ui_host:$ui_port"
+  kv "ui_pidfile" "$ui_pidfile"
+  kv "ui_log" "$ui_log"
 }
 
 cmd_rollback() {
@@ -421,6 +504,7 @@ case "$1" in
   stop-hotspot) cmd_stop_hotspot ;;
   start-ui) cmd_start_ui ;;
   stop-ui) cmd_stop_ui ;;
+  status) cmd_status ;;
   rollback) cmd_rollback ;;
   -h|--help|help) usage ;;
   *)
