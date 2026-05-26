@@ -1176,24 +1176,88 @@ def read_text_tail(path: Path, *, max_lines: int = 20, max_chars: int = 4000) ->
     return tail[-max_chars:]
 
 
+def path_access_status(path: Path) -> dict[str, object]:
+    try:
+        path.stat()
+    except FileNotFoundError:
+        return {"exists": False, "readable": False, "error": ""}
+    except PermissionError:
+        return {"exists": True, "readable": False, "error": "permission-denied"}
+    except OSError as exc:
+        return {"exists": False, "readable": False, "error": exc.__class__.__name__}
+    try:
+        readable = os.access(path, os.R_OK)
+    except OSError:
+        readable = False
+    return {"exists": True, "readable": bool(readable), "error": "" if readable else "not-readable"}
+
+
+def read_key_value_file_status(path: Path) -> tuple[dict[str, str], str]:
+    values: dict[str, str] = {}
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            key, sep, value = line.partition("=")
+            if sep and key:
+                values[key] = value
+    except FileNotFoundError:
+        return values, ""
+    except PermissionError:
+        return values, "permission-denied"
+    except OSError as exc:
+        return values, exc.__class__.__name__
+    return values, ""
+
+
+def read_last_text_line_status(path: Path, max_chars: int = 2000) -> tuple[str, str]:
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except FileNotFoundError:
+        return "", ""
+    except PermissionError:
+        return "", "permission-denied"
+    except OSError as exc:
+        return "", exc.__class__.__name__
+    for line in reversed(lines):
+        line = line.strip()
+        if line:
+            return line[:max_chars], ""
+    return "", ""
+
+
 def runtime_watchdog_status() -> dict[str, object]:
     state = read_key_value_file(RUNTIME_WATCHDOG_STATE)
-    persistent_state = read_key_value_file(RUNTIME_WATCHDOG_PERSISTENT_STATE)
+    persistent_state_status = path_access_status(RUNTIME_WATCHDOG_PERSISTENT_STATE)
+    persistent_log_status = path_access_status(RUNTIME_WATCHDOG_PERSISTENT_LOG)
+    live_state_status = path_access_status(RUNTIME_WATCHDOG_STATE)
+    persistent_state, persistent_state_error = read_key_value_file_status(RUNTIME_WATCHDOG_PERSISTENT_STATE)
     for key, value in persistent_state.items():
         state.setdefault(key, value)
     instability = read_key_value_file(RUNTIME_WATCHDOG_INSTABILITY)
-    last_event = read_last_text_line(RUNTIME_WATCHDOG_PERSISTENT_LOG) or read_last_text_line(
-        Path(state.get("log_file", ""))
-    )
+    last_event, persistent_log_error = read_last_text_line_status(RUNTIME_WATCHDOG_PERSISTENT_LOG)
+    live_event_error = ""
+    live_log_file = state.get("log_file", "")
+    if not last_event and live_log_file:
+        last_event, live_event_error = read_last_text_line_status(Path(live_log_file))
+    access_errors = [
+        error
+        for error in (persistent_state_error, persistent_log_error, live_event_error)
+        if error
+    ]
+    if not last_event and "permission-denied" in access_errors:
+        last_event = "permission-denied"
     return {
         "state_file": str(RUNTIME_WATCHDOG_STATE),
-        "state_exists": RUNTIME_WATCHDOG_STATE.exists(),
+        "state_exists": live_state_status["exists"],
+        "state_readable": live_state_status["readable"],
+        "state_access_error": live_state_status["error"],
         "persistent_state_file": state.get("persistent_state_file", str(RUNTIME_WATCHDOG_PERSISTENT_STATE)),
-        "persistent_state_exists": RUNTIME_WATCHDOG_PERSISTENT_STATE.exists(),
+        "persistent_state_exists": persistent_state_status["exists"],
+        "persistent_state_readable": persistent_state_status["readable"],
+        "persistent_state_access_error": persistent_state_status["error"] or persistent_state_error,
         "status": state.get("status", "unknown"),
         "reason": state.get("reason", ""),
         "health_status": state.get("health_status", ""),
-        "health_reason": state.get("health_reason", ""),
+        "health_reason": state.get("health_reason", "permission-denied" if "permission-denied" in access_errors else ""),
         "config_readable": state.get("config_readable", ""),
         "last_good_configured": state.get("last_good_configured", ""),
         "runtime_match": state.get("runtime_match", ""),
@@ -1213,7 +1277,9 @@ def runtime_watchdog_status() -> dict[str, object]:
         "unstable_window_minutes": instability.get("unstable_window_minutes", state.get("unstable_window_minutes", "")),
         "log_file": state.get("log_file", ""),
         "persistent_log_file": state.get("persistent_log_file", str(RUNTIME_WATCHDOG_PERSISTENT_LOG)),
-        "persistent_log_exists": RUNTIME_WATCHDOG_PERSISTENT_LOG.exists(),
+        "persistent_log_exists": persistent_log_status["exists"],
+        "persistent_log_readable": persistent_log_status["readable"],
+        "persistent_log_access_error": persistent_log_status["error"] or persistent_log_error,
         "last_event": last_event,
         "timestamp": state.get("timestamp", ""),
     }
