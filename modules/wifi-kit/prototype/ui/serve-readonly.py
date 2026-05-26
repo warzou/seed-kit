@@ -47,6 +47,12 @@ RUNTIME_WATCHDOG_STATE = Path(os.environ.get("WIFI_KIT_RUNTIME_WATCHDOG_STATE", 
 RUNTIME_WATCHDOG_INSTABILITY = Path(
     os.environ.get("WIFI_KIT_RUNTIME_WATCHDOG_INSTABILITY", "/tmp/wifi-kit-actions/runtime-watchdog-instability")
 )
+RUNTIME_WATCHDOG_PERSISTENT_LOG = Path(
+    os.environ.get("WIFI_KIT_RUNTIME_WATCHDOG_PERSISTENT_LOG", "/var/log/seed-kit/wifi-kit/runtime-watchdog.log")
+)
+RUNTIME_WATCHDOG_PERSISTENT_STATE = Path(
+    os.environ.get("WIFI_KIT_RUNTIME_WATCHDOG_PERSISTENT_STATE", "/var/log/seed-kit/wifi-kit/runtime-watchdog-state")
+)
 UI_CLIENT_TTL_SECONDS = int(os.environ.get("WIFI_KIT_UI_CLIENT_TTL_SECONDS", "600"))
 UI_CLIENT_ACCESS: dict[str, float] = {}
 UI_CLIENT_ACCESS_LOCK = threading.Lock()
@@ -1130,14 +1136,38 @@ def read_key_value_file(path: Path) -> dict[str, str]:
     return values
 
 
+def read_last_text_line(path: Path, max_chars: int = 2000) -> str:
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return ""
+    for line in reversed(lines):
+        line = line.strip()
+        if line:
+            return line[:max_chars]
+    return ""
+
+
 def runtime_watchdog_status() -> dict[str, object]:
     state = read_key_value_file(RUNTIME_WATCHDOG_STATE)
+    persistent_state = read_key_value_file(RUNTIME_WATCHDOG_PERSISTENT_STATE)
+    for key, value in persistent_state.items():
+        state.setdefault(key, value)
     instability = read_key_value_file(RUNTIME_WATCHDOG_INSTABILITY)
+    last_event = read_last_text_line(RUNTIME_WATCHDOG_PERSISTENT_LOG) or read_last_text_line(
+        Path(state.get("log_file", ""))
+    )
     return {
         "state_file": str(RUNTIME_WATCHDOG_STATE),
         "state_exists": RUNTIME_WATCHDOG_STATE.exists(),
+        "persistent_state_file": state.get("persistent_state_file", str(RUNTIME_WATCHDOG_PERSISTENT_STATE)),
+        "persistent_state_exists": RUNTIME_WATCHDOG_PERSISTENT_STATE.exists(),
         "status": state.get("status", "unknown"),
         "reason": state.get("reason", ""),
+        "health_status": state.get("health_status", ""),
+        "health_reason": state.get("health_reason", ""),
+        "config_readable": state.get("config_readable", ""),
+        "last_good_configured": state.get("last_good_configured", ""),
         "runtime_match": state.get("runtime_match", ""),
         "runtime_reason": state.get("runtime_reason", state.get("reason", "")),
         "runtime_recovery_debug_passive": state.get("runtime_recovery_debug_passive", ""),
@@ -1145,11 +1175,18 @@ def runtime_watchdog_status() -> dict[str, object]:
         "current_ssid": state.get("current_ssid", ""),
         "last_good_connection": state.get("last_good_connection", ""),
         "last_good_ssid": state.get("last_good_ssid", ""),
+        "ip": state.get("ip", ""),
+        "default_route": state.get("default_route", ""),
+        "gateway": state.get("gateway", ""),
+        "gateway_ping": state.get("gateway_ping", ""),
         "ssid": state.get("ssid", ""),
         "unstable_ssid": instability.get("unstable_ssid", state.get("unstable_ssid", "")),
         "unstable_count": instability.get("unstable_count", state.get("unstable_count", "")),
         "unstable_window_minutes": instability.get("unstable_window_minutes", state.get("unstable_window_minutes", "")),
         "log_file": state.get("log_file", ""),
+        "persistent_log_file": state.get("persistent_log_file", str(RUNTIME_WATCHDOG_PERSISTENT_LOG)),
+        "persistent_log_exists": RUNTIME_WATCHDOG_PERSISTENT_LOG.exists(),
+        "last_event": last_event,
         "timestamp": state.get("timestamp", ""),
     }
 

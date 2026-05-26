@@ -7,6 +7,9 @@ Wants=NetworkManager.service wifi-kit-ui.service
 Type=simple
 Environment=WIFI_KIT_RUNTIME_CONFIG=/home/warzy/.config/wifi-kit/runtime.conf
 Environment=WIFI_KIT_RUNTIME_WATCHDOG_IFACE=wlan0
+Environment=WIFI_KIT_RUNTIME_WATCHDOG_PERSISTENT_LOG_DIR=/var/log/seed-kit/wifi-kit
+Environment=WIFI_KIT_RUNTIME_WATCHDOG_PERSISTENT_LOG=/var/log/seed-kit/wifi-kit/runtime-watchdog.log
+Environment=WIFI_KIT_RUNTIME_WATCHDOG_PERSISTENT_STATE=/var/log/seed-kit/wifi-kit/runtime-watchdog-state
 ExecStart=/opt/seed-kit/wifi-kit/wifi-kit-runtime-watchdog.sh run
 Restart=on-failure
 RestartSec=5

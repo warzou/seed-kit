@@ -28,6 +28,7 @@ internet_probe="${WIFI_KIT_BOOT_GUARD_PROBE:-1.1.1.1}"
 system_power_actions="${WIFI_KIT_ENABLE_SYSTEM_POWER_ACTIONS:-1}"
 reboot_action="${WIFI_KIT_ENABLE_REBOOT_ACTION:-1}"
 shutdown_action="${WIFI_KIT_ENABLE_SHUTDOWN_ACTION:-1}"
+runtime_log_dir="${WIFI_KIT_RUNTIME_LOG_DIR:-/var/log/seed-kit/wifi-kit}"
 
 usage() {
   cat <<'EOF'
@@ -282,6 +283,9 @@ Wants=NetworkManager.service wifi-kit-ui.service
 Type=simple
 Environment=WIFI_KIT_RUNTIME_CONFIG=$runtime_config
 Environment=WIFI_KIT_RUNTIME_WATCHDOG_IFACE=$iface
+Environment=WIFI_KIT_RUNTIME_WATCHDOG_PERSISTENT_LOG_DIR=$runtime_log_dir
+Environment=WIFI_KIT_RUNTIME_WATCHDOG_PERSISTENT_LOG=$runtime_log_dir/runtime-watchdog.log
+Environment=WIFI_KIT_RUNTIME_WATCHDOG_PERSISTENT_STATE=$runtime_log_dir/runtime-watchdog-state
 ExecStart=$app_dir/wifi-kit-runtime-watchdog.sh run
 Restart=on-failure
 RestartSec=5
@@ -319,6 +323,7 @@ cmd_audit() {
   kv "app_dir" "$app_dir"
   kv "ui_dir" "$ui_dir"
   kv "runtime_config" "$runtime_config"
+  kv "runtime_log_dir" "$runtime_log_dir"
   kv "sudoers_path" "$sudoers_path"
   kv "normal_unit_path" "$normal_unit_path"
   kv "boot_guard_unit_path" "$boot_guard_unit_path"
@@ -345,7 +350,7 @@ cmd_audit() {
 cmd_plan() {
   cmd_audit
   section "wifi-kit-install-plan"
-  kv "01.create_dirs" "$app_dir and $ui_dir root:root 0755"
+  kv "01.create_dirs" "$app_dir and $ui_dir root:root 0755; $runtime_log_dir root:root 0750"
   kv "02.copy_runtime_files" "wrapper, AP helper, connect transaction, boot guard, runtime watchdog, AP return-check helper, NM AP lab helper, UI backend, UI index"
   kv "03.runtime_config" "$runtime_config_dir 0700 and $runtime_config 0600 owned by $install_user"
   kv "04.sudoers" "$sudoers_path exact wrapper actions only; validate with visudo when available"
@@ -377,6 +382,7 @@ cmd_install() {
   kv "status" "starting"
   kv "reinstall" "$reinstall"
   install -d -o root -g root -m 0755 "$app_dir" "$ui_dir"
+  install -d -o root -g root -m 0750 "$runtime_log_dir"
   copy_file "prototype/wifi-kit-action-wrapper.sh" "$app_dir/wifi-kit-action-wrapper.sh" 0755
   copy_file "prototype/ap-setup-test.sh" "$app_dir/ap-setup-test.sh" 0755
   copy_file "prototype/wifi-kit-connect-transaction.sh" "$app_dir/wifi-kit-connect-transaction.sh" 0755
