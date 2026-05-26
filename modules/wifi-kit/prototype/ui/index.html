@@ -1445,7 +1445,7 @@
     .status-summary-grid {
       display: grid;
       grid-template-columns: 1fr;
-      gap: 10px;
+      gap: 12px;
     }
 
     .config-recovery-card,
@@ -1454,31 +1454,77 @@
       border: 1px solid rgba(213, 229, 255, 0.09);
       border-radius: 16px;
       background: rgba(255, 255, 255, 0.045);
-      padding: 11px;
+      padding: 14px;
     }
 
     .status-summary-card span,
     .config-recovery-card span {
       display: block;
       color: var(--muted);
-      font-size: 0.68rem;
+      font-size: 0.7rem;
       font-weight: 900;
       text-transform: uppercase;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
     }
 
     .status-summary-card strong,
     .config-recovery-card strong {
       display: block;
-      margin-top: 5px;
+      margin-top: 6px;
       color: var(--soft);
-      font-size: 0.98rem;
-      line-height: 1.18;
+      font-size: 1rem;
+      line-height: 1.22;
       overflow-wrap: anywhere;
     }
 
     .config-recovery-card .field-label,
     .config-recovery-card .confirm-line {
-      margin-top: 8px;
+      margin-top: 12px;
+    }
+
+    .config-recovery-card .field-label {
+      gap: 7px;
+      min-width: 0;
+      line-height: 1.35;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .config-recovery-card .password-local {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .config-recovery-card .confirm-line {
+      align-items: center;
+      gap: 10px;
+      line-height: 1.35;
+      color: var(--soft);
+      font-size: 0.86rem;
+    }
+
+    .input-with-unit {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .input-unit {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 34px;
+      min-height: 36px;
+      border: 1px solid rgba(213, 229, 255, 0.1);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.055);
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 900;
+      text-transform: none;
     }
 
     .maintenance-card {
@@ -1810,7 +1856,7 @@
       .status-pill-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .secondary-action-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .maintenance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .config-recovery-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .config-recovery-grid { grid-template-columns: repeat(2, minmax(260px, 1fr)); }
       .status-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .tab-button { font-size: 0.74rem; }
       .network-orb {
@@ -1833,6 +1879,10 @@
       }
 
       .status-summary-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .config-recovery-grid {
         grid-template-columns: repeat(4, minmax(0, 1fr));
       }
     }
@@ -2205,15 +2255,18 @@
             <strong id="config-failsafe-mode">...</strong>
             <label class="confirm-line">
               <input id="runtime-failsafe-automatic-input" type="checkbox">
-              Mode automatique
+              <span>Mode automatique</span>
             </label>
           </div>
           <div class="config-recovery-card">
-            <span>Delai recovery</span>
+            <span>Attente avant Wi-Fi secours</span>
             <strong id="config-recovery-delay">...</strong>
             <label class="field-label">
-              Delai d'inaccessibilite
-              <input id="runtime-recovery-grace-input" class="password-local" type="number" min="1" step="1" inputmode="numeric" placeholder="120">
+              Delai avant ouverture AP
+              <span class="input-with-unit">
+                <input id="runtime-recovery-grace-input" class="password-local" type="number" min="1" step="1" inputmode="numeric" placeholder="120">
+                <span class="input-unit">s</span>
+              </span>
             </label>
           </div>
           <div class="config-recovery-card">
@@ -2221,7 +2274,7 @@
             <strong id="config-runtime-recovery-status">...</strong>
             <label class="confirm-line">
               <input id="runtime-recovery-enabled-input" type="checkbox">
-              Activer le watchdog runtime
+              <span>Activer le watchdog runtime</span>
             </label>
           </div>
         </div>
