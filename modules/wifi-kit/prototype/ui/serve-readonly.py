@@ -115,6 +115,7 @@ CONNECT_WRAPPER_ACTION = "connect-wifi"
 START_AP_MODE_LOG = action_log_path("start-ap-mode")
 RETURN_DEFAULT_NETWORK_LOG = action_log_path("return-default-network")
 AP_RETURN_CHECK_ONCE_LOG = action_log_path("ap-return-check")
+FAILSAFE_MODE_LOG = action_log_path("failsafe-mode")
 SYSTEM_REBOOT_LOG = unique_action_log_path("system-reboot")
 SYSTEM_SHUTDOWN_LOG = unique_action_log_path("system-shutdown")
 UPDATE_INSTALL_LOG_ACTION = "update-install"
@@ -1017,6 +1018,7 @@ def update_runtime_config(payload: dict) -> tuple[dict, int]:
         return {"status": "failure", "error": payload["_error"]}, 400
 
     config = read_runtime_config()
+    previous_debug_passive = config.get("runtime_recovery_debug_passive", "false")
     original_missing = not config.get("original_ssid") or not config.get("original_connection")
     for key in ("original_ssid", "original_connection"):
         if key not in payload:
@@ -1125,6 +1127,15 @@ def update_runtime_config(payload: dict) -> tuple[dict, int]:
         config["runtime_recovery_instability_threshold"] = str(int(threshold))
 
     write_runtime_config(config)
+    if config.get("runtime_recovery_debug_passive", "false") != previous_debug_passive:
+        append_action_log(
+            FAILSAFE_MODE_LOG,
+            action="failsafe-mode-changed",
+            status="saved",
+            previous="observation" if previous_debug_passive == "true" else "automatic",
+            current="observation" if config.get("runtime_recovery_debug_passive") == "true" else "automatic",
+            runtime_config=RUNTIME_CONFIG_PATH,
+        )
     return {
         "status": "saved",
         "config": public_runtime_config(),
@@ -1529,6 +1540,7 @@ def backend_status(recovery: dict | None = None) -> dict[str, object]:
     config = read_runtime_config()
     diagnose = safe_diagnose()
     recovery = recovery or {}
+    runtime_version = runtime_version_status(find_git_repo_dir())
     wrapper_path = action_wrapper_path()
     app_dir_exists = INSTALLED_APP_DIR.exists()
     wrapper_exists = wrapper_path.exists()
@@ -1566,6 +1578,7 @@ def backend_status(recovery: dict | None = None) -> dict[str, object]:
             "runtime_recovery_instability_window_minutes": config.get("runtime_recovery_instability_window_minutes", "10"),
             "runtime_recovery_instability_threshold": config.get("runtime_recovery_instability_threshold", "3"),
             "runtime_watchdog": runtime_watchdog_status(),
+            "runtime_version": runtime_version,
         },
         "install": {
             "app_dir_exists": app_dir_exists,
@@ -1577,6 +1590,10 @@ def backend_status(recovery: dict | None = None) -> dict[str, object]:
             "boot_guard_active": systemd_is_active(BOOT_GUARD_SERVICE_NAME),
             "runtime_watchdog_enabled": systemd_is_enabled(RUNTIME_WATCHDOG_SERVICE_NAME),
             "runtime_watchdog_active": systemd_is_active(RUNTIME_WATCHDOG_SERVICE_NAME),
+            "runtime_synced": runtime_version.get("runtime_synced", False),
+            "runtime_commit": runtime_version.get("runtime_commit", ""),
+            "repo_commit": runtime_version.get("repo_commit", ""),
+            "runtime_install_time": runtime_version.get("runtime_install_time", ""),
         },
         "network": {
             "current_ssid": system_info(diagnose, recovery).get("wifi", "unknown"),
@@ -1585,6 +1602,36 @@ def backend_status(recovery: dict | None = None) -> dict[str, object]:
             "iface": diagnose.get("interface") or "wlan0",
         },
         "notes": notes,
+    }
+
+
+def diagnostic_export_payload(recovery: dict | None = None) -> dict[str, object]:
+    watchdog = runtime_watchdog_status()
+    runtime_version = runtime_version_status(find_git_repo_dir())
+    log_paths = {
+        "runtime_watchdog_persistent": Path(str(watchdog.get("persistent_log_file") or RUNTIME_WATCHDOG_PERSISTENT_LOG)),
+        "runtime_watchdog_live": Path(str(watchdog.get("log_file") or RUNTIME_WATCHDOG_STATE)),
+        "failsafe_mode": FAILSAFE_MODE_LOG,
+        "update_install": ACTION_LOG_DIR / f"{UPDATE_INSTALL_LOG_ACTION}-{action_log_identity()}.log",
+        "start_ap_mode": START_AP_MODE_LOG,
+    }
+    logs: dict[str, object] = {}
+    for name, path in log_paths.items():
+        logs[name] = {
+            "path": str(path),
+            "tail": read_text_tail(path, max_lines=30, max_chars=6000),
+            "access": path_access_status(path),
+        }
+    return {
+        "ok": True,
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "secret_policy": "No client Wi-Fi passwords are included. Runtime config is redacted.",
+        "backend_status": backend_status(recovery),
+        "runtime_config": public_runtime_config(),
+        "runtime_version": runtime_version,
+        "watchdog": watchdog,
+        "diagnose": safe_diagnose(),
+        "logs": logs,
     }
 
 
@@ -3397,6 +3444,7 @@ def ui_data(recovery: dict | None = None) -> dict:
     snapshot = snapshot_preview()
     hostname = socket.gethostname() or "node"
     config = read_runtime_config()
+    runtime_version = runtime_version_status(find_git_repo_dir())
     recovery_active = bool(recovery and recovery.get("active"))
     scan = wifi_scan(refresh=False, recovery_active=recovery_active)
     wifi_connections = known_wifi_connections(scan)
@@ -3450,6 +3498,7 @@ def ui_data(recovery: dict | None = None) -> dict:
         "diagnose": diagnose,
         "snapshot": snapshot,
         "runtime_config": public_runtime_config(),
+        "runtime_version": runtime_version,
         "known_wifi_connections": wifi_connections,
         "mode": "recovery" if recovery_active else "normal",
         "recovery_active": recovery_active,
@@ -3786,6 +3835,10 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         if path == "/api/backend-status":
             log_route("match-backend-status", raw_path, path)
             self.send_json(backend_status(self.recovery))
+            return
+
+        if path == "/api/diagnostic-export":
+            self.send_json(diagnostic_export_payload(self.recovery))
             return
 
         if path == "/api/runtime-config":

@@ -1709,6 +1709,11 @@
           <div class="metric"><span>DNS captive</span><strong id="recovery-dns">...</strong></div>
           <div class="metric"><span>Interface</span><strong id="recovery-ui">...</strong></div>
           <div class="metric"><span>Clients AP</span><strong id="recovery-clients">...</strong></div>
+          <div class="metric"><span>R&eacute;seau principal</span><strong id="recovery-main-health">...</strong></div>
+          <div class="metric"><span>AP recovery</span><strong id="recovery-ap-health">...</strong></div>
+          <div class="metric"><span>Runtime /opt</span><strong id="recovery-runtime-sync">...</strong></div>
+          <div class="metric"><span>Mode</span><strong id="recovery-failsafe-mode">...</strong></div>
+          <div class="metric"><span>Watchdog</span><strong id="recovery-watchdog-event">...</strong></div>
         </div>
         <div class="recovery-settings" aria-label="Configuration recovery">
           <div class="recovery-reassurance">
@@ -1752,8 +1757,8 @@
                 Activer le watchdog runtime
               </label>
               <label class="confirm-line">
-                <input id="runtime-recovery-debug-passive-input" type="checkbox">
-                Mode debug passif: observer sans ouvrir l'AP
+                <input id="runtime-failsafe-automatic-input" type="checkbox">
+                Failsafe automatique
               </label>
               <label class="field-label">
                 D&eacute;lai d'inaccessibilit&eacute; tol&eacute;r&eacute;
@@ -1768,7 +1773,7 @@
                 <input id="runtime-recovery-threshold-input" class="password-local" type="number" min="1" step="1" inputmode="numeric" placeholder="3">
               </label>
             </div>
-            <p class="danger-note">Le watchdog ne teste jamais le Wi-Fi principal/Flint en runtime. Les coupures courtes sont journalis&eacute;es mais ne forcent pas l'AP. Minimum effectif: 120 s. En mode debug passif, il loggue la d&eacute;cision mais ne lance aucune action r&eacute;seau.</p>
+            <p class="danger-note">OFF = mode observation. ON = mode automatique: apr&egrave;s inaccessibilit&eacute; durable, le watchdog peut ouvrir l'AP recovery. Il ne teste jamais le Wi-Fi principal/Flint en runtime. Minimum effectif: 120 s.</p>
           </div>
           <div class="recovery-settings-section">
             <h3 class="settings-title">Sélectionner le Wi-Fi principal</h3>
@@ -1942,6 +1947,8 @@
           <div class="metric"><span>Recovery guard</span><strong>audit futur</strong></div>
           <div class="metric"><span>Ports utiles</span><strong>18089 / 80 / 53 / 67</strong></div>
         </div>
+        <button id="diagnostic-export-button" class="button secondary" type="button">Exporter diagnostic</button>
+        <div id="diagnostic-export-result" class="callout recovery-result" hidden></div>
         <div class="advanced-grid">
           <h2 id="node-title">Diagnostic SAFE</h2>
           <div id="node-state" class="mini-grid"></div>
@@ -2428,6 +2435,38 @@
       return safeCount === 1 ? '1 acces' : `${safeCount} acces`;
     }
 
+    function watchdogState() {
+      return systemState().runtime_watchdog || recoveryState().runtime_watchdog || {};
+    }
+
+    function runtimeVersionState() {
+      return data.runtime_version || systemState().runtime_version || systemState().install?.runtime_version || {};
+    }
+
+    function failsafeModeLabel() {
+      const debugPassive = String(runtimeConfig().runtime_recovery_debug_passive || watchdogState().runtime_recovery_debug_passive || 'false') === 'true';
+      return debugPassive ? 'observation' : 'automatique';
+    }
+
+    function mainNetworkHealthLabel() {
+      const watchdog = watchdogState();
+      if (watchdog.health_status === 'healthy') return 'OK';
+      if (watchdog.unstable_ssid || Number(watchdog.unstable_count || 0) > 0) return 'instable';
+      return 'indisponible';
+    }
+
+    function apRecoveryHealthLabel() {
+      if (systemState().recovery_active || recoveryState().active) return 'actif';
+      if (systemState().actions?.start_ap_mode) return 'pret';
+      return 'indisponible';
+    }
+
+    function runtimeSyncLabel() {
+      const version = runtimeVersionState();
+      if (version.runtime_version_exists === false) return 'inconnu';
+      return version.runtime_synced ? 'synchronise' : 'en retard';
+    }
+
     function isRecoveryApNetwork(network) {
       const system = systemState();
       const recovery = recoveryState();
@@ -2519,8 +2558,13 @@
       const runtimeRecoveryEnabledInput = document.getElementById('runtime-recovery-enabled-input');
       if (runtimeRecoveryEnabledInput) runtimeRecoveryEnabledInput.checked = runtimeRecoveryEnabled;
       const runtimeRecoveryDebugPassive = String(config.runtime_recovery_debug_passive || 'false') === 'true';
-      const runtimeRecoveryDebugPassiveInput = document.getElementById('runtime-recovery-debug-passive-input');
-      if (runtimeRecoveryDebugPassiveInput) runtimeRecoveryDebugPassiveInput.checked = runtimeRecoveryDebugPassive;
+      const failsafeAutomaticInput = document.getElementById('runtime-failsafe-automatic-input');
+      if (failsafeAutomaticInput) failsafeAutomaticInput.checked = !runtimeRecoveryDebugPassive;
+      setText('recovery-main-health', mainNetworkHealthLabel());
+      setText('recovery-ap-health', apRecoveryHealthLabel());
+      setText('recovery-runtime-sync', runtimeSyncLabel());
+      setText('recovery-failsafe-mode', failsafeModeLabel());
+      setText('recovery-watchdog-event', watchdogState().last_event || watchdogState().reason || 'aucun');
       setInputValue('runtime-recovery-grace-input', config.runtime_recovery_grace_seconds || '120');
       setInputValue('runtime-recovery-window-input', config.runtime_recovery_instability_window_minutes || '10');
       setInputValue('runtime-recovery-threshold-input', config.runtime_recovery_instability_threshold || '3');
@@ -2634,6 +2678,13 @@
       const target = document.getElementById('updates-check-result');
       if (!target) return;
       target.style.whiteSpace = 'pre-line';
+      target.textContent = message;
+      target.hidden = false;
+    }
+
+    function showDiagnosticExportResult(message) {
+      const target = document.getElementById('diagnostic-export-result');
+      if (!target) return;
       target.textContent = message;
       target.hidden = false;
     }
@@ -2860,7 +2911,7 @@
       const returnCheckEnabled = Boolean(document.getElementById('return-check-enabled-input')?.checked);
       const returnCheckInterval = document.getElementById('return-check-interval-input')?.value.trim() || '1';
       const runtimeRecoveryEnabled = Boolean(document.getElementById('runtime-recovery-enabled-input')?.checked);
-      const runtimeRecoveryDebugPassive = Boolean(document.getElementById('runtime-recovery-debug-passive-input')?.checked);
+      const failsafeAutomatic = Boolean(document.getElementById('runtime-failsafe-automatic-input')?.checked);
       const runtimeRecoveryGrace = document.getElementById('runtime-recovery-grace-input')?.value.trim() || '120';
       const runtimeRecoveryWindow = document.getElementById('runtime-recovery-window-input')?.value.trim() || '10';
       const runtimeRecoveryThreshold = document.getElementById('runtime-recovery-threshold-input')?.value.trim() || '3';
@@ -2909,11 +2960,17 @@
         return_check_target: 'last_good_ssid',
         return_check_mode: 'periodic-from-ap',
         runtime_recovery_enabled: runtimeRecoveryEnabled,
-        runtime_recovery_debug_passive: runtimeRecoveryDebugPassive,
+        runtime_recovery_debug_passive: !failsafeAutomatic,
         runtime_recovery_grace_seconds: runtimeRecoveryGrace,
         runtime_recovery_instability_window_minutes: runtimeRecoveryWindow,
         runtime_recovery_instability_threshold: runtimeRecoveryThreshold
       });
+    }
+
+    async function saveFailsafeMode() {
+      const automatic = Boolean(document.getElementById('runtime-failsafe-automatic-input')?.checked);
+      await saveRuntimeConfig({ runtime_recovery_debug_passive: !automatic }, 'recovery');
+      showRecoveryConfigResult(`Failsafe automatique: ${automatic ? 'mode automatique' : 'mode observation'}.`);
     }
 
     function networkActionPlan(action) {
@@ -3092,6 +3149,7 @@
         });
         const payload = await response.json();
         lastUpdateCheck = payload;
+        data.runtime_version = payload;
         const lines = [
           `Statut: ${updateStatusLabel(payload.status)}`,
           `Branche: ${payload.branch || 'inconnue'}`,
@@ -3158,6 +3216,7 @@
           })
         });
         const payload = await response.json();
+        data.runtime_version = payload;
         const lines = [
           payload.message || (response.ok ? 'Installation terminee.' : 'Installation refusee.'),
           `Statut: ${payload.update_status || payload.status || 'inconnu'}`,
@@ -3189,6 +3248,42 @@
           button.textContent = originalText;
         }
         updateInstallButton();
+      }
+    }
+
+    async function exportDiagnostic() {
+      const button = document.getElementById('diagnostic-export-button');
+      const originalText = button ? button.textContent : '';
+      if (window.location.protocol === 'file:') {
+        showDiagnosticExportResult('Export diagnostic indisponible depuis cette page locale.');
+        return;
+      }
+      try {
+        if (button) {
+          button.disabled = true;
+          button.textContent = 'Export...';
+        }
+        const response = await fetch('/api/diagnostic-export', { cache: 'no-store' });
+        const payload = await response.json();
+        const text = JSON.stringify(payload, null, 2);
+        const blob = new Blob([text + '\n'], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        link.href = url;
+        link.download = `wifi-kit-diagnostic-${stamp}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        showDiagnosticExportResult('Diagnostic exporte.');
+      } catch (error) {
+        showDiagnosticExportResult(`Export diagnostic indisponible: ${error.message}`);
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = originalText;
+        }
       }
     }
 
@@ -3875,6 +3970,7 @@
     document.getElementById('updates-install-confirmed')?.addEventListener('change', updateInstallButton);
     document.getElementById('updates-install-confirmed')?.addEventListener('input', updateInstallButton);
     document.getElementById('recovery-save-config').addEventListener('click', saveRecoveryConfig);
+    document.getElementById('runtime-failsafe-automatic-input')?.addEventListener('change', saveFailsafeMode);
     document.getElementById('recovery-return-dropdown-button').addEventListener('click', (event) => {
       event.stopPropagation();
       const dropdown = document.getElementById('recovery-return-dropdown');
@@ -3903,6 +3999,7 @@
     });
     document.getElementById('updates-check-button')?.addEventListener('click', checkUpdates);
     document.getElementById('updates-install-button')?.addEventListener('click', installUpdate);
+    document.getElementById('diagnostic-export-button')?.addEventListener('click', exportDiagnostic);
     document.querySelectorAll('[data-network-plan]').forEach((button) => {
       button.addEventListener('click', () => showNetworkActionResult(networkActionPlan(button.dataset.networkPlan)));
     });
