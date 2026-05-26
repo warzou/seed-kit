@@ -236,12 +236,17 @@ read_reinstall_runtime_request() {
 }
 
 validate_runtime_installer() {
+  [ -r "$repo_dir_file" ] || { log_event "$1" "refused" "repo-dir-file-missing=$repo_dir_file"; reply "refused" "$1" "repo-dir-file-missing"; exit 2; }
   case "$repo_dir" in
     /*) ;;
     *) log_event "$1" "refused" "repo-dir-not-absolute"; reply "refused" "$1" "repo-dir-not-absolute"; exit 2 ;;
   esac
   [ -d "$repo_dir" ] || { log_event "$1" "failure" "repo-dir-missing=$repo_dir"; reply "failure" "$1" "repo-dir-missing"; exit 1; }
   [ -f "$runtime_installer" ] || { log_event "$1" "failure" "runtime-installer-missing=$runtime_installer"; reply "failure" "$1" "runtime-installer-missing"; exit 1; }
+  case "$runtime_installer" in
+    "$repo_dir"/modules/wifi-kit/install-wifi-kit-runtime.sh) ;;
+    *) log_event "$1" "refused" "runtime-installer-unsafe=$runtime_installer"; reply "refused" "$1" "runtime-installer-unsafe"; exit 2 ;;
+  esac
 }
 
 require_root() {
@@ -385,8 +390,20 @@ case "$action" in
       reply "planned" "$action" "repo_dir=$repo_dir installer=$runtime_installer"
       exit 0
     fi
-    log_event "$action" "started" "repo_dir=$repo_dir installer=$runtime_installer"
-    exec sh "$runtime_installer" install --reinstall
+    command="sh $runtime_installer install --reinstall --defer-ui-restart"
+    log_event "$action" "started" "repo_dir=$repo_dir command=$command"
+    set +e
+    sh "$runtime_installer" install --reinstall --defer-ui-restart
+    rc=$?
+    set -e
+    if [ "$rc" -eq 0 ]; then
+      log_event "$action" "success" "repo_dir=$repo_dir command=$command exit_code=$rc ui_restart=deferred"
+      reply "success" "$action" "runtime-reinstalled exit_code=$rc ui_restart=deferred"
+      exit 0
+    fi
+    log_event "$action" "failure" "repo_dir=$repo_dir command=$command exit_code=$rc"
+    reply "failure" "$action" "runtime-reinstall-failed exit_code=$rc"
+    exit "$rc"
     ;;
   reboot-system)
     read_system_power_request

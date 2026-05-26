@@ -93,10 +93,14 @@ require_root() {
 
 parse_install_options() {
   reinstall=0
+  defer_ui_restart=0
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --reinstall)
         reinstall=1
+        ;;
+      --defer-ui-restart)
+        defer_ui_restart=1
         ;;
       *)
         kv "status" "refused"
@@ -381,6 +385,7 @@ cmd_install() {
   section "wifi-kit-install"
   kv "status" "starting"
   kv "reinstall" "$reinstall"
+  kv "defer_ui_restart" "$defer_ui_restart"
   install -d -o root -g root -m 0755 "$app_dir" "$ui_dir"
   install -d -o root -g root -m 0750 "$runtime_log_dir"
   copy_file "prototype/wifi-kit-action-wrapper.sh" "$app_dir/wifi-kit-action-wrapper.sh" 0755
@@ -422,11 +427,15 @@ cmd_install() {
 
   systemctl daemon-reload
   systemctl enable wifi-kit-ui.service
-  systemctl restart wifi-kit-ui.service
+  if [ "$defer_ui_restart" = "1" ]; then
+    kv "wifi-kit-ui" "enabled-restart-deferred"
+  else
+    systemctl restart wifi-kit-ui.service
+    kv "wifi-kit-ui" "enabled-restarted"
+  fi
   systemctl enable wifi-kit-boot-guard.service
   systemctl enable wifi-kit-runtime-watchdog.service
   systemctl restart wifi-kit-runtime-watchdog.service
-  kv "wifi-kit-ui" "enabled-restarted"
   kv "wifi-kit-boot-guard" "enabled"
   kv "wifi-kit-runtime-watchdog" "enabled-restarted"
   kv "status" "done"

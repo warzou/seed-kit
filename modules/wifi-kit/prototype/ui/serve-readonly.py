@@ -461,21 +461,30 @@ def run_runtime_reinstall(log_path: Path) -> tuple[dict[str, object], int]:
         append_action_log(log_path, action=action, status="planned", reason="privileged-actions-disabled")
         return {
             "reinstall_status": "planned",
+            "reinstall_exit_code": "",
             "reinstall_message": "Reinstallation runtime non executee: actions privilegiees desactivees.",
             "reinstall_started": False,
+            "reinstall_log": str(log_path),
         }, 200
 
     command, error = privileged_action_command(action)
     if error:
-        append_action_log(log_path, action=action, status="failure", error=error)
+        message = (
+            "sudoers refused reinstall-runtime"
+            if error == "wifi-kit-network-rights-not-installed"
+            else privileged_error_response(action, error)["message"]
+        )
+        append_action_log(log_path, action=action, status="failure", error=error, message=message)
         return {
             "reinstall_status": "failed",
             "reinstall_error": error,
-            "reinstall_message": privileged_error_response(action, error)["message"],
+            "reinstall_exit_code": "",
+            "reinstall_message": message,
             "reinstall_started": False,
+            "reinstall_log": str(log_path),
         }, 403 if error == "wifi-kit-network-rights-not-installed" else 500
 
-    append_action_log(log_path, action=action, status="starting")
+    append_action_log(log_path, action=action, status="starting", command=" ".join(command))
     try:
         with open_action_log(log_path) as handle:
             result = subprocess.run(
@@ -496,26 +505,36 @@ def run_runtime_reinstall(log_path: Path) -> tuple[dict[str, object], int]:
         return {
             "reinstall_status": "failed",
             "reinstall_error": "reinstall-timeout",
+            "reinstall_exit_code": "timeout",
             "reinstall_message": "Reinstallation runtime timeout.",
             "reinstall_started": True,
+            "reinstall_log": str(log_path),
+            "reinstall_log_tail": read_text_tail(log_path),
         }, 504
     except OSError as exc:
         append_action_log(log_path, action=action, status="failure", error=f"start-failed: {exc}")
         return {
             "reinstall_status": "failed",
             "reinstall_error": f"start-failed: {exc}",
+            "reinstall_exit_code": "",
             "reinstall_message": "Impossible de lancer la reinstallation runtime.",
             "reinstall_started": False,
+            "reinstall_log": str(log_path),
+            "reinstall_log_tail": read_text_tail(log_path),
         }, 500
 
     reinstall_status = "success" if result.returncode == 0 else "failed"
     append_action_log(log_path, action=action, status=reinstall_status, returncode=result.returncode)
+    log_tail = read_text_tail(log_path)
     return {
         "reinstall_status": reinstall_status,
         "reinstall_returncode": result.returncode,
+        "reinstall_exit_code": result.returncode,
         "reinstall_started": True,
+        "reinstall_log": str(log_path),
+        "reinstall_log_tail": log_tail,
         "reinstall_message": (
-            "Runtime reinstalle; l'interface peut redemarrer."
+            "Runtime reinstalle; redemarrage de l'interface differe pour afficher ce resultat."
             if result.returncode == 0
             else "Reinstallation runtime refusee ou echouee; voir le log."
         ),
@@ -1146,6 +1165,15 @@ def read_last_text_line(path: Path, max_chars: int = 2000) -> str:
         if line:
             return line[:max_chars]
     return ""
+
+
+def read_text_tail(path: Path, *, max_lines: int = 20, max_chars: int = 4000) -> str:
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return ""
+    tail = "\n".join(lines[-max_lines:])
+    return tail[-max_chars:]
 
 
 def runtime_watchdog_status() -> dict[str, object]:
