@@ -17,6 +17,9 @@ persistent_log_file="${WIFI_KIT_RUNTIME_WATCHDOG_PERSISTENT_LOG:-$persistent_log
 persistent_state_file="${WIFI_KIT_RUNTIME_WATCHDOG_PERSISTENT_STATE:-$persistent_log_dir/runtime-watchdog-state}"
 persistent_max_bytes="${WIFI_KIT_RUNTIME_WATCHDOG_PERSISTENT_MAX_BYTES:-262144}"
 gateway_ping_enabled="${WIFI_KIT_RUNTIME_WATCHDOG_GATEWAY_PING:-1}"
+normal_ui_port="${WIFI_KIT_NORMAL_UI_PORT:-54321}"
+normal_ui_service="${WIFI_KIT_NORMAL_UI_SERVICE:-wifi-kit-ui.service}"
+ui_repair_min_seconds="${WIFI_KIT_RUNTIME_WATCHDOG_UI_REPAIR_MIN_SECONDS:-60}"
 
 usage() {
   cat <<'EOF'
@@ -342,11 +345,69 @@ ap_recovery_ui_healthy() {
   WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$nm_ap_lab_script" status 2>/dev/null | grep -q '^ui_recovery_healthy=true$'
 }
 
+port_listening() {
+  port=$1
+  ss_bin=$(find_tool ss 2>/dev/null || true)
+  if [ -n "$ss_bin" ]; then
+    "$ss_bin" -ltn 2>/dev/null | awk '{ print $4 }' | grep -Eq "(^|:)$port$"
+    return $?
+  fi
+  return 1
+}
+
+http_healthy() {
+  url=$1
+  curl_bin=$(find_tool curl 2>/dev/null || true)
+  if [ -n "$curl_bin" ]; then
+    "$curl_bin" -fsS --max-time 2 "$url" >/dev/null 2>&1
+    return $?
+  fi
+  return 1
+}
+
+normal_ui_healthy() {
+  if [ -n "${WIFI_KIT_RUNTIME_WATCHDOG_MOCK_NORMAL_UI_HEALTHY:-}" ]; then
+    [ "$WIFI_KIT_RUNTIME_WATCHDOG_MOCK_NORMAL_UI_HEALTHY" = "yes" ] || [ "$WIFI_KIT_RUNTIME_WATCHDOG_MOCK_NORMAL_UI_HEALTHY" = "true" ]
+    return $?
+  fi
+  if http_healthy "http://127.0.0.1:$normal_ui_port/api/backend-status"; then
+    return 0
+  fi
+  port_listening "$normal_ui_port"
+}
+
+ensure_normal_ui() {
+  if normal_ui_healthy; then
+    return 0
+  fi
+  log_event "ui-http-unhealthy" "ui=normal port=$normal_ui_port action=restart-service"
+  if [ "$debug_passive" = "true" ]; then
+    log_event "debug-passive-suppressed-action" "would_restart_normal_ui=yes service=$normal_ui_service"
+    return 0
+  fi
+  systemctl_bin=$(find_tool systemctl 2>/dev/null || true)
+  [ -n "$systemctl_bin" ] || {
+    log_event "ui-normal-restart-failed" "reason=systemctl-missing service=$normal_ui_service"
+    return 1
+  }
+  set +e
+  "$systemctl_bin" restart "$normal_ui_service" >> "$log_file" 2>&1
+  ui_restart_rc=$?
+  set -e
+  if [ "$ui_restart_rc" -eq 0 ]; then
+    log_event "ui-normal-restarted" "result=success service=$normal_ui_service port=$normal_ui_port"
+    return 0
+  fi
+  log_event "ui-normal-restart-failed" "result=failure exit_code=$ui_restart_rc service=$normal_ui_service"
+  return "$ui_restart_rc"
+}
+
 ensure_ap_recovery_ui() {
   if ap_recovery_ui_healthy; then
     log_event "recovery-ui-healthy" "ap_recovery_active=yes"
     return 0
   fi
+  log_event "ui-http-unhealthy" "ui=recovery port=80 ap_recovery_active=yes"
   log_event "recovery-ui-missing" "ap_recovery_active=yes action=start-ui"
   if [ "$debug_passive" = "true" ]; then
     log_event "debug-passive-suppressed-action" "would_start_recovery_ui=yes"
@@ -649,6 +710,7 @@ cmd_audit() {
   kv "watchdog_persistent_state_file" "$persistent_state_file"
   kv "watchdog_persistent_log_file" "$persistent_log_file"
   kv "watchdog_instability_file" "$instability_file"
+  kv "normal_ui_healthy" "$(normal_ui_healthy && printf yes || printf no)"
   kv "watchdog_status" "${watchdog_status:-unknown}"
   kv "unstable_ssid" "${unstable_ssid:-}"
   kv "status" "$status"
@@ -676,6 +738,9 @@ cmd_plan() {
 cmd_run() {
   require_root
   config_values
+  if ! is_positive_integer "$ui_repair_min_seconds"; then
+    ui_repair_min_seconds=60
+  fi
   section "runtime-watchdog-run"
   kv "mode" "run"
   kv "log_file" "$log_file"
@@ -704,6 +769,7 @@ cmd_run() {
   grace_active=0
   grace_start=0
   last_ui_repair_attempt=0
+  last_normal_ui_repair_attempt=0
   while :; do
     config_values
     if [ "$enabled" != "true" ]; then
@@ -732,6 +798,15 @@ cmd_run() {
       write_state "ap-recovery-active" "watchdog-idle" "$last_good_ssid"
       sleep "$poll_seconds"
       continue
+    fi
+    if ! normal_ui_healthy; then
+      now=$(epoch_seconds)
+      if [ "$last_normal_ui_repair_attempt" -eq 0 ] || [ $((now - last_normal_ui_repair_attempt)) -ge "$ui_repair_min_seconds" ]; then
+        last_normal_ui_repair_attempt=$now
+        ensure_normal_ui || true
+      fi
+    else
+      last_normal_ui_repair_attempt=0
     fi
     if is_runtime_healthy; then
       if [ "$grace_active" = "1" ]; then

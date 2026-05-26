@@ -37,6 +37,7 @@ connect_wait_seconds="${WIFI_KIT_RETURN_CHECK_CONNECT_WAIT:-30}"
 ping_wait_seconds="${WIFI_KIT_RETURN_CHECK_PING_WAIT:-3}"
 internet_probe="${WIFI_KIT_RETURN_CHECK_PROBE:-1.1.1.1}"
 ap_restart_wait_seconds="${WIFI_KIT_RETURN_CHECK_AP_RESTART_WAIT:-30}"
+ap_min_stable_seconds="${WIFI_KIT_RETURN_CHECK_AP_MIN_STABLE_SECONDS:-120}"
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ap_setup_script="$script_dir/ap-setup-test.sh"
 action_wrapper="$script_dir/wifi-kit-action-wrapper.sh"
@@ -349,7 +350,7 @@ cmd_plan() {
   kv "sudo" "not-used"
   kv "reboot" "not-used"
   kv "future_01_scope" "only from AP recovery"
-  kv "future_02_wait" "sleep return_check_interval_minutes between attempts"
+  kv "future_02_wait" "sleep at least 120 seconds, or return_check_interval_minutes if longer, before attempts"
   kv "future_03_leave_ap" "temporarily leave AP recovery; do not use permanent AP+STA"
   kv "future_04_try_target" "try only last_good NetworkManager connection with bounded timeout"
   kv "future_05_success" "stay normal and leave AP recovery stopped"
@@ -380,6 +381,7 @@ cmd_run_loop() {
   kv "target_connection" "${target_connection:-}"
   kv "target_ssid" "${target_ssid:-}"
   kv "ap_restart_wait_seconds" "$ap_restart_wait_seconds"
+  kv "ap_min_stable_seconds" "$ap_min_stable_seconds"
   kv "secret_policy" "no client Wi-Fi password is read, logged, or stored"
   require_root
   if [ "$status" != "ok" ] || [ "$enabled" != "true" ]; then
@@ -390,6 +392,7 @@ cmd_run_loop() {
   fi
   require_number "return-check-interval-minutes" "$interval" "1440"
   require_number "ap-restart-wait-seconds" "$ap_restart_wait_seconds" "120"
+  require_number "ap-min-stable-seconds" "$ap_min_stable_seconds" "3600"
   if [ -n "${WIFI_KIT_RETURN_CHECK_INTERVAL_SECONDS:-}" ]; then
     require_number "return-check-interval-seconds" "$WIFI_KIT_RETURN_CHECK_INTERVAL_SECONDS" "86400"
     interval_seconds=$WIFI_KIT_RETURN_CHECK_INTERVAL_SECONDS
@@ -415,10 +418,15 @@ cmd_run_loop() {
   trap cleanup_loop EXIT INT TERM HUP
   kv "status" "started"
   kv "interval_seconds" "$interval_seconds"
+  kv "min_stable_seconds" "$ap_min_stable_seconds"
   log_event "ap-return-check-loop started" "interval_seconds=$interval_seconds"
   while ap_recovery_active; do
-    log_event "sleeping interval" "seconds=$interval_seconds"
-    sleep "$interval_seconds"
+    sleep_seconds=$interval_seconds
+    if [ "$sleep_seconds" -lt "$ap_min_stable_seconds" ]; then
+      sleep_seconds=$ap_min_stable_seconds
+    fi
+    log_event "sleeping interval" "seconds=$sleep_seconds min_stable_seconds=$ap_min_stable_seconds"
+    sleep "$sleep_seconds"
     audit_values
     if [ "$enabled" != "true" ]; then
       kv "status" "stopping"
