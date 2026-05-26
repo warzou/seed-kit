@@ -29,6 +29,7 @@ system_power_actions="${WIFI_KIT_ENABLE_SYSTEM_POWER_ACTIONS:-1}"
 reboot_action="${WIFI_KIT_ENABLE_REBOOT_ACTION:-1}"
 shutdown_action="${WIFI_KIT_ENABLE_SHUTDOWN_ACTION:-1}"
 runtime_log_dir="${WIFI_KIT_RUNTIME_LOG_DIR:-/var/log/seed-kit/wifi-kit}"
+runtime_version_path="${WIFI_KIT_RUNTIME_VERSION_PATH:-$app_dir/runtime-version}"
 
 usage() {
   cat <<'EOF'
@@ -76,6 +77,13 @@ runtime_config_path() {
 
 runtime_config=$(runtime_config_path)
 runtime_config_dir=$(dirname -- "$runtime_config")
+
+git_value() {
+  [ -d "$repo_dir/.git" ] || return 0
+  git_bin=$(find_tool git)
+  [ -n "$git_bin" ] || return 0
+  "$git_bin" -C "$repo_dir" "$@" 2>/dev/null | sed -n '1p' || true
+}
 
 legacy_user_ui_unit_path() {
   home=$(user_home)
@@ -317,6 +325,23 @@ ensure_runtime_config() {
   chmod 0600 "$runtime_config"
 }
 
+write_runtime_version() {
+  commit=$(git_value rev-parse HEAD)
+  branch=$(git_value rev-parse --abbrev-ref HEAD)
+  timestamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+  tmp_version=$(mktemp)
+  {
+    printf 'commit=%s\n' "${commit:-unknown}"
+    printf 'branch=%s\n' "${branch:-unknown}"
+    printf 'installed_at=%s\n' "$timestamp"
+    printf 'hostname=%s\n' "$(hostname 2>/dev/null || printf unknown)"
+    printf 'repo_dir=%s\n' "$repo_dir"
+    printf 'app_dir=%s\n' "$app_dir"
+  } > "$tmp_version"
+  install -o root -g root -m 0644 "$tmp_version" "$runtime_version_path"
+  rm -f "$tmp_version"
+}
+
 cmd_audit() {
   section "wifi-kit-install-audit"
   kv "mode" "audit"
@@ -327,6 +352,7 @@ cmd_audit() {
   kv "app_dir" "$app_dir"
   kv "ui_dir" "$ui_dir"
   kv "runtime_config" "$runtime_config"
+  kv "runtime_version_path" "$runtime_version_path"
   kv "runtime_log_dir" "$runtime_log_dir"
   kv "sudoers_path" "$sudoers_path"
   kv "normal_unit_path" "$normal_unit_path"
@@ -400,7 +426,9 @@ cmd_install() {
   printf '%s\n' "$repo_dir" > "$app_dir/repo-dir"
   chown root:root "$app_dir/repo-dir"
   chmod 0644 "$app_dir/repo-dir"
+  write_runtime_version
   kv "files" "installed"
+  kv "runtime_version" "$runtime_version_path"
 
   ensure_runtime_config
   kv "runtime_config" "prepared"

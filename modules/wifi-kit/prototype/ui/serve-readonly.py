@@ -27,6 +27,7 @@ ACTION_WRAPPER_SH = SCRIPT_DIR.parent / "wifi-kit-action-wrapper.sh"
 INSTALLED_ACTION_WRAPPER_SH = Path(os.environ.get("WIFI_KIT_ACTION_WRAPPER", "/opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh"))
 INSTALLED_APP_DIR = INSTALLED_ACTION_WRAPPER_SH.parent
 INSTALLED_NM_AP_LAB_SH = INSTALLED_APP_DIR / "wifi-kit-nm-ap-lab.sh"
+INSTALLED_RUNTIME_VERSION = Path(os.environ.get("WIFI_KIT_RUNTIME_VERSION", str(INSTALLED_APP_DIR / "runtime-version")))
 SUDOERS_PATH = Path(os.environ.get("WIFI_KIT_SUDOERS_PATH", "/etc/sudoers.d/wifi-kit"))
 UI_SERVICE_NAME = os.environ.get("WIFI_KIT_UI_SERVICE", "wifi-kit-ui.service")
 BOOT_GUARD_SERVICE_NAME = os.environ.get("WIFI_KIT_BOOT_GUARD_SERVICE", "wifi-kit-boot-guard.service")
@@ -370,6 +371,34 @@ def git_run_logged(repo: Path, log_path: Path, *args: str, timeout: float = 30.0
     return result.returncode, output
 
 
+def runtime_version_status(repo: Path | None = None, repo_commit: str = "") -> dict[str, object]:
+    values = read_key_value_file(INSTALLED_RUNTIME_VERSION)
+    version_access = path_access_status(INSTALLED_RUNTIME_VERSION)
+    runtime_commit = safe_label(values.get("commit", ""))
+    runtime_branch = safe_label(values.get("branch", ""))
+    runtime_install_time = safe_label(values.get("installed_at", ""))
+    runtime_repo_dir = safe_label(values.get("repo_dir", ""))
+    runtime_app_dir = safe_label(values.get("app_dir", ""))
+    if not repo_commit and repo:
+        repo_commit, _ = git_output(repo, "rev-parse", "HEAD")
+    runtime_synced = bool(runtime_commit and repo_commit and runtime_commit == repo_commit)
+    return {
+        "runtime_version_file": str(INSTALLED_RUNTIME_VERSION),
+        "runtime_version_exists": version_access["exists"],
+        "runtime_version_readable": version_access["readable"],
+        "runtime_version_access_error": version_access["error"],
+        "runtime_commit": runtime_commit,
+        "runtime_commit_short": runtime_commit[:12],
+        "runtime_branch": runtime_branch,
+        "runtime_install_time": runtime_install_time,
+        "runtime_repo_dir": runtime_repo_dir,
+        "runtime_app_dir": runtime_app_dir,
+        "repo_commit": repo_commit,
+        "repo_commit_short": repo_commit[:12],
+        "runtime_synced": runtime_synced,
+    }
+
+
 def update_check_status() -> tuple[dict, int]:
     repo = find_git_repo_dir()
     if not repo:
@@ -438,6 +467,7 @@ def update_check_status() -> tuple[dict, int]:
 
     status = "up-to-date" if local_commit == remote_commit else "update-available"
     message = "A jour." if status == "up-to-date" else "Mise a jour disponible sur la branche distante."
+    runtime_version = runtime_version_status(repo, local_commit)
     return {
         "ok": True,
         "status": status,
@@ -452,6 +482,7 @@ def update_check_status() -> tuple[dict, int]:
         "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "install_available": False,
         "install_message": "Installation automatique non disponible dans ce lot.",
+        **runtime_version,
     }, 200
 
 
@@ -660,6 +691,7 @@ def update_install(payload: dict) -> tuple[dict, int]:
     if local_before == remote_commit:
         append_action_log(log_path, action=action, status="already-up-to-date", repo=repo, branch=branch, commit=local_before[:12])
         reinstall_payload, reinstall_http_status = run_runtime_reinstall(log_path)
+        runtime_version = runtime_version_status(repo, local_before)
         return {
             "status": "success" if reinstall_http_status == 200 else "failure",
             "action": action,
@@ -679,6 +711,7 @@ def update_install(payload: dict) -> tuple[dict, int]:
             "update_started": False,
             "log": str(log_path),
             **reinstall_payload,
+            **runtime_version,
         }, 200 if reinstall_http_status == 200 else reinstall_http_status
 
     pull_code, pull_output = git_run_logged(repo, log_path, "pull", "--ff-only", "origin", branch, timeout=90.0)
@@ -713,6 +746,7 @@ def update_install(payload: dict) -> tuple[dict, int]:
         needs_reinstall=True,
     )
     reinstall_payload, reinstall_http_status = run_runtime_reinstall(log_path)
+    runtime_version = runtime_version_status(repo, local_after)
     return {
         "status": "success" if reinstall_http_status == 200 else "failure",
         "action": action,
@@ -734,6 +768,7 @@ def update_install(payload: dict) -> tuple[dict, int]:
         "update_started": True,
         "log": str(log_path),
         **reinstall_payload,
+        **runtime_version,
     }, 202 if reinstall_http_status == 200 else reinstall_http_status
 
 

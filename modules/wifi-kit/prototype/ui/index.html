@@ -3101,6 +3101,13 @@
         if (payload.remote_commit_short || payload.remote_commit) {
           lines.push(`Commit distant: ${payload.remote_commit_short || payload.remote_commit}`);
         }
+        if (payload.runtime_version_exists) {
+          lines.push(`Runtime /opt: ${payload.runtime_synced ? 'synchronise' : 'en retard'}`);
+          lines.push(`Commit runtime: ${payload.runtime_commit_short || payload.runtime_commit || 'inconnu'}`);
+          if (payload.runtime_install_time) lines.push(`Installation runtime: ${payload.runtime_install_time}`);
+        } else {
+          lines.push('Runtime /opt: version inconnue');
+        }
         lines.push(payload.message || (response.ok ? 'Verification terminee.' : 'Verification impossible.'));
         showUpdateCheckResult(lines.join('\n'));
         updateInstallButton();
