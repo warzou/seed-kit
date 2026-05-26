@@ -5,6 +5,7 @@ runtime_config="${WIFI_KIT_RUNTIME_CONFIG:-${HOME:-/tmp}/.config/wifi-kit/runtim
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 action_wrapper="$script_dir/wifi-kit-action-wrapper.sh"
 ap_setup_script="$script_dir/ap-setup-test.sh"
+nm_ap_lab_script="$script_dir/wifi-kit-nm-ap-lab.sh"
 iface="${WIFI_KIT_RUNTIME_WATCHDOG_IFACE:-wlan0}"
 poll_seconds="${WIFI_KIT_RUNTIME_WATCHDOG_POLL_SECONDS:-5}"
 log_file="${WIFI_KIT_RUNTIME_WATCHDOG_LOG:-/tmp/wifi-kit-actions/runtime-watchdog-$(id -u).log}"
@@ -325,8 +326,47 @@ ap_recovery_active() {
     [ "$WIFI_KIT_RUNTIME_WATCHDOG_MOCK_AP_ACTIVE" = "yes" ] || [ "$WIFI_KIT_RUNTIME_WATCHDOG_MOCK_AP_ACTIVE" = "true" ]
     return $?
   fi
+  if [ -f "$nm_ap_lab_script" ]; then
+    WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$nm_ap_lab_script" status 2>/dev/null | grep -q '^hotspot_active=true$' && return 0
+  fi
   [ -f "$ap_setup_script" ] || return 1
   sh "$ap_setup_script" status 2>/dev/null | grep -q '^test_hostapd_running=yes$'
+}
+
+ap_recovery_ui_healthy() {
+  if [ -n "${WIFI_KIT_RUNTIME_WATCHDOG_MOCK_AP_UI_HEALTHY:-}" ]; then
+    [ "$WIFI_KIT_RUNTIME_WATCHDOG_MOCK_AP_UI_HEALTHY" = "yes" ] || [ "$WIFI_KIT_RUNTIME_WATCHDOG_MOCK_AP_UI_HEALTHY" = "true" ]
+    return $?
+  fi
+  [ -f "$nm_ap_lab_script" ] || return 1
+  WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$nm_ap_lab_script" status 2>/dev/null | grep -q '^ui_recovery_healthy=true$'
+}
+
+ensure_ap_recovery_ui() {
+  if ap_recovery_ui_healthy; then
+    log_event "recovery-ui-healthy" "ap_recovery_active=yes"
+    return 0
+  fi
+  log_event "recovery-ui-missing" "ap_recovery_active=yes action=start-ui"
+  if [ "$debug_passive" = "true" ]; then
+    log_event "debug-passive-suppressed-action" "would_start_recovery_ui=yes"
+    write_state "ap-recovery-active" "recovery-ui-missing-debug-passive" "$last_good_ssid"
+    return 0
+  fi
+  [ -f "$nm_ap_lab_script" ] || {
+    log_event "recovery-ui-restart-failed" "reason=nm-ap-lab-script-missing"
+    return 1
+  }
+  set +e
+  WIFI_KIT_RUNTIME_CONFIG="$runtime_config" WIFI_KIT_NM_AP_LAB_APPLY=1 sh "$nm_ap_lab_script" start-ui >> "$log_file" 2>&1
+  ui_start_rc=$?
+  set -e
+  if [ "$ui_start_rc" -eq 0 ]; then
+    log_event "recovery-ui-restarted" "result=success exit_code=$ui_start_rc"
+    return 0
+  fi
+  log_event "recovery-ui-restart-failed" "result=failure exit_code=$ui_start_rc"
+  return "$ui_start_rc"
 }
 
 config_values() {
@@ -595,6 +635,11 @@ cmd_audit() {
   kv "runtime_reason" "$runtime_reason"
   kv "health_status" "$health_status"
   kv "health_reason" "$health_reason"
+  if ap_recovery_ui_healthy; then
+    kv "ap_recovery_ui_healthy" "yes"
+  else
+    kv "ap_recovery_ui_healthy" "no"
+  fi
   kv "unstable_triggered" "$unstable_triggered"
   kv "unstable_count" "$unstable_count"
   kv "unstable_threshold" "$threshold"
@@ -658,6 +703,7 @@ cmd_run() {
 
   grace_active=0
   grace_start=0
+  last_ui_repair_attempt=0
   while :; do
     config_values
     if [ "$enabled" != "true" ]; then
@@ -672,6 +718,17 @@ cmd_run() {
     fi
     if ap_recovery_active; then
       grace_active=0
+      if ! ap_recovery_ui_healthy; then
+        now=$(epoch_seconds)
+        if [ "$last_ui_repair_attempt" -eq 0 ] || [ $((now - last_ui_repair_attempt)) -ge 30 ]; then
+          last_ui_repair_attempt=$now
+          ensure_ap_recovery_ui || true
+        else
+          log_event "recovery-ui-missing" "ap_recovery_active=yes action=retry-wait"
+        fi
+      else
+        last_ui_repair_attempt=0
+      fi
       write_state "ap-recovery-active" "watchdog-idle" "$last_good_ssid"
       sleep "$poll_seconds"
       continue

@@ -122,6 +122,10 @@ ss_path() {
   find_tool ss 2>/dev/null || true
 }
 
+curl_path() {
+  find_tool curl 2>/dev/null || true
+}
+
 effective_ap_ssid() {
   if [ -n "$ap_ssid" ]; then
     printf '%s\n' "$ap_ssid"
@@ -245,6 +249,47 @@ ui_pid() {
 ui_is_active() {
   pid=$(ui_pid)
   [ -n "$pid" ] && pid_is_alive "$pid"
+}
+
+ui_http_healthy() {
+  port_is_listening || return 1
+  curl_bin=$(curl_path)
+  if [ -n "$curl_bin" ]; then
+    "$curl_bin" -fsS --max-time 2 "http://$ui_host:$ui_port/recovery" >/dev/null 2>&1 && return 0
+  fi
+  port_is_listening
+}
+
+ui_recovery_healthy() {
+  port_is_listening || return 1
+  ui_http_healthy || return 1
+  pid=$(ui_pid)
+  [ -z "$pid" ] || pid_is_alive "$pid" || return 1
+  return 0
+}
+
+cleanup_stale_ui() {
+  pid=$(ui_pid)
+  if [ -n "$pid" ] && ! pid_is_alive "$pid"; then
+    kv "recovery-ui-stale-process" "$pid"
+    rm -f "$ui_pidfile" 2>/dev/null || true
+    return 0
+  fi
+  if [ -n "$pid" ] && ! ui_recovery_healthy; then
+    kv "recovery-ui-stale-process" "$pid"
+    kill "$pid" 2>/dev/null || true
+    rm -f "$ui_pidfile" 2>/dev/null || true
+  fi
+}
+
+wait_ui_recovery_healthy() {
+  tries=${1:-10}
+  while [ "$tries" -gt 0 ]; do
+    ui_recovery_healthy && return 0
+    sleep 1
+    tries=$((tries - 1))
+  done
+  return 1
 }
 
 hotspot_is_active() {
@@ -741,18 +786,29 @@ cmd_start_ui() {
   kv "command" "$(ui_start_command "$ssid")"
   if [ "$apply" = "1" ]; then
     python_bin=$(require_apply_tool python3)
-    if ui_is_active; then
-      kv "result" "ui-already-running"
+    if ui_recovery_healthy; then
+      kv "recovery-ui-healthy" "true"
+      kv "result" "ui-already-healthy"
       kv "pid" "$(ui_pid)"
       return 0
     fi
+    kv "recovery-ui-missing" "true"
+    cleanup_stale_ui
     WIFI_KIT_RECOVERY_BACKEND=nm-hotspot \
     WIFI_KIT_NM_AP_LAB=1 \
     WIFI_KIT_RUNTIME_CONFIG="$runtime_config" \
       nohup "$python_bin" "$ui_script" --host "$ui_host" --port "$ui_port" --recovery-mode --recovery-ssid "$ssid" --recovery-ip "$ui_host" >"$ui_log" 2>&1 &
     printf '%s\n' "$!" > "$ui_pidfile"
-    kv "result" "ui-started"
     kv "pid" "$!"
+    if wait_ui_recovery_healthy 10; then
+      kv "recovery-ui-restarted" "true"
+      kv "recovery-ui-healthy" "true"
+      kv "result" "ui-started"
+    else
+      kv "recovery-ui-healthy" "false"
+      kv "result" "ui-start-requested-not-confirmed"
+      return 1
+    fi
   fi
 }
 
@@ -795,18 +851,17 @@ cmd_status() {
   else
     kv "hotspot_active" "false"
   fi
-  if ui_is_active; then
-    kv "ui_recovery_active" "true"
-    kv "ui_pid" "$(ui_pid)"
-  else
-    kv "ui_recovery_active" "false"
-    kv "ui_pid" "${ui_pid:-missing}"
-  fi
+  ui_pid_value=$(ui_pid)
+  if ui_is_active; then kv "ui_process_active" "true"; else kv "ui_process_active" "false"; fi
+  if ui_recovery_healthy; then kv "ui_recovery_active" "true"; else kv "ui_recovery_active" "false"; fi
+  kv "ui_pid" "${ui_pid_value:-missing}"
   if port_is_listening; then
     kv "port_80_listening" "true"
   else
     kv "port_80_listening" "false"
   fi
+  if ui_http_healthy; then kv "ui_http_healthy" "true"; else kv "ui_http_healthy" "false"; fi
+  if ui_recovery_healthy; then kv "ui_recovery_healthy" "true"; else kv "ui_recovery_healthy" "false"; fi
   kv "ui_url" "http://$ui_host:$ui_port"
   kv "ui_pidfile" "$ui_pidfile"
   kv "ui_log" "$ui_log"
