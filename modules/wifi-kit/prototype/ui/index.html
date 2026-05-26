@@ -1407,6 +1407,144 @@
 
     .recovery-result[hidden] { display: none; }
 
+    .appliance-stack {
+      display: grid;
+      gap: 14px;
+    }
+
+    .appliance-card {
+      display: grid;
+      gap: 12px;
+      border: 1px solid rgba(213, 229, 255, 0.1);
+      border-radius: 18px;
+      background: rgba(6, 16, 27, 0.48);
+      padding: 14px;
+    }
+
+    .appliance-card.primary {
+      border-color: rgba(68, 212, 230, 0.22);
+      background: linear-gradient(180deg, rgba(68, 212, 230, 0.1), rgba(6, 16, 27, 0.48));
+    }
+
+    .appliance-card.danger-zone {
+      border-color: rgba(255, 85, 77, 0.28);
+      background: rgba(45, 14, 18, 0.34);
+    }
+
+    .appliance-card-header {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .appliance-card-header h2,
+    .appliance-card-header h3 {
+      margin: 0;
+      color: var(--soft);
+      font-size: 1rem;
+      line-height: 1.1;
+    }
+
+    .appliance-card-header p,
+    .appliance-copy {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.4;
+    }
+
+    .status-pill-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .status-pill {
+      min-width: 0;
+      border: 1px solid rgba(213, 229, 255, 0.09);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.045);
+      padding: 10px;
+    }
+
+    .status-pill span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.68rem;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+
+    .status-pill strong {
+      display: block;
+      margin-top: 4px;
+      color: var(--soft);
+      font-size: 0.94rem;
+      line-height: 1.15;
+      overflow-wrap: anywhere;
+    }
+
+    .status-pill-row .metric,
+    .health-section .metric {
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.045);
+      box-shadow: none;
+    }
+
+    .status-pill-row .metric span,
+    .health-section .metric span {
+      font-size: 0.68rem;
+      letter-spacing: 0;
+    }
+
+    .primary-action-button {
+      min-height: 56px;
+      border-radius: 18px;
+      font-size: 0.95rem;
+    }
+
+    .secondary-action-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .health-section {
+      display: grid;
+      gap: 10px;
+    }
+
+    .health-section h3 {
+      grid-column: 1 / -1;
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .advanced-details {
+      border: 1px solid rgba(213, 229, 255, 0.1);
+      border-radius: 18px;
+      background: rgba(4, 12, 22, 0.36);
+      padding: 0;
+      overflow: hidden;
+      opacity: 1;
+    }
+
+    .advanced-details summary {
+      min-height: 48px;
+      padding: 12px 14px;
+    }
+
+    .advanced-details-body {
+      display: grid;
+      gap: 12px;
+      border-top: 1px solid rgba(213, 229, 255, 0.08);
+      padding: 12px;
+    }
+
     .section-tabs {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1562,6 +1700,8 @@
       .recovery-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
       .node-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .action-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .status-pill-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .secondary-action-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .tab-button { font-size: 0.74rem; }
       .network-orb {
         width: 64px;
@@ -1692,15 +1832,22 @@
     </div>
 
     <div class="page" data-page="recovery" hidden>
-      <section class="panel recovery-panel" id="recovery-panel" aria-labelledby="recovery-title">
+      <section class="panel recovery-panel appliance-stack" id="recovery-panel" aria-labelledby="recovery-title">
         <div class="section-head">
           <div>
-            <h2 id="recovery-title">Recuperation AP</h2>
-            <p class="section-copy" id="recovery-copy">Un Wi-Fi temporaire pour retrouver le node si le reseau principal ne repond plus.</p>
+            <h2 id="recovery-title">Secours</h2>
+            <p class="section-copy" id="recovery-copy">Les actions utiles quand le node doit rester joignable.</p>
           </div>
           <span class="chip" id="recovery-chip">Plan-only</span>
         </div>
-        <div class="recovery-grid" aria-label="Etat recovery">
+        <article class="appliance-card primary" aria-label="Etat recovery">
+          <div class="appliance-card-header">
+            <div>
+              <h3>Etat recovery</h3>
+              <p class="appliance-copy">Etat instantane des chemins de secours.</p>
+            </div>
+          </div>
+          <div class="status-pill-row">
           <div class="metric"><span>Wi-Fi AP</span><strong id="recovery-ssid">...</strong></div>
           <div class="metric"><span>Wi-Fi principal</span><strong id="recovery-return-ssid">...</strong></div>
           <div class="metric"><span>Adresse AP</span><strong id="recovery-ip">192.168.50.1</strong></div>
@@ -1712,10 +1859,13 @@
           <div class="metric"><span>R&eacute;seau principal</span><strong id="recovery-main-health">...</strong></div>
           <div class="metric"><span>AP recovery</span><strong id="recovery-ap-health">...</strong></div>
           <div class="metric"><span>Runtime /opt</span><strong id="recovery-runtime-sync">...</strong></div>
-          <div class="metric"><span>Mode</span><strong id="recovery-failsafe-mode">...</strong></div>
+          <div class="metric"><span>Failsafe</span><strong id="recovery-failsafe-mode">...</strong></div>
           <div class="metric"><span>Watchdog</span><strong id="recovery-watchdog-event">...</strong></div>
-        </div>
-        <div class="recovery-settings" aria-label="Configuration recovery">
+          </div>
+        </article>
+        <details class="advanced-details" id="recovery-advanced">
+          <summary>Parametres avances</summary>
+          <div class="advanced-details-body recovery-settings" aria-label="Configuration recovery">
           <div class="recovery-reassurance">
             <strong>Le mode AP reste un secours manuel.</strong>
             <p>Il ne demarre pas tout seul depuis cette page. Le retour utilise le Wi-Fi principal choisi ci-dessous.</p>
@@ -1814,37 +1964,38 @@
           <button id="forget-network-button" class="button danger" type="button" disabled>⚠ Oublier ce réseau</button>
           <p class="danger-note">Supprimera le profil Wi-Fi connu après confirmation.</p>
           <div id="recovery-config-result" class="callout recovery-result" hidden></div>
-        </div>
+          </div>
+        </details>
       </section>
 
-      <section class="panel network-actions-panel" aria-labelledby="network-actions-title">
+      <section class="panel network-actions-panel appliance-card" aria-labelledby="network-actions-title">
         <div class="section-head">
           <div>
-            <h2 id="network-actions-title">Actions de secours</h2>
-            <p class="section-copy">A utiliser seulement si tu veux basculer volontairement le node.</p>
+            <h2 id="network-actions-title">Action principale</h2>
+            <p class="section-copy">Une action claire, puis des options secondaires si besoin.</p>
           </div>
           <span class="chip">SAFE</span>
         </div>
-        <div class="recovery-actions">
+        <div class="recovery-actions secondary-action-grid">
           <div class="action-card">
             <span class="chip">Mode AP</span>
-            <strong>Activer le mode AP</strong>
-            <p>Le node cree son propre Wi-Fi temporaire. Tu pourras ouvrir l'interface sur le port 80.</p>
+            <strong>Activer le Wi-Fi secours</strong>
+            <p>Le node cree son propre Wi-Fi de secours et ouvre l'interface recovery.</p>
             <label class="confirm-line">
               <input id="ap-confirmed" type="checkbox">
               Je comprends que le mode AP peut couper temporairement l'acces reseau.
             </label>
-            <button id="start-ap-mode-button" class="button" type="button" data-network-action="start-ap-mode" disabled>Activer le mode AP</button>
+            <button id="start-ap-mode-button" class="button primary-action-button" type="button" data-network-action="start-ap-mode" disabled>Activer le Wi-Fi secours</button>
             <div id="start-ap-mode-result" class="callout recovery-result" hidden></div>
             <details class="action-plan">
               <summary>Afficher le plan</summary>
-              <p>Snapshot NetworkManager, bascule wlan0 en AP-only, lancement temporaire hostapd, dnsmasq DHCP/DNS captive et UI locale sur 192.168.50.1:80. Timeout prototype: 300 s.</p>
+              <p>Demande au backend SAFE d'ouvrir le mode AP recovery puis confirme l'etat reel avant d'annoncer le succes.</p>
             </details>
           </div>
           <div class="action-card">
-            <strong>Retour au Wi-Fi principal</strong>
-            <p>Reconnecte le node au Wi-Fi principal configure dans la section Recuperation AP.</p>
-            <button id="return-default-network-button" class="button secondary" type="button" data-network-action="return-default-network">Retour Wi-Fi principal</button>
+            <strong>Retour reseau principal</strong>
+            <p>Reconnecte le node au Wi-Fi principal configure.</p>
+            <button id="return-default-network-button" class="button secondary primary-action-button" type="button" data-network-action="return-default-network">Retour reseau principal</button>
             <details class="action-plan">
               <summary>Afficher le plan</summary>
               <p>Demande &agrave; NetworkManager de reconnecter uniquement le profil principal enregistré. L'accès réseau peut couper quelques secondes.</p>
@@ -1859,113 +2010,77 @@
               <p>Depuis le mode AP recovery, stoppe l'AP, tente une fois le dernier Wi-Fi connu, puis reste en mode normal si le retour reussit. En cas d'echec, relance l'AP recovery.</p>
             </details>
           </div>
+          <div class="action-card">
+            <strong>Exporter diagnostic</strong>
+            <p>Prepare un fichier court pour comprendre l'etat du node.</p>
+            <button class="button secondary diagnostic-export-trigger" type="button">Exporter diagnostic</button>
+            <div id="recovery-diagnostic-export-result" class="callout recovery-result" hidden></div>
+          </div>
         </div>
         <div id="network-action-result" class="callout recovery-result" hidden></div>
         <div id="recovery-action-result" class="callout recovery-result" hidden></div>
       </section>
 
-      <section class="panel network-actions-panel" aria-labelledby="system-actions-title">
-        <div class="section-head">
-          <div>
-            <h2 id="system-actions-title">Maintenance systeme</h2>
-            <p class="section-copy">Actions fortes uniquement. Elles coupent l'acces au node et ne partent jamais par GET.</p>
-          </div>
-          <span class="chip">SAFE</span>
-        </div>
-        <div class="recovery-actions">
-          <div class="action-card">
-            <span class="chip">Systeme</span>
-            <strong>Redemarrer</strong>
-            <p>Redemarre proprement le node. Cette action coupera temporairement l'acces au node.</p>
-            <label class="confirm-line">
-              <input id="system-reboot-confirmed" type="checkbox">
-              Confirmer le red&eacute;marrage
-            </label>
-            <button id="system-reboot-button" class="button warn" type="button" data-system-action="system-reboot" disabled>Redemarrer</button>
-            <div id="system-reboot-result" class="callout recovery-result" hidden></div>
-          </div>
-          <div class="action-card">
-            <span class="chip">Systeme</span>
-            <strong>Eteindre</strong>
-            <p>Eteint proprement le node. Cette action coupera definitivement l'acces jusqu'au prochain demarrage physique.</p>
-            <label class="confirm-line">
-              <input id="system-shutdown-confirmed" type="checkbox">
-              Confirmer l'arr&ecirc;t
-            </label>
-            <button id="system-shutdown-button" class="button danger" type="button" data-system-action="system-shutdown" disabled>Eteindre</button>
-            <div id="system-shutdown-result" class="callout recovery-result" hidden></div>
-          </div>
-          <div class="action-card">
-            <span class="chip">Updates</span>
-            <strong>Verifier les mises a jour</strong>
-            <p>Compare le commit local avec la branche distante. Aucune installation automatique n'est lancee.</p>
-            <button id="updates-check-button" class="button secondary" type="button">Verifier les mises a jour</button>
-            <label class="confirm-line">
-              <input id="updates-install-confirmed" type="checkbox" disabled>
-              Confirmer l'installation de la mise a jour
-            </label>
-            <button id="updates-install-button" class="button secondary" type="button" disabled>Installer la mise a jour</button>
-            <div id="updates-check-result" class="callout recovery-result" hidden></div>
-          </div>
-        </div>
-      </section>
     </div>
 
     <div class="page" data-page="diagnostic" hidden>
-      <section class="panel diagnostic-panel" aria-labelledby="diag-title">
+      <section class="panel diagnostic-panel appliance-stack" aria-labelledby="diag-title">
         <div class="section-head">
           <div>
             <h2 id="diag-title">Diagnostic</h2>
-            <p class="section-copy">Lecture seule: dernier etat connu, guard recovery, ports utiles et JSON brut.</p>
+            <p class="section-copy">Vue sante du node, sans bruit technique au premier regard.</p>
           </div>
           <span class="chip">SAFE</span>
         </div>
-        <div class="node-grid">
+        <div class="node-grid health-section">
+          <h3>Reseau</h3>
           <div class="metric"><span>Hostname</span><strong id="node-hostname">...</strong></div>
           <div class="metric"><span>IP actuelle</span><strong id="node-ip">...</strong></div>
           <div class="metric"><span>Wi-Fi actuel</span><strong id="node-wifi">...</strong></div>
           <div class="metric"><span>NetworkManager</span><strong id="node-nm">...</strong></div>
           <div class="metric"><span>Uptime</span><strong id="node-uptime">...</strong></div>
           <div class="metric"><span>Temperature</span><strong id="node-temp">...</strong></div>
+          <h3>Recovery</h3>
           <div class="metric"><span>Mode</span><strong id="node-recovery">...</strong></div>
           <div class="metric"><span>AP</span><strong id="node-ap">...</strong></div>
           <div class="metric"><span>DHCP</span><strong id="node-dhcp">...</strong></div>
           <div class="metric"><span>Dernier evenement</span><strong id="diag-last-event">...</strong></div>
+          <h3>Runtime</h3>
           <div class="metric"><span>Watchdog runtime</span><strong id="diag-runtime-watchdog">...</strong></div>
           <div class="metric"><span>Cause runtime</span><strong id="diag-runtime-reason">...</strong></div>
           <div class="metric"><span>Debug passif</span><strong id="diag-runtime-debug-passive">...</strong></div>
           <div class="metric"><span>Connexion actuelle</span><strong id="diag-current-connection">...</strong></div>
           <div class="metric"><span>Last good attendu</span><strong id="diag-last-good">...</strong></div>
           <div class="metric"><span>SSID instable</span><strong id="diag-unstable-ssid">...</strong></div>
+          <h3>Services</h3>
           <div class="metric"><span>AP</span><strong id="diag-ap">...</strong></div>
           <div class="metric"><span>DHCP</span><strong id="diag-dhcp">...</strong></div>
           <div class="metric"><span>UI</span><strong id="diag-ui">...</strong></div>
           <div class="metric"><span>Source de scan</span><strong id="scan-source">...</strong></div>
           <div class="metric"><span>Backend scan</span><strong id="diag-scan-backend">...</strong></div>
-          <div class="metric"><span>Ping gateway</span><strong>futur</strong></div>
-          <div class="metric"><span>Ping internet</span><strong>futur</strong></div>
-          <div class="metric"><span>Recovery guard</span><strong>audit futur</strong></div>
-          <div class="metric"><span>Ports utiles</span><strong>18089 / 80 / 53 / 67</strong></div>
         </div>
-        <button id="diagnostic-export-button" class="button secondary" type="button">Exporter diagnostic</button>
+        <button id="diagnostic-export-button" class="button secondary diagnostic-export-trigger" type="button">Exporter diagnostic</button>
         <div id="diagnostic-export-result" class="callout recovery-result" hidden></div>
-        <div class="advanced-grid">
-          <h2 id="node-title">Diagnostic SAFE</h2>
-          <div id="node-state" class="mini-grid"></div>
-          <h2 id="json-title">JSON brut</h2>
-          <pre id="raw-diagnose"></pre>
-          <pre id="raw-scan"></pre>
-          <pre id="raw-snapshot"></pre>
-        </div>
+        <details class="advanced-details">
+          <summary>Voir donnees brutes</summary>
+          <div class="advanced-details-body advanced-grid">
+            <h2 id="node-title">Diagnostic SAFE</h2>
+            <div id="node-state" class="mini-grid"></div>
+            <h2 id="json-title">JSON brut</h2>
+            <pre id="raw-diagnose"></pre>
+            <pre id="raw-scan"></pre>
+            <pre id="raw-snapshot"></pre>
+          </div>
+        </details>
       </section>
     </div>
 
-    <div class="page" data-page="config" hidden>
-      <section class="panel config-panel" aria-labelledby="config-password-title">
+    <div class="page appliance-stack" data-page="config" hidden>
+      <section class="panel config-panel appliance-card" aria-labelledby="config-password-title">
         <div class="section-head">
           <div>
-            <h2 id="config-password-title">Mot de passe AP recovery</h2>
-            <p class="section-copy">Ce mot de passe sert au Wi-Fi recovery, pas &agrave; l'interface.</p>
+            <h2 id="config-password-title">Recovery</h2>
+            <p class="section-copy">Parametres essentiels du Wi-Fi de secours.</p>
           </div>
           <span class="chip">Plan-only</span>
         </div>
@@ -1982,15 +2097,17 @@
         </div>
       </section>
 
-      <section class="panel config-panel" aria-labelledby="config-title">
+      <section class="panel config-panel appliance-card" aria-labelledby="config-title">
         <div class="section-head">
           <div>
-            <h2 id="config-title">Configuration</h2>
-            <p class="section-copy">Param&egrave;tres affich&eacute;s seulement ; persistance future hors repo.</p>
+            <h2 id="config-title">Avance</h2>
+            <p class="section-copy">Ports, politiques et informations techniques.</p>
           </div>
           <span class="chip">SAFE</span>
         </div>
-        <div class="config-grid">
+        <details class="advanced-details">
+          <summary>Details techniques</summary>
+          <div class="advanced-details-body config-grid">
           <div class="metric"><span>Port normal UI</span><strong id="config-normal-port">...</strong></div>
           <div class="metric"><span>Port recovery UI</span><strong id="config-recovery-port">...</strong></div>
           <div class="metric"><span>SSID recovery</span><strong id="config-recovery-ssid">...</strong></div>
@@ -1998,6 +2115,53 @@
           <div class="metric"><span>Politique AP</span><strong id="config-ap-password-policy">...</strong></div>
           <div class="metric"><span>Acc&egrave;s interface</span><strong id="config-ui-access-password">...</strong></div>
           <div class="metric"><span>Persistance</span><strong>future</strong></div>
+          </div>
+        </details>
+      </section>
+
+      <section class="panel config-panel appliance-card danger-zone" aria-labelledby="system-actions-title">
+        <div class="section-head">
+          <div>
+            <h2 id="system-actions-title">Maintenance</h2>
+            <p class="section-copy">Mises a jour et actions systeme. Toujours confirmees, jamais par GET.</p>
+          </div>
+          <span class="chip">SAFE</span>
+        </div>
+        <div class="recovery-actions secondary-action-grid">
+          <div class="action-card">
+            <span class="chip">Runtime</span>
+            <strong>Verifier les mises a jour</strong>
+            <p>Compare le commit local avec la branche distante.</p>
+            <button id="updates-check-button" class="button secondary" type="button">Verifier les mises a jour</button>
+            <label class="confirm-line">
+              <input id="updates-install-confirmed" type="checkbox" disabled>
+              Confirmer l'installation de la mise a jour
+            </label>
+            <button id="updates-install-button" class="button secondary" type="button" disabled>Installer la mise a jour</button>
+            <div id="updates-check-result" class="callout recovery-result" hidden></div>
+          </div>
+          <div class="action-card">
+            <span class="chip">Danger</span>
+            <strong>Redemarrer</strong>
+            <p>Le node va redemarrer proprement. L'interface sera indisponible puis devrait revenir sur le meme Wi-Fi.</p>
+            <label class="confirm-line">
+              <input id="system-reboot-confirmed" type="checkbox">
+              Confirmer le red&eacute;marrage
+            </label>
+            <button id="system-reboot-button" class="button warn" type="button" data-system-action="system-reboot" disabled>Redemarrer</button>
+            <div id="system-reboot-result" class="callout recovery-result" hidden></div>
+          </div>
+          <div class="action-card">
+            <span class="chip">Danger</span>
+            <strong>Eteindre</strong>
+            <p>Le node va s'eteindre proprement. Il faudra le rallumer physiquement.</p>
+            <label class="confirm-line">
+              <input id="system-shutdown-confirmed" type="checkbox">
+              Confirmer l'arr&ecirc;t
+            </label>
+            <button id="system-shutdown-button" class="button danger" type="button" data-system-action="system-shutdown" disabled>Eteindre</button>
+            <div id="system-shutdown-result" class="callout recovery-result" hidden></div>
+          </div>
         </div>
       </section>
     </div>
@@ -2534,8 +2698,8 @@
       const originalProfile = connectionByProfile(originalConnection);
       document.getElementById('recovery-chip').textContent = active ? 'Mode AP actif' : 'Mode AP inactif';
       document.getElementById('recovery-copy').textContent = active
-        ? 'Connecte-toi au Wi-Fi Wifi-Kit puis ouvre cette page locale.'
-        : 'Prépare le Wi-Fi AP et le Wi-Fi principal avant un test réel.';
+        ? 'AP recovery actif. Garde cette page ouverte pour revenir au reseau normal.'
+        : 'Surveille le failsafe et ouvre le Wi-Fi de secours si le node devient inaccessible.';
       document.getElementById('recovery-ssid').textContent = apSsid;
       document.getElementById('recovery-ap-password').textContent = apPassword;
       document.getElementById('recovery-original-ssid').textContent = originalSsid || 'non configure';
@@ -2683,10 +2847,12 @@
     }
 
     function showDiagnosticExportResult(message) {
-      const target = document.getElementById('diagnostic-export-result');
-      if (!target) return;
-      target.textContent = message;
-      target.hidden = false;
+      ['diagnostic-export-result', 'recovery-diagnostic-export-result'].forEach((id) => {
+        const target = document.getElementById(id);
+        if (!target) return;
+        target.textContent = message;
+        target.hidden = false;
+      });
     }
 
     function showConfigResult(message) {
@@ -3251,8 +3417,8 @@
       }
     }
 
-    async function exportDiagnostic() {
-      const button = document.getElementById('diagnostic-export-button');
+    async function exportDiagnostic(event) {
+      const button = event?.currentTarget || document.getElementById('diagnostic-export-button');
       const originalText = button ? button.textContent : '';
       if (window.location.protocol === 'file:') {
         showDiagnosticExportResult('Export diagnostic indisponible depuis cette page locale.');
@@ -3999,7 +4165,9 @@
     });
     document.getElementById('updates-check-button')?.addEventListener('click', checkUpdates);
     document.getElementById('updates-install-button')?.addEventListener('click', installUpdate);
-    document.getElementById('diagnostic-export-button')?.addEventListener('click', exportDiagnostic);
+    document.querySelectorAll('.diagnostic-export-trigger').forEach((button) => {
+      button.addEventListener('click', exportDiagnostic);
+    });
     document.querySelectorAll('[data-network-plan]').forEach((button) => {
       button.addEventListener('click', () => showNetworkActionResult(networkActionPlan(button.dataset.networkPlan)));
     });
