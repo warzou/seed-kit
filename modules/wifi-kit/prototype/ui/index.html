@@ -1840,32 +1840,44 @@
           </div>
           <span class="chip" id="recovery-chip">Plan-only</span>
         </div>
-        <article class="appliance-card primary" aria-label="Etat recovery">
+        <article class="appliance-card primary" aria-label="Securite reseau">
           <div class="appliance-card-header">
             <div>
-              <h3>Etat recovery</h3>
-              <p class="appliance-copy">Etat instantane des chemins de secours.</p>
+              <h3 id="recovery-safety-title">Securite reseau</h3>
+              <p class="appliance-copy" id="recovery-safety-copy">Lecture en cours...</p>
             </div>
+            <span id="recovery-safety-badge" class="chip">Observation</span>
           </div>
           <div class="status-pill-row">
-          <div class="metric"><span>Wi-Fi AP</span><strong id="recovery-ssid">...</strong></div>
-          <div class="metric"><span>Wi-Fi principal</span><strong id="recovery-return-ssid">...</strong></div>
-          <div class="metric"><span>Adresse AP</span><strong id="recovery-ip">192.168.50.1</strong></div>
-          <div class="metric"><span>Port portail</span><strong id="recovery-captive-port">80</strong></div>
-          <div class="metric"><span>DHCP</span><strong id="recovery-dhcp">...</strong></div>
-          <div class="metric"><span>DNS captive</span><strong id="recovery-dns">...</strong></div>
-          <div class="metric"><span>Interface</span><strong id="recovery-ui">...</strong></div>
-          <div class="metric"><span>Clients AP</span><strong id="recovery-clients">...</strong></div>
-          <div class="metric"><span>R&eacute;seau principal</span><strong id="recovery-main-health">...</strong></div>
-          <div class="metric"><span>AP recovery</span><strong id="recovery-ap-health">...</strong></div>
-          <div class="metric"><span>Runtime /opt</span><strong id="recovery-runtime-sync">...</strong></div>
-          <div class="metric"><span>Failsafe</span><strong id="recovery-failsafe-mode">...</strong></div>
-          <div class="metric"><span>Watchdog</span><strong id="recovery-watchdog-event">...</strong></div>
+            <div class="metric"><span>Etat</span><strong id="recovery-watchdog-state">...</strong></div>
+            <div class="metric"><span>Mode</span><strong id="recovery-watchdog-mode">...</strong></div>
+            <div class="metric"><span>Dernier evenement</span><strong id="recovery-watchdog-summary">...</strong></div>
+            <div class="metric"><span>Decision</span><strong id="recovery-watchdog-decision">...</strong></div>
+            <div class="metric"><span>Delai</span><strong id="recovery-watchdog-delay">...</strong></div>
+            <div class="metric"><span>Reseau surveille</span><strong id="recovery-watchdog-network">...</strong></div>
           </div>
         </article>
         <details class="advanced-details" id="recovery-advanced">
           <summary>Parametres avances</summary>
           <div class="advanced-details-body recovery-settings" aria-label="Configuration recovery">
+          <div class="recovery-settings-section">
+            <h3 class="settings-title">Details techniques recovery</h3>
+            <div class="recovery-settings-grid">
+              <div class="metric"><span>Wi-Fi AP</span><strong id="recovery-ssid">...</strong></div>
+              <div class="metric"><span>Wi-Fi principal</span><strong id="recovery-return-ssid">...</strong></div>
+              <div class="metric"><span>Adresse AP</span><strong id="recovery-ip">192.168.50.1</strong></div>
+              <div class="metric"><span>Port portail</span><strong id="recovery-captive-port">80</strong></div>
+              <div class="metric"><span>DHCP</span><strong id="recovery-dhcp">...</strong></div>
+              <div class="metric"><span>DNS captive</span><strong id="recovery-dns">...</strong></div>
+              <div class="metric"><span>Interface</span><strong id="recovery-ui">...</strong></div>
+              <div class="metric"><span>Clients AP</span><strong id="recovery-clients">...</strong></div>
+              <div class="metric"><span>Reseau principal</span><strong id="recovery-main-health">...</strong></div>
+              <div class="metric"><span>AP recovery</span><strong id="recovery-ap-health">...</strong></div>
+              <div class="metric"><span>Runtime /opt</span><strong id="recovery-runtime-sync">...</strong></div>
+              <div class="metric"><span>Failsafe</span><strong id="recovery-failsafe-mode">...</strong></div>
+              <div class="metric"><span>Watchdog brut</span><strong id="recovery-watchdog-event">...</strong></div>
+            </div>
+          </div>
           <div class="recovery-reassurance">
             <strong>Le mode AP reste un secours manuel.</strong>
             <p>Il ne demarre pas tout seul depuis cette page. Le retour utilise le Wi-Fi principal choisi ci-dessous.</p>
@@ -2586,10 +2598,10 @@
 
     function apClientLabel() {
       const count = recoveryState().ap_client_count ?? systemState().ap_client_count;
-      if (count === null || count === undefined || count === '') return '0 client connecte';
+      if (count === null || count === undefined || count === '') return '0 client connecté';
       const numeric = Number(count);
-      if (!Number.isFinite(numeric)) return '0 client connecte';
-      return numeric === 1 ? '1 client connecte' : `${numeric} clients connectes`;
+      if (!Number.isFinite(numeric)) return '0 client connecté';
+      return numeric === 1 ? '1 client connecté' : `${numeric} clients connectés`;
     }
 
     function uiAccessLabel() {
@@ -2609,26 +2621,127 @@
 
     function failsafeModeLabel() {
       const debugPassive = String(runtimeConfig().runtime_recovery_debug_passive || watchdogState().runtime_recovery_debug_passive || 'false') === 'true';
-      return debugPassive ? 'observation' : 'automatique';
+      return debugPassive ? 'Mode observation' : 'Mode automatique';
     }
 
     function mainNetworkHealthLabel() {
       const watchdog = watchdogState();
       if (watchdog.health_status === 'healthy') return 'OK';
       if (watchdog.unstable_ssid || Number(watchdog.unstable_count || 0) > 0) return 'instable';
+      if (watchdog.health_status === 'unhealthy') return 'indisponible';
+      if (!isUnknownValue(resolveCurrentIp()) && !isUnknownValue(resolveCurrentSsid())) return 'OK';
+      if (!Object.keys(watchdog).length) return 'inconnu';
       return 'indisponible';
     }
 
     function apRecoveryHealthLabel() {
-      if (systemState().recovery_active || recoveryState().active) return 'actif';
-      if (systemState().actions?.start_ap_mode) return 'pret';
-      return 'indisponible';
+      if (systemState().recovery_active || recoveryState().active) {
+        const uiState = serviceLabel(recoveryState().ui || systemState().ui_state);
+        if (uiState === 'actif' || uiState === 'lecture seule') return 'AP actif';
+        return 'AP actif, UI a verifier';
+      }
+      if (systemState().actions?.start_ap_mode) return 'AP pret';
+      return 'AP inactif';
     }
 
     function runtimeSyncLabel() {
       const version = runtimeVersionState();
       if (version.runtime_version_exists === false) return 'inconnu';
-      return version.runtime_synced ? 'synchronise' : 'en retard';
+      if (version.runtime_synced === true) return 'synchronise';
+      if (version.runtime_synced === false && (version.runtime_commit || version.repo_commit)) return 'en retard';
+      return 'inconnu';
+    }
+
+    function parseKeyValueLine(line) {
+      const values = {};
+      const text = String(line || '');
+      const pattern = /([A-Za-z0-9_.-]+)=("([^"]*)"|'([^']*)'|[^ ]*)/g;
+      let match;
+      while ((match = pattern.exec(text)) !== null) {
+        values[match[1]] = match[3] ?? match[4] ?? match[2] ?? '';
+      }
+      return values;
+    }
+
+    function compactWatchdogData() {
+      const raw = watchdogState();
+      const lastRaw = raw.last_event || raw.last_event_raw || raw.event || raw.reason || '';
+      return {
+        ...parseKeyValueLine(lastRaw),
+        ...raw,
+        last_event_raw: lastRaw,
+      };
+    }
+
+    function shortEventPhrase(event, reason) {
+      const action = String(event || '').trim();
+      const why = String(reason || '').trim();
+      if (action === 'debug-passive-suppressed-action') return 'Action supprimée en mode observation';
+      if (action === 'grace-period-started') return 'Délai de sécurité démarré';
+      if (action === 'recovery-cancelled') return 'Lien revenu, aucune action';
+      if (action === 'starting-ap-recovery') return 'Ouverture du Wi-Fi secours';
+      if (action === 'ap-start-failed') return 'Ouverture AP échouée';
+      if (action === 'runtime-healthy' || why === 'matched-last-good') return 'Lien principal stable';
+      if (why === 'gateway-unreachable') return 'Passerelle momentanément injoignable';
+      if (why === 'no-ip') return 'Adresse IP absente';
+      if (why === 'nm-disconnected') return 'Wi-Fi déconnecté';
+      if (why === 'mismatch-return-connection') return 'Connecté au réseau de secours boot';
+      if (action) return action.replace(/[-_]/g, ' ');
+      if (why) return why.replace(/[-_]/g, ' ');
+      return 'Aucun incident récent';
+    }
+
+    function watchdogSummary() {
+      const config = runtimeConfig();
+      const system = systemState();
+      const recovery = recoveryState();
+      const watchdog = compactWatchdogData();
+      const apActive = Boolean(system.recovery_active || recovery.active);
+      const debugPassive = String(config.runtime_recovery_debug_passive || watchdog.runtime_recovery_debug_passive || 'false') === 'true';
+      const synced = runtimeSyncLabel() === 'synchronise';
+      const mainHealth = mainNetworkHealthLabel();
+      const target = pickValue(
+        watchdog.last_good_ssid,
+        config.last_good_ssid,
+        watchdog.current_ssid,
+        system.wifi,
+        config.return_ssid,
+      );
+      const grace = pickValue(
+        config.runtime_recovery_grace_seconds,
+        watchdog.runtime_recovery_grace_seconds,
+        '120',
+      );
+      const event = watchdog.action || watchdog.event || watchdog.status || '';
+      const reason = watchdog.runtime_reason || watchdog.reason || watchdog.health_reason || '';
+      let state = 'OK';
+      if (apActive) state = 'AP actif';
+      else if (debugPassive) state = 'Observation';
+      else if (mainHealth === 'indisponible' || watchdog.health_status === 'unhealthy') state = 'Action requise';
+      const decision = apActive
+        ? 'AP actif'
+        : debugPassive && /start-ap|recovery|unhealthy|gateway|no-ip|disconnected|mismatch/.test(`${event} ${reason}`)
+        ? 'AP aurait été lancé'
+        : !debugPassive && /start-ap|starting-ap-recovery/.test(`${event} ${reason}`)
+        ? 'AP lancé'
+        : 'Aucune action';
+      const allGood = !apActive && mainHealth === 'OK' && synced && debugPassive;
+      return {
+        title: allGood ? 'Tout va bien' : apActive ? 'Wi-Fi secours actif' : mainHealth === 'instable' ? 'Réseau à surveiller' : state,
+        copy: allGood
+          ? `Le node est joignable sur ${target}. Le failsafe observe seulement.`
+          : apActive
+          ? `Le Wi-Fi secours est actif. Retour possible vers ${target} quand le réseau est stable.`
+          : `Le node surveille ${target}. Mode ${debugPassive ? 'observation' : 'automatique'}.`,
+        badge: debugPassive ? 'Observation' : 'Automatique',
+        state,
+        mode: debugPassive ? 'Observation' : 'Automatique',
+        event: shortEventPhrase(event, reason),
+        decision,
+        delay: `${grace} s`,
+        network: target,
+        raw: watchdog.last_event_raw || watchdog.last_event || watchdog.reason || 'aucun',
+      };
     }
 
     function isRecoveryApNetwork(network) {
@@ -2696,10 +2809,30 @@
       const returnSsid = config.return_ssid || recovery.return_ssid || systemState().return_ssid || originalSsid;
       const returnConnection = config.return_connection || recovery.return_connection || systemState().return_connection || originalConnection;
       const originalProfile = connectionByProfile(originalConnection);
+      const summary = watchdogSummary();
       document.getElementById('recovery-chip').textContent = active ? 'Mode AP actif' : 'Mode AP inactif';
       document.getElementById('recovery-copy').textContent = active
         ? 'AP recovery actif. Garde cette page ouverte pour revenir au reseau normal.'
         : 'Surveille le failsafe et ouvre le Wi-Fi de secours si le node devient inaccessible.';
+      setText('recovery-safety-title', summary.title);
+      setText('recovery-safety-copy', summary.copy);
+      setText('recovery-safety-badge', summary.badge);
+      setText('recovery-watchdog-state', summary.state);
+      setText('recovery-watchdog-mode', summary.mode);
+      setText('recovery-watchdog-summary', summary.event);
+      setText('recovery-watchdog-decision', summary.decision);
+      setText('recovery-watchdog-delay', summary.delay);
+      setText('recovery-watchdog-network', summary.network);
+      const startApButton = document.getElementById('start-ap-mode-button');
+      const returnButton = document.getElementById('return-default-network-button');
+      if (startApButton) {
+        startApButton.classList.toggle('primary-action-button', active);
+        startApButton.textContent = active ? 'Wi-Fi secours actif' : 'Activer le Wi-Fi secours';
+      }
+      if (returnButton) {
+        returnButton.classList.toggle('primary-action-button', active);
+        returnButton.textContent = active ? 'Retour réseau principal' : 'Retour réseau principal';
+      }
       document.getElementById('recovery-ssid').textContent = apSsid;
       document.getElementById('recovery-ap-password').textContent = apPassword;
       document.getElementById('recovery-original-ssid').textContent = originalSsid || 'non configure';
@@ -2728,7 +2861,7 @@
       setText('recovery-ap-health', apRecoveryHealthLabel());
       setText('recovery-runtime-sync', runtimeSyncLabel());
       setText('recovery-failsafe-mode', failsafeModeLabel());
-      setText('recovery-watchdog-event', watchdogState().last_event || watchdogState().reason || 'aucun');
+      setText('recovery-watchdog-event', summary.raw);
       setInputValue('runtime-recovery-grace-input', config.runtime_recovery_grace_seconds || '120');
       setInputValue('runtime-recovery-window-input', config.runtime_recovery_instability_window_minutes || '10');
       setInputValue('runtime-recovery-threshold-input', config.runtime_recovery_instability_threshold || '3');
