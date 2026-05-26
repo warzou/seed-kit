@@ -1745,7 +1745,7 @@
           </div>
           <div class="recovery-settings-section">
             <h3 class="settings-title">Recovery runtime</h3>
-            <p class="section-copy">Si le Wi-Fi valid&eacute; tombe pendant l'usage normal, Wifi-Kit attend le d&eacute;lai choisi puis ouvre l'AP recovery. La boucle AP teste ensuite seulement le dernier bon Wi-Fi.</p>
+            <p class="section-copy">Si le Wi-Fi valid&eacute; devient inaccessible durablement pendant l'usage normal, Wifi-Kit attend le d&eacute;lai choisi puis ouvre l'AP recovery. Les microcoupures courtes restent seulement diagnostiqu&eacute;es.</p>
             <div class="recovery-settings-grid">
               <label class="confirm-line">
                 <input id="runtime-recovery-enabled-input" type="checkbox">
@@ -1756,19 +1756,19 @@
                 Mode debug passif: observer sans ouvrir l'AP
               </label>
               <label class="field-label">
-                D&eacute;lai avant AP recovery
-                <input id="runtime-recovery-grace-input" class="password-local" type="number" min="1" step="1" inputmode="numeric" placeholder="30">
+                D&eacute;lai d'inaccessibilit&eacute; tol&eacute;r&eacute;
+                <input id="runtime-recovery-grace-input" class="password-local" type="number" min="1" step="1" inputmode="numeric" placeholder="120">
               </label>
               <label class="field-label">
-                Fen&ecirc;tre instabilit&eacute;
+                Fen&ecirc;tre diagnostic instabilit&eacute;
                 <input id="runtime-recovery-window-input" class="password-local" type="number" min="1" step="1" inputmode="numeric" placeholder="10">
               </label>
               <label class="field-label">
-                Seuil de coupures
+                Seuil diagnostic
                 <input id="runtime-recovery-threshold-input" class="password-local" type="number" min="1" step="1" inputmode="numeric" placeholder="3">
               </label>
             </div>
-            <p class="danger-note">Le watchdog ne teste jamais le Wi-Fi principal/Flint en runtime. En mode debug passif, il loggue la decision mais ne lance aucune action reseau.</p>
+            <p class="danger-note">Le watchdog ne teste jamais le Wi-Fi principal/Flint en runtime. Les coupures courtes sont journalis&eacute;es mais ne forcent pas l'AP. Minimum effectif: 120 s. En mode debug passif, il loggue la d&eacute;cision mais ne lance aucune action r&eacute;seau.</p>
           </div>
           <div class="recovery-settings-section">
             <h3 class="settings-title">Sélectionner le Wi-Fi principal</h3>
@@ -2521,7 +2521,7 @@
       const runtimeRecoveryDebugPassive = String(config.runtime_recovery_debug_passive || 'false') === 'true';
       const runtimeRecoveryDebugPassiveInput = document.getElementById('runtime-recovery-debug-passive-input');
       if (runtimeRecoveryDebugPassiveInput) runtimeRecoveryDebugPassiveInput.checked = runtimeRecoveryDebugPassive;
-      setInputValue('runtime-recovery-grace-input', config.runtime_recovery_grace_seconds || '30');
+      setInputValue('runtime-recovery-grace-input', config.runtime_recovery_grace_seconds || '120');
       setInputValue('runtime-recovery-window-input', config.runtime_recovery_instability_window_minutes || '10');
       setInputValue('runtime-recovery-threshold-input', config.runtime_recovery_instability_threshold || '3');
       renderReturnConnectionSelect(returnConnection);
@@ -2861,7 +2861,7 @@
       const returnCheckInterval = document.getElementById('return-check-interval-input')?.value.trim() || '1';
       const runtimeRecoveryEnabled = Boolean(document.getElementById('runtime-recovery-enabled-input')?.checked);
       const runtimeRecoveryDebugPassive = Boolean(document.getElementById('runtime-recovery-debug-passive-input')?.checked);
-      const runtimeRecoveryGrace = document.getElementById('runtime-recovery-grace-input')?.value.trim() || '30';
+      const runtimeRecoveryGrace = document.getElementById('runtime-recovery-grace-input')?.value.trim() || '120';
       const runtimeRecoveryWindow = document.getElementById('runtime-recovery-window-input')?.value.trim() || '10';
       const runtimeRecoveryThreshold = document.getElementById('runtime-recovery-threshold-input')?.value.trim() || '3';
       const returnInput = document.getElementById('recovery-return-connection-select');

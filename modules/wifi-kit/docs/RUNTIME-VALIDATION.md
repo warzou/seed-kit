@@ -231,16 +231,18 @@ Target policy names:
 The runtime recovery watchdog makes this policy explicit for installed nodes:
 
 - `runtime_recovery_enabled=true` by default;
-- `runtime_recovery_grace_seconds=30` by default;
+- `runtime_recovery_grace_seconds=120` by default;
 - `runtime_recovery_instability_window_minutes=10` by default;
 - `runtime_recovery_instability_threshold=3` by default.
 
 When `last_good_connection` / `last_good_ssid` has been active during runtime
-and then disappears, the watchdog starts a grace timer. If last-good returns
-before the timer expires, it logs `recovery-cancelled link-restored`. If it is
-still absent after the grace period, it starts AP recovery through the existing
-wrapper. From AP recovery, the periodic return-check loop takes over and tests
-only `last_good_*`; it does not try `return_connection` unless that is also the
+and then becomes unavailable, the watchdog starts an inaccessibility timer. If
+last-good becomes usable again before the timer expires, it logs
+`recovery-cancelled link-restored`. Short gateway failures and Wi-Fi
+microcuts are therefore tolerated. If the runtime remains unusable for the
+whole grace period, it starts AP recovery through the existing wrapper. From AP
+recovery, the periodic return-check loop takes over and tests only
+`last_good_*`; it does not try `return_connection` unless that is also the
 last-good target.
 
 If the same SSID disconnects at least

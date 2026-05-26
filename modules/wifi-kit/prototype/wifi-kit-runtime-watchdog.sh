@@ -126,7 +126,7 @@ event_line() {
   if [ -n "$detail" ]; then
     printf ' detail=%s' "$detail"
   fi
-  printf ' health_status=%s health_reason=%s runtime_match=%s runtime_reason=%s current_connection=%s current_ssid=%s last_good_connection=%s last_good_ssid=%s ip=%s default_route=%s gateway=%s gateway_ping=%s config_readable=%s\n' \
+  printf ' health_status=%s health_reason=%s runtime_match=%s runtime_reason=%s current_connection=%s current_ssid=%s last_good_connection=%s last_good_ssid=%s ip=%s default_route=%s gateway=%s gateway_ping=%s config_readable=%s unstable_triggered=%s unstable_count=%s recovery_decision=%s\n' \
     "${health_status:-unknown}" \
     "${health_reason:-unknown}" \
     "${runtime_match:-}" \
@@ -139,7 +139,10 @@ event_line() {
     "${default_route_present:-}" \
     "${gateway:-}" \
     "${gateway_ping_status:-}" \
-    "${runtime_config_readable:-}"
+    "${runtime_config_readable:-}" \
+    "${unstable_triggered:-no}" \
+    "${unstable_count:-}" \
+    "${recovery_decision:-none}"
 }
 
 log_event() {
@@ -179,6 +182,10 @@ write_state() {
     kv "default_route" "${default_route_present:-}"
     kv "gateway" "${gateway:-}"
     kv "gateway_ping" "${gateway_ping_status:-}"
+    kv "unstable_triggered" "${unstable_triggered:-no}"
+    kv "unstable_count" "${unstable_count:-}"
+    kv "unstable_threshold" "${threshold:-}"
+    kv "recovery_decision" "${recovery_decision:-none}"
     kv "persistent_log_file" "$persistent_log_file"
     kv "persistent_state_file" "$persistent_state_file"
     kv "iface" "$iface"
@@ -206,6 +213,10 @@ write_state() {
       kv "default_route" "${default_route_present:-}"
       kv "gateway" "${gateway:-}"
       kv "gateway_ping" "${gateway_ping_status:-}"
+      kv "unstable_triggered" "${unstable_triggered:-no}"
+      kv "unstable_count" "${unstable_count:-}"
+      kv "unstable_threshold" "${threshold:-}"
+      kv "recovery_decision" "${recovery_decision:-none}"
       kv "iface" "$iface"
       kv "runtime_config" "$runtime_config"
       kv "log_file" "$log_file"
@@ -323,7 +334,8 @@ config_values() {
   enabled=$(normalize_bool "$enabled_raw")
   debug_passive_raw=$(runtime_value runtime_recovery_debug_passive false)
   debug_passive=$(normalize_bool "$debug_passive_raw")
-  grace_seconds=$(runtime_value runtime_recovery_grace_seconds 30)
+  grace_seconds=$(runtime_value runtime_recovery_grace_seconds 120)
+  min_unavailable_seconds="${WIFI_KIT_RUNTIME_WATCHDOG_MIN_UNAVAILABLE_SECONDS:-120}"
   window_minutes=$(runtime_value runtime_recovery_instability_window_minutes 10)
   threshold=$(runtime_value runtime_recovery_instability_threshold 3)
   last_good_ssid=$(runtime_value last_good_ssid "")
@@ -346,10 +358,23 @@ config_values() {
   runtime_reason="disconnected"
   health_status="unhealthy"
   health_reason="disconnected"
+  recovery_decision="none"
   unstable_ssid=$(state_value unstable_ssid)
+  unstable_count=$(state_value unstable_count)
+  unstable_triggered=$(state_value unstable_triggered)
   if [ -z "$unstable_ssid" ] && [ -r "$instability_file" ]; then
     unstable_ssid=$(sed -n 's/^unstable_ssid=//p' "$instability_file" 2>/dev/null | sed -n '1p')
   fi
+  if [ -z "$unstable_count" ] && [ -r "$instability_file" ]; then
+    unstable_count=$(sed -n 's/^unstable_count=//p' "$instability_file" 2>/dev/null | sed -n '1p')
+  fi
+  case "$unstable_count" in
+    ''|*[!0-9]*) unstable_count=0 ;;
+  esac
+  case "$unstable_triggered" in
+    yes|true) unstable_triggered=yes ;;
+    *) unstable_triggered=no ;;
+  esac
   watchdog_status=$(state_value status)
   status="ok"
   reason=""
@@ -366,6 +391,9 @@ config_values() {
     status="refused"
     reason="${reason:-runtime-recovery-grace-invalid}"
   fi
+  if ! is_positive_integer "$min_unavailable_seconds"; then
+    min_unavailable_seconds=120
+  fi
   if ! is_positive_integer "$window_minutes"; then
     status="refused"
     reason="${reason:-runtime-recovery-window-invalid}"
@@ -374,13 +402,18 @@ config_values() {
     status="refused"
     reason="${reason:-runtime-recovery-threshold-invalid}"
   fi
+  if is_positive_integer "$threshold" && [ "$unstable_count" -ge "$threshold" ]; then
+    if [ -z "$unstable_ssid" ] || [ -z "$last_good_ssid" ] || [ "$unstable_ssid" = "$last_good_ssid" ]; then
+      unstable_triggered=yes
+    fi
+  fi
   if [ "$enabled" = "true" ] && [ -z "$last_good_ssid" ] && [ -z "$last_good_connection" ]; then
     status="refused"
     reason="${reason:-last-good-missing}"
   fi
   effective_grace_seconds=$grace_seconds
-  if is_positive_integer "$effective_grace_seconds" && [ "$effective_grace_seconds" -gt 60 ]; then
-    effective_grace_seconds=60
+  if is_positive_integer "$effective_grace_seconds" && [ "$effective_grace_seconds" -lt "$min_unavailable_seconds" ]; then
+    effective_grace_seconds=$min_unavailable_seconds
   fi
   if [ -n "$last_good_connection" ] && [ "$current_connection" = "$last_good_connection" ]; then
     runtime_match="true"
@@ -396,6 +429,7 @@ config_values() {
     runtime_reason="mismatch-last-good"
   fi
   classify_health
+  classify_recovery_decision
 }
 
 is_last_good_active() {
@@ -448,6 +482,18 @@ classify_health() {
   health_reason="available-last-good"
 }
 
+classify_recovery_decision() {
+  recovery_decision="none"
+  if ap_recovery_active; then
+    recovery_decision="ap-recovery-active"
+  elif [ "$health_status" != "healthy" ]; then
+    recovery_decision="start-ap-recovery-after-unavailable-grace"
+  fi
+  if [ "$debug_passive" = "true" ] && [ "$recovery_decision" != "none" ] && [ "$recovery_decision" != "ap-recovery-active" ]; then
+    recovery_decision="debug-passive-suppressed-$recovery_decision"
+  fi
+}
+
 record_instability_event() {
   ssid=$1
   [ -n "$ssid" ] || return 0
@@ -465,12 +511,17 @@ record_instability_event() {
   mv "$tmp" "$events_file" 2>/dev/null || true
   chmod 0666 "$events_file" 2>/dev/null || true
   count=$(awk -F'|' -v ssid="$ssid" '$2 == ssid { c++ } END { print c + 0 }' "$events_file" 2>/dev/null || printf '0')
+  unstable_count=$count
   if [ "$count" -ge "$threshold" ]; then
-    log_event "unstable-ssid" "ssid=$ssid count=$count window_minutes=$window_minutes"
+    unstable_triggered=yes
+    log_event "unstable-ssid" "ssid=$ssid count=$count threshold=$threshold window_minutes=$window_minutes action=diagnostic-only"
     {
       kv "unstable_ssid" "$ssid"
       kv "unstable_count" "$count"
       kv "unstable_window_minutes" "$window_minutes"
+      kv "unstable_threshold" "$threshold"
+      kv "unstable_triggered" "yes"
+      kv "instability_policy" "diagnostic-only"
     } > "$instability_file" 2>/dev/null || true
     chmod 0666 "$instability_file" 2>/dev/null || true
   fi
@@ -482,6 +533,34 @@ require_root() {
     kv "reason" "root-required"
     exit 1
   fi
+}
+
+start_ap_recovery() {
+  trigger=$1
+  if ap_recovery_active; then
+    log_event "ap-recovery-already-active" "trigger=$trigger"
+    write_state "ap-recovery-active" "$trigger" "$last_good_ssid"
+    return 0
+  fi
+  if [ "$debug_passive" = "true" ]; then
+    log_event "debug-passive-suppressed-action" "would_start_ap_recovery=yes trigger=$trigger health_reason=$health_reason runtime_reason=$runtime_reason current_connection=${current_connection:-unknown} current_ssid=${current_ssid:-unknown} last_good_connection=${last_good_connection:-unknown} last_good_ssid=${last_good_ssid:-unknown} unstable_count=${unstable_count:-0} threshold=$threshold"
+    write_state "debug-passive-suppressed-action" "$trigger" "$last_good_ssid"
+    return 0
+  fi
+  log_event "recovery-enter" "trigger=$trigger last_good_ssid=${last_good_ssid:-unknown} health_reason=$health_reason runtime_reason=$runtime_reason grace_seconds=$effective_grace_seconds"
+  log_event "starting-ap-recovery" "trigger=$trigger action=start-ap-recovery last_good_ssid=${last_good_ssid:-unknown} health_reason=$health_reason unstable_count=${unstable_count:-0} threshold=$threshold"
+  write_state "starting-ap-recovery" "$trigger" "$last_good_ssid"
+  set +e
+  WIFI_KIT_AP_START_RETURN_CHECK_LOOP=1 WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$action_wrapper" start-ap-mode >> "$log_file" 2>&1
+  ap_start_rc=$?
+  set -e
+  if [ "$ap_start_rc" -eq 0 ]; then
+    log_event "ap-start-result" "trigger=$trigger result=success exit_code=$ap_start_rc"
+    return 0
+  fi
+  log_event "ap-start-failed" "trigger=$trigger result=failure exit_code=$ap_start_rc"
+  write_state "ap-start-failed" "$trigger" "$last_good_ssid"
+  return "$ap_start_rc"
 }
 
 cmd_audit() {
@@ -497,8 +576,10 @@ cmd_audit() {
   kv "runtime_recovery_debug_passive_raw" "$debug_passive_raw"
   kv "runtime_recovery_grace_seconds" "$grace_seconds"
   kv "runtime_recovery_effective_grace_seconds" "$effective_grace_seconds"
+  kv "runtime_recovery_min_unavailable_seconds" "$min_unavailable_seconds"
   kv "runtime_recovery_instability_window_minutes" "$window_minutes"
   kv "runtime_recovery_instability_threshold" "$threshold"
+  kv "runtime_recovery_instability_policy" "diagnostic-only"
   kv "runtime_config_readable" "$runtime_config_readable"
   kv "last_good_configured" "$last_good_configured"
   kv "last_good_ssid" "$last_good_ssid"
@@ -514,6 +595,10 @@ cmd_audit() {
   kv "runtime_reason" "$runtime_reason"
   kv "health_status" "$health_status"
   kv "health_reason" "$health_reason"
+  kv "unstable_triggered" "$unstable_triggered"
+  kv "unstable_count" "$unstable_count"
+  kv "unstable_threshold" "$threshold"
+  kv "recovery_decision" "$recovery_decision"
   kv "ap_recovery_active" "$(ap_recovery_active && printf yes || printf no)"
   kv "watchdog_state_file" "$state_file"
   kv "watchdog_persistent_state_file" "$persistent_state_file"
@@ -533,8 +618,9 @@ cmd_plan() {
   kv "network_writes" "false"
   kv "runtime_scope" "watch last_good only; never try return_connection"
   kv "01.detect" "when last_good was active and wlan0 leaves it, record runtime-disconnect detected"
-  kv "02.grace" "wait runtime_recovery_grace_seconds"
-  kv "02b.boot_failsafe_cap" "effective grace is capped at 60 seconds for unavailable startup states"
+  kv "02.grace" "wait until runtime is unavailable continuously for effective grace"
+  kv "02b.min_unavailable" "effective grace is at least 120 seconds by default"
+  kv "02c.instability" "short repeated failures are logged as diagnostic-only; they do not force AP by themselves"
   kv "03.cancel" "if last_good returns during grace, log recovery-cancelled link-restored"
   kv "04.recover" "if still disconnected from last_good, call wrapper start-ap-mode"
   kv "05.ap" "AP return-check loop handles periodic last_good retry from AP recovery"
@@ -592,7 +678,7 @@ cmd_run() {
     fi
     if is_runtime_healthy; then
       if [ "$grace_active" = "1" ]; then
-        log_event "recovery-cancelled link-restored" "ssid=${current_ssid:-unknown} health_reason=$health_reason"
+        log_event "recovery-cancelled link-restored" "ssid=${current_ssid:-unknown} health_reason=$health_reason unstable_count=${unstable_count:-0} instability_policy=diagnostic-only"
       fi
       grace_active=0
       write_state "watching" "$health_reason" "${current_ssid:-$last_good_ssid}"
@@ -621,16 +707,12 @@ cmd_run() {
       continue
     fi
     if [ "$debug_passive" = "true" ]; then
-      log_event "debug-passive-suppressed-action" "would_start_ap_recovery=yes health_reason=$health_reason runtime_reason=$runtime_reason current_connection=${current_connection:-unknown} current_ssid=${current_ssid:-unknown} last_good_connection=${last_good_connection:-unknown} last_good_ssid=${last_good_ssid:-unknown} grace_seconds=$effective_grace_seconds"
-      write_state "debug-passive-suppressed-action" "$health_reason" "$last_good_ssid"
+      start_ap_recovery "$health_reason"
       grace_active=0
       sleep "$poll_seconds"
       continue
     fi
-    log_event "recovery-enter" "last_good_ssid=${last_good_ssid:-unknown} health_reason=$health_reason runtime_reason=$runtime_reason grace_seconds=$effective_grace_seconds"
-    log_event "starting-ap-recovery" "last_good_ssid=${last_good_ssid:-unknown} health_reason=$health_reason grace_seconds=$effective_grace_seconds"
-    write_state "starting-ap-recovery" "$health_reason" "$last_good_ssid"
-    WIFI_KIT_AP_START_RETURN_CHECK_LOOP=1 WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$action_wrapper" start-ap-mode >> "$log_file" 2>&1 || true
+    start_ap_recovery "$health_reason" || true
     grace_active=0
     sleep "$poll_seconds"
   done

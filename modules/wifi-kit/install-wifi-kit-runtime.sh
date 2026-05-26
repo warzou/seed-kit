@@ -308,7 +308,7 @@ ensure_runtime_config() {
       printf 'ap_ssid=Wifi-Kit-%s\n' "$(hostname 2>/dev/null || printf node)"
       printf 'ap_password=12345678\n'
       printf 'runtime_recovery_enabled=true\n'
-      printf 'runtime_recovery_grace_seconds=30\n'
+      printf 'runtime_recovery_grace_seconds=120\n'
       printf 'runtime_recovery_instability_window_minutes=10\n'
       printf 'runtime_recovery_instability_threshold=3\n'
     } > "$runtime_config"
