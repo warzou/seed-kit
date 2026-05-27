@@ -1441,14 +1441,87 @@
       gap: 12px;
     }
 
-    .config-recovery-grid,
+    .config-recovery-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      width: 100%;
+      max-width: 760px;
+    }
+
+    .recovery-setting {
+      padding: 18px 0;
+      border-top: 1px solid rgba(213, 229, 255, 0.08);
+    }
+
+    .recovery-setting:first-child {
+      padding-top: 4px;
+      border-top: 0;
+    }
+
+    .recovery-setting-title {
+      margin: 0;
+      color: var(--soft);
+      font-size: 1rem;
+      font-weight: 950;
+      letter-spacing: 0;
+    }
+
+    .recovery-setting-current {
+      display: block;
+      margin-top: 6px;
+      color: rgba(245, 247, 251, 0.9);
+      font-size: 0.92rem;
+      font-weight: 800;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .recovery-setting .field-label,
+    .recovery-setting .confirm-line {
+      margin-top: 12px;
+      max-width: 440px;
+    }
+
+    .recovery-setting .field-label {
+      gap: 7px;
+      min-width: 0;
+      line-height: 1.35;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .recovery-setting .field-hint,
+    .recovery-setting .setting-help {
+      display: block;
+      margin-top: 8px;
+      max-width: 620px;
+      color: rgba(213, 229, 255, 0.72);
+      font-size: 0.8rem;
+      font-weight: 700;
+      line-height: 1.45;
+      text-transform: none;
+    }
+
+    .recovery-setting .password-local {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .recovery-setting .confirm-line {
+      align-items: center;
+      gap: 10px;
+      line-height: 1.35;
+      color: var(--soft);
+      font-size: 0.9rem;
+    }
+
     .status-summary-grid {
       display: grid;
       grid-template-columns: 1fr;
       gap: 12px;
     }
 
-    .config-recovery-card,
     .status-summary-card {
       min-width: 0;
       border: 1px solid rgba(213, 229, 255, 0.09);
@@ -1457,8 +1530,7 @@
       padding: 14px;
     }
 
-    .status-summary-card span,
-    .config-recovery-card span {
+    .status-summary-card span {
       display: block;
       color: var(--muted);
       font-size: 0.7rem;
@@ -1468,8 +1540,7 @@
       overflow-wrap: anywhere;
     }
 
-    .status-summary-card strong,
-    .config-recovery-card strong {
+    .status-summary-card strong {
       display: block;
       margin-top: 6px;
       color: var(--soft);
@@ -1478,35 +1549,18 @@
       overflow-wrap: anywhere;
     }
 
-    .config-recovery-card .field-label,
-    .config-recovery-card .confirm-line {
-      margin-top: 12px;
-    }
-
-    .config-recovery-card .field-label {
-      gap: 7px;
-      min-width: 0;
-      line-height: 1.35;
-      color: var(--muted);
-      font-size: 0.82rem;
-    }
-
-    .config-recovery-card .password-local {
+    .setting-action {
       width: 100%;
-      min-width: 0;
-    }
-
-    .config-recovery-card .confirm-line {
-      align-items: center;
-      gap: 10px;
-      line-height: 1.35;
-      color: var(--soft);
-      font-size: 0.86rem;
+      max-width: 360px;
+      margin-top: 14px;
+      justify-content: center;
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
 
     .input-with-unit {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: minmax(96px, 1fr) minmax(78px, auto);
       align-items: center;
       gap: 8px;
       min-width: 0;
@@ -1525,6 +1579,7 @@
       font-size: 0.78rem;
       font-weight: 900;
       text-transform: none;
+      white-space: nowrap;
     }
 
     .maintenance-card {
@@ -1856,7 +1911,6 @@
       .status-pill-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .secondary-action-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .maintenance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .config-recovery-grid { grid-template-columns: repeat(2, minmax(260px, 1fr)); }
       .status-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .tab-button { font-size: 0.74rem; }
       .network-orb {
@@ -1882,9 +1936,6 @@
         grid-template-columns: repeat(4, minmax(0, 1fr));
       }
 
-      .config-recovery-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-      }
     }
   </style>
 </head>
@@ -2239,46 +2290,53 @@
             <h2 id="config-password-title">Recovery</h2>
             <p class="section-copy">Parametres essentiels du Wi-Fi de secours.</p>
           </div>
-          <span class="chip">Plan-only</span>
         </div>
-        <div class="config-recovery-grid">
-          <div class="config-recovery-card">
-            <span>Mot de passe AP</span>
-            <strong id="config-ap-password-current">...</strong>
+        <div class="config-recovery-stack">
+          <section class="recovery-setting" aria-labelledby="config-ap-password-heading">
+            <h3 class="recovery-setting-title" id="config-ap-password-heading">Mot de passe AP</h3>
+            <strong class="recovery-setting-current" id="config-ap-password-current">...</strong>
+            <small class="setting-help">Le mot de passe actuel reste conservé tant qu'aucun nouveau mot de passe n'est appliqué.</small>
             <label class="field-label">
-              Nouveau mot de passe
+              Nouveau mot de passe AP
               <input id="config-ap-password" class="password-local" type="password" autocomplete="new-password" placeholder="Minimum 8 caracteres">
+              <small class="field-hint">Laisser vide pour conserver le mot de passe actuel.</small>
             </label>
-          </div>
-          <div class="config-recovery-card">
-            <span>Failsafe</span>
-            <strong id="config-failsafe-mode">...</strong>
+            <button id="config-save-password" class="button secondary setting-action" type="button">Changer le mot de passe AP</button>
+          </section>
+          <section class="recovery-setting" aria-labelledby="config-failsafe-heading">
+            <h3 class="recovery-setting-title" id="config-failsafe-heading">Failsafe</h3>
+            <strong class="recovery-setting-current" id="config-failsafe-mode">...</strong>
             <label class="confirm-line">
               <input id="runtime-failsafe-automatic-input" type="checkbox">
-              <span>Mode automatique</span>
+              <span>Activer le failsafe automatique</span>
             </label>
-          </div>
-          <div class="config-recovery-card">
-            <span>Attente avant Wi-Fi secours</span>
-            <strong id="config-recovery-delay">...</strong>
+            <small class="setting-help">En mode observation, Wifi-Kit détecte et journalise seulement. En mode automatique, il peut ouvrir l'AP recovery après une inaccessibilité durable.</small>
+            <button id="config-apply-failsafe" class="button secondary setting-action" type="button">Appliquer le mode failsafe</button>
+          </section>
+          <section class="recovery-setting" aria-labelledby="config-recovery-delay-heading">
+            <h3 class="recovery-setting-title" id="config-recovery-delay-heading">Ouverture du Wi-Fi secours</h3>
+            <strong class="recovery-setting-current" id="config-recovery-delay">...</strong>
             <label class="field-label">
-              Delai avant ouverture AP
+              Attente avant ouverture AP
               <span class="input-with-unit">
                 <input id="runtime-recovery-grace-input" class="password-local" type="number" min="1" step="1" inputmode="numeric" placeholder="120">
-                <span class="input-unit">s</span>
+                <span class="input-unit">secondes</span>
               </span>
             </label>
-          </div>
-          <div class="config-recovery-card">
-            <span>Watchdog</span>
-            <strong id="config-runtime-recovery-status">...</strong>
+            <small class="setting-help">Temps d'inaccessibilité continue avant ouverture de l'AP recovery.</small>
+            <button id="config-apply-recovery-delay" class="button secondary setting-action" type="button">Appliquer le délai</button>
+          </section>
+          <section class="recovery-setting" aria-labelledby="config-watchdog-heading">
+            <h3 class="recovery-setting-title" id="config-watchdog-heading">Watchdog</h3>
+            <strong class="recovery-setting-current" id="config-runtime-recovery-status">...</strong>
             <label class="confirm-line">
               <input id="runtime-recovery-enabled-input" type="checkbox">
-              <span>Activer le watchdog runtime</span>
+              <span>Surveiller la connexion</span>
             </label>
-          </div>
+            <small class="setting-help">Recommandé : activé. Le watchdog observe la connexion et alimente les diagnostics recovery.</small>
+            <button id="config-apply-watchdog" class="button secondary setting-action" type="button">Appliquer la surveillance</button>
+          </section>
         </div>
-        <button id="config-save-recovery" class="button secondary" type="button">Enregistrer recovery</button>
         <div id="config-result" class="callout recovery-result" hidden></div>
       </section>
 
@@ -3086,10 +3144,11 @@
       setText('config-normal-port', system.normal_ui_port || recovery.normal_ui_port || 18089);
       setText('config-recovery-port', system.recovery_ui_port || recovery.recovery_ui_port || 80);
       setText('config-recovery-ssid', config.ap_ssid || recovery.ssid || system.recovery_ssid || 'Wifi-Kit-node');
-      setText('config-ap-password-current', config.ap_password || recovery.ap_password_current || system.recovery_ap_password_current || '12345678');
-      setText('config-failsafe-mode', failsafeModeLabel());
-      setText('config-recovery-delay', `${config.runtime_recovery_grace_seconds || '120'} s`);
-      setText('config-runtime-recovery-status', String(config.runtime_recovery_enabled || 'true') === 'true' ? 'actif' : 'inactif');
+      const currentApPassword = config.ap_password || recovery.ap_password_current || system.recovery_ap_password_current || '';
+      setText('config-ap-password-current', `Mot de passe actuel : ${currentApPassword ? 'configuré' : 'non configuré'}`);
+      setText('config-failsafe-mode', `Mode actuel : ${failsafeModeLabel()}`);
+      setText('config-recovery-delay', `Actuel : ${config.runtime_recovery_grace_seconds || '120'} secondes`);
+      setText('config-runtime-recovery-status', `Watchdog : ${String(config.runtime_recovery_enabled || 'true') === 'true' ? 'actif' : 'inactif'}`);
       setText('config-ap-password-summary', config.ap_password || recovery.ap_password_current || system.recovery_ap_password_current || '12345678');
       setText('config-ap-password-policy', recovery.ap_password_policy || system.recovery_ap_password_policy || 'min-8-chars');
       setText('config-ui-access-password', recovery.ui_access_password || system.ui_access_password || 'future-not-configured');
@@ -3464,6 +3523,22 @@
       const automatic = Boolean(document.getElementById('runtime-failsafe-automatic-input')?.checked);
       await saveRuntimeConfig({ runtime_recovery_debug_passive: !automatic }, 'config');
       showConfigResult(`Failsafe automatique: ${automatic ? 'mode automatique' : 'mode observation'}.`);
+    }
+
+    async function saveRecoveryDelay() {
+      const runtimeRecoveryGrace = document.getElementById('runtime-recovery-grace-input')?.value.trim() || '120';
+      if (!/^[0-9]+$/.test(runtimeRecoveryGrace) || Number(runtimeRecoveryGrace) < 1) {
+        showConfigResult('Délai avant Wi-Fi secours : minimum 1 seconde.');
+        return;
+      }
+      await saveRuntimeConfig({ runtime_recovery_grace_seconds: runtimeRecoveryGrace }, 'config');
+      showConfigResult(`Délai avant Wi-Fi secours appliqué : ${runtimeRecoveryGrace} secondes.`);
+    }
+
+    async function saveRuntimeWatchdogMode() {
+      const runtimeRecoveryEnabled = Boolean(document.getElementById('runtime-recovery-enabled-input')?.checked);
+      await saveRuntimeConfig({ runtime_recovery_enabled: runtimeRecoveryEnabled }, 'config');
+      showConfigResult(`Watchdog runtime : ${runtimeRecoveryEnabled ? 'surveillance active' : 'surveillance désactivée'}.`);
     }
 
     function networkActionPlan(action) {
@@ -4464,7 +4539,9 @@
     document.getElementById('updates-install-confirmed')?.addEventListener('input', updateInstallButton);
     document.getElementById('recovery-save-config').addEventListener('click', () => saveRecoveryConfig('recovery'));
     document.getElementById('config-save-recovery')?.addEventListener('click', () => saveRecoveryConfig('config'));
-    document.getElementById('runtime-failsafe-automatic-input')?.addEventListener('change', saveFailsafeMode);
+    document.getElementById('config-apply-failsafe')?.addEventListener('click', saveFailsafeMode);
+    document.getElementById('config-apply-recovery-delay')?.addEventListener('click', saveRecoveryDelay);
+    document.getElementById('config-apply-watchdog')?.addEventListener('click', saveRuntimeWatchdogMode);
     document.getElementById('recovery-return-dropdown-button').addEventListener('click', (event) => {
       event.stopPropagation();
       const dropdown = document.getElementById('recovery-return-dropdown');
@@ -4479,6 +4556,10 @@
       const field = document.getElementById('config-ap-password');
       const apPassword = field.value;
       field.value = '';
+      if (!apPassword) {
+        showConfigResult('Aucun changement : le mot de passe AP actuel est conservé.');
+        return;
+      }
       if (apPassword.length < 8) {
         showConfigResult('Mot de passe AP: minimum 8 caracteres.');
         return;
