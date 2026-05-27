@@ -28,11 +28,21 @@ INSTALLED_ACTION_WRAPPER_SH = Path(os.environ.get("WIFI_KIT_ACTION_WRAPPER", "/o
 INSTALLED_APP_DIR = INSTALLED_ACTION_WRAPPER_SH.parent
 INSTALLED_NM_AP_LAB_SH = INSTALLED_APP_DIR / "wifi-kit-nm-ap-lab.sh"
 INSTALLED_RUNTIME_VERSION = Path(os.environ.get("WIFI_KIT_RUNTIME_VERSION", str(INSTALLED_APP_DIR / "runtime-version")))
+INSTALLED_INDEX_HTML = INSTALLED_APP_DIR / "ui" / "index.html"
 SUDOERS_PATH = Path(os.environ.get("WIFI_KIT_SUDOERS_PATH", "/etc/sudoers.d/wifi-kit"))
 UI_SERVICE_NAME = os.environ.get("WIFI_KIT_UI_SERVICE", "wifi-kit-ui.service")
 BOOT_GUARD_SERVICE_NAME = os.environ.get("WIFI_KIT_BOOT_GUARD_SERVICE", "wifi-kit-boot-guard.service")
 RUNTIME_WATCHDOG_SERVICE_NAME = os.environ.get("WIFI_KIT_RUNTIME_WATCHDOG_SERVICE", "wifi-kit-runtime-watchdog.service")
 INDEX_HTML = SCRIPT_DIR / "index.html"
+RUNTIME_UI_EXPECTED_MARKERS = (
+    "config-recovery-stack",
+    "Laisser vide pour conserver le mot de passe actuel.",
+)
+RUNTIME_UI_LEGACY_MARKERS = (
+    "config-recovery-card",
+    "Enregistrer recovery",
+    '<span class="input-unit">s</span>',
+)
 NORMAL_UI_PORT = 18089  # Prototype/dev local UI default; production/service target is 54321 in contract.
 RECOVERY_UI_PORT = 80
 RECOVERY_AP_TEST_PASSWORD = "12345678"
@@ -400,6 +410,49 @@ def runtime_version_status(repo: Path | None = None, repo_commit: str = "") -> d
     }
 
 
+def runtime_deploy_status(repo: Path | None = None, repo_commit: str = "") -> dict[str, object]:
+    version = runtime_version_status(repo, repo_commit)
+    index_access = path_access_status(INSTALLED_INDEX_HTML)
+    content = ""
+    read_error = safe_label(str(index_access.get("error", "")))
+    if index_access.get("readable"):
+        try:
+            content = INSTALLED_INDEX_HTML.read_text(encoding="utf-8", errors="replace")
+            read_error = ""
+        except PermissionError:
+            read_error = "permission-denied"
+        except OSError as exc:
+            read_error = safe_label(exc.__class__.__name__)
+
+    expected_found = [marker for marker in RUNTIME_UI_EXPECTED_MARKERS if marker in content]
+    legacy_found = [marker for marker in RUNTIME_UI_LEGACY_MARKERS if marker in content]
+    runtime_ui_synced = bool(content and len(expected_found) == len(RUNTIME_UI_EXPECTED_MARKERS) and not legacy_found)
+    runtime_deploy_synced = bool(version.get("runtime_synced") and runtime_ui_synced)
+    if not index_access.get("exists"):
+        deploy_status = "missing-served-index"
+    elif read_error:
+        deploy_status = "served-index-unreadable"
+    elif not version.get("runtime_synced"):
+        deploy_status = "runtime-version-out-of-sync"
+    elif not runtime_ui_synced:
+        deploy_status = "served-index-out-of-sync"
+    else:
+        deploy_status = "success"
+
+    return {
+        **version,
+        "runtime_deploy_status": deploy_status,
+        "runtime_deploy_synced": runtime_deploy_synced,
+        "served_index": str(INSTALLED_INDEX_HTML),
+        "served_index_exists": bool(index_access.get("exists")),
+        "served_index_readable": bool(index_access.get("readable")) and not read_error,
+        "served_index_access_error": read_error,
+        "runtime_ui_synced": runtime_ui_synced,
+        "runtime_ui_expected_markers_found": expected_found,
+        "runtime_ui_legacy_markers_found": legacy_found,
+    }
+
+
 def update_check_status() -> tuple[dict, int]:
     repo = find_git_repo_dir()
     if not repo:
@@ -692,15 +745,25 @@ def update_install(payload: dict) -> tuple[dict, int]:
     if local_before == remote_commit:
         append_action_log(log_path, action=action, status="already-up-to-date", repo=repo, branch=branch, commit=local_before[:12])
         reinstall_payload, reinstall_http_status = run_runtime_reinstall(log_path)
-        runtime_version = runtime_version_status(repo, local_before)
+        runtime_deploy = runtime_deploy_status(repo, local_before)
+        deploy_ok = reinstall_payload.get("reinstall_status") == "success" and runtime_deploy.get("runtime_deploy_synced") is True
+        append_action_log(
+            log_path,
+            action=action,
+            status="runtime-deploy-verified" if deploy_ok else "runtime-deploy-mismatch",
+            runtime_deploy_status=runtime_deploy.get("runtime_deploy_status", ""),
+            runtime_synced=runtime_deploy.get("runtime_synced", False),
+            runtime_ui_synced=runtime_deploy.get("runtime_ui_synced", False),
+            served_index=runtime_deploy.get("served_index", ""),
+        )
         return {
-            "status": "success" if reinstall_http_status == 200 else "failure",
+            "status": "success" if deploy_ok else "failure",
             "action": action,
             "update_status": "already-up-to-date",
             "message": (
-                "Depot deja a jour, runtime reinstalle."
-                if reinstall_payload.get("reinstall_status") == "success"
-                else "Depot deja a jour; reinstallation runtime non terminee."
+                "Depot deja a jour, runtime reinstalle et verifie."
+                if deploy_ok
+                else "Depot deja a jour; deploiement runtime impossible ou incomplet."
             ),
             "repo": str(repo),
             "branch": branch,
@@ -712,8 +775,8 @@ def update_install(payload: dict) -> tuple[dict, int]:
             "update_started": False,
             "log": str(log_path),
             **reinstall_payload,
-            **runtime_version,
-        }, 200 if reinstall_http_status == 200 else reinstall_http_status
+            **runtime_deploy,
+        }, 200 if deploy_ok else (reinstall_http_status if reinstall_http_status != 200 else 500)
 
     pull_code, pull_output = git_run_logged(repo, log_path, "pull", "--ff-only", "origin", branch, timeout=90.0)
     local_after, after_error = git_output(repo, "rev-parse", "HEAD")
@@ -747,15 +810,25 @@ def update_install(payload: dict) -> tuple[dict, int]:
         needs_reinstall=True,
     )
     reinstall_payload, reinstall_http_status = run_runtime_reinstall(log_path)
-    runtime_version = runtime_version_status(repo, local_after)
+    runtime_deploy = runtime_deploy_status(repo, local_after)
+    deploy_ok = reinstall_payload.get("reinstall_status") == "success" and runtime_deploy.get("runtime_deploy_synced") is True
+    append_action_log(
+        log_path,
+        action=action,
+        status="runtime-deploy-verified" if deploy_ok else "runtime-deploy-mismatch",
+        runtime_deploy_status=runtime_deploy.get("runtime_deploy_status", ""),
+        runtime_synced=runtime_deploy.get("runtime_synced", False),
+        runtime_ui_synced=runtime_deploy.get("runtime_ui_synced", False),
+        served_index=runtime_deploy.get("served_index", ""),
+    )
     return {
-        "status": "success" if reinstall_http_status == 200 else "failure",
+        "status": "success" if deploy_ok else "failure",
         "action": action,
         "update_status": "updated",
         "message": (
-            "Mise a jour installee et runtime reinstalle."
-            if reinstall_payload.get("reinstall_status") == "success"
-            else "Mise a jour Git installee; reinstallation runtime non terminee."
+            "Mise a jour installee, runtime reinstalle et verifie."
+            if deploy_ok
+            else "Mise a jour Git installee; deploiement runtime impossible ou incomplet."
         ),
         "repo": str(repo),
         "branch": branch,
@@ -769,8 +842,8 @@ def update_install(payload: dict) -> tuple[dict, int]:
         "update_started": True,
         "log": str(log_path),
         **reinstall_payload,
-        **runtime_version,
-    }, 202 if reinstall_http_status == 200 else reinstall_http_status
+        **runtime_deploy,
+    }, 202 if deploy_ok else (reinstall_http_status if reinstall_http_status != 200 else 500)
 
 
 def safe_label(value: str, *, fallback: str = "") -> str:
