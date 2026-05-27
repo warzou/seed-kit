@@ -17,6 +17,7 @@ persistent_log_file="${WIFI_KIT_RUNTIME_WATCHDOG_PERSISTENT_LOG:-$persistent_log
 persistent_state_file="${WIFI_KIT_RUNTIME_WATCHDOG_PERSISTENT_STATE:-$persistent_log_dir/runtime-watchdog-state}"
 persistent_max_bytes="${WIFI_KIT_RUNTIME_WATCHDOG_PERSISTENT_MAX_BYTES:-262144}"
 gateway_ping_enabled="${WIFI_KIT_RUNTIME_WATCHDOG_GATEWAY_PING:-1}"
+internet_probe="${WIFI_KIT_RUNTIME_WATCHDOG_INTERNET_PROBE:-1.1.1.1}"
 normal_ui_port="${WIFI_KIT_NORMAL_UI_PORT:-54321}"
 normal_ui_service="${WIFI_KIT_NORMAL_UI_SERVICE:-wifi-kit-ui.service}"
 ui_repair_min_seconds="${WIFI_KIT_RUNTIME_WATCHDOG_UI_REPAIR_MIN_SECONDS:-60}"
@@ -86,6 +87,35 @@ runtime_value() {
   printf '%s\n' "$fallback"
 }
 
+write_runtime_value() {
+  key=$1
+  value=$2
+  wr_runtime_dir=$(dirname -- "$runtime_config")
+  mkdir -p "$wr_runtime_dir" 2>/dev/null || return 1
+  if [ ! -f "$runtime_config" ]; then
+    {
+      printf '# Wifi-Kit runtime config\n'
+      printf '# Created by runtime watchdog bootstrap baseline.\n'
+    } > "$runtime_config" 2>/dev/null || return 1
+  fi
+  wr_tmp="${runtime_config}.$$"
+  awk -v key="$key" -v value="$value" '
+    BEGIN { done = 0 }
+    $0 ~ "^" key "=" { print key "=" value; done = 1; next }
+    { print }
+    END { if (!done) print key "=" value }
+  ' "$runtime_config" > "$wr_tmp" 2>/dev/null || {
+    rm -f "$wr_tmp" 2>/dev/null || true
+    return 1
+  }
+  cat "$wr_tmp" > "$runtime_config" 2>/dev/null || {
+    rm -f "$wr_tmp" 2>/dev/null || true
+    return 1
+  }
+  chmod 0600 "$runtime_config" 2>/dev/null || true
+  rm -f "$wr_tmp" 2>/dev/null || true
+}
+
 normalize_bool() {
   case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
     true|1|yes|on) printf 'true' ;;
@@ -130,7 +160,7 @@ event_line() {
   if [ -n "$detail" ]; then
     printf ' detail=%s' "$detail"
   fi
-  printf ' health_status=%s health_reason=%s runtime_match=%s runtime_reason=%s current_connection=%s current_ssid=%s last_good_connection=%s last_good_ssid=%s ip=%s default_route=%s gateway=%s gateway_ping=%s config_readable=%s unstable_triggered=%s unstable_count=%s recovery_decision=%s\n' \
+  printf ' health_status=%s health_reason=%s runtime_match=%s runtime_reason=%s current_connection=%s current_ssid=%s last_good_connection=%s last_good_ssid=%s ip=%s default_route=%s gateway=%s gateway_ping=%s bootstrap_state=%s bootstrap_source=%s baseline_quality=%s config_readable=%s unstable_triggered=%s unstable_count=%s recovery_decision=%s\n' \
     "${health_status:-unknown}" \
     "${health_reason:-unknown}" \
     "${runtime_match:-}" \
@@ -143,6 +173,9 @@ event_line() {
     "${default_route_present:-}" \
     "${gateway:-}" \
     "${gateway_ping_status:-}" \
+    "${bootstrap_state:-}" \
+    "${bootstrap_source:-}" \
+    "${baseline_quality:-}" \
     "${runtime_config_readable:-}" \
     "${unstable_triggered:-no}" \
     "${unstable_count:-}" \
@@ -186,6 +219,9 @@ write_state() {
     kv "default_route" "${default_route_present:-}"
     kv "gateway" "${gateway:-}"
     kv "gateway_ping" "${gateway_ping_status:-}"
+    kv "bootstrap_state" "${bootstrap_state:-}"
+    kv "bootstrap_source" "${bootstrap_source:-}"
+    kv "baseline_quality" "${baseline_quality:-}"
     kv "unstable_triggered" "${unstable_triggered:-no}"
     kv "unstable_count" "${unstable_count:-}"
     kv "unstable_threshold" "${threshold:-}"
@@ -217,6 +253,9 @@ write_state() {
       kv "default_route" "${default_route_present:-}"
       kv "gateway" "${gateway:-}"
       kv "gateway_ping" "${gateway_ping_status:-}"
+      kv "bootstrap_state" "${bootstrap_state:-}"
+      kv "bootstrap_source" "${bootstrap_source:-}"
+      kv "baseline_quality" "${baseline_quality:-}"
       kv "unstable_triggered" "${unstable_triggered:-no}"
       kv "unstable_count" "${unstable_count:-}"
       kv "unstable_threshold" "${threshold:-}"
@@ -322,6 +361,93 @@ ping_gateway() {
   else
     printf 'failed\n'
   fi
+}
+
+ping_internet_probe() {
+  if [ -n "${WIFI_KIT_RUNTIME_WATCHDOG_MOCK_INTERNET_PING:-}" ]; then
+    printf '%s\n' "$WIFI_KIT_RUNTIME_WATCHDOG_MOCK_INTERNET_PING"
+    return 0
+  fi
+  [ -n "$internet_probe" ] || {
+    printf 'unknown\n'
+    return 0
+  }
+  ping_bin=$(find_tool ping 2>/dev/null || true)
+  [ -n "$ping_bin" ] || {
+    printf 'unknown\n'
+    return 0
+  }
+  if "$ping_bin" -c 1 -W 1 "$internet_probe" >/dev/null 2>&1; then
+    printf 'ok\n'
+  else
+    printf 'failed\n'
+  fi
+}
+
+current_wifi_baseline_eligible() {
+  [ "$last_good_configured" != "yes" ] || return 1
+  [ -n "$current_connection" ] || return 1
+  [ -n "$current_ssid" ] || return 1
+  case "$current_ssid" in
+    Wifi-Kit-*|wifi-kit-*) return 1 ;;
+  esac
+  [ -n "$iface_ipv4" ] || return 1
+  [ "$default_route_present" = "yes" ] || return 1
+  [ -n "$gateway" ] || return 1
+  [ "$gateway_ping_status" = "ok" ] || return 1
+  return 0
+}
+
+classify_bootstrap_state() {
+  bootstrap_state=$(runtime_value bootstrap_state "")
+  bootstrap_source=$(runtime_value bootstrap_source "")
+  baseline_quality=$(runtime_value baseline_quality "")
+  if [ "$last_good_configured" = "yes" ]; then
+    [ -n "$bootstrap_state" ] || bootstrap_state="baselined"
+    return 0
+  fi
+  if current_wifi_baseline_eligible; then
+    bootstrap_state="baseline-pending"
+    bootstrap_source="current-healthy-wifi"
+    case "$(ping_internet_probe)" in
+      ok) baseline_quality="internet" ;;
+      *) baseline_quality="lan-only" ;;
+    esac
+  else
+    bootstrap_state="onboarding-required"
+    bootstrap_source=""
+    baseline_quality=""
+  fi
+}
+
+auto_baseline_current_wifi() {
+  current_wifi_baseline_eligible || return 1
+  internet_ping_status=$(ping_internet_probe)
+  case "$internet_ping_status" in
+    ok) new_baseline_quality="internet" ;;
+    *) new_baseline_quality="lan-only" ;;
+  esac
+  log_event "bootstrap-baseline-started" "source=current-healthy-wifi current_connection=$current_connection current_ssid=$current_ssid baseline_quality=$new_baseline_quality internet_probe=$internet_probe internet_ping=$internet_ping_status"
+  if [ -z "$(runtime_value original_connection "")" ]; then
+    write_runtime_value original_connection "$current_connection" || return 1
+  fi
+  if [ -z "$(runtime_value original_ssid "")" ]; then
+    write_runtime_value original_ssid "$current_ssid" || return 1
+  fi
+  if [ -z "$(runtime_value return_connection "")" ]; then
+    write_runtime_value return_connection "$current_connection" || return 1
+  fi
+  if [ -z "$(runtime_value return_ssid "")" ]; then
+    write_runtime_value return_ssid "$current_ssid" || return 1
+  fi
+  write_runtime_value last_good_connection "$current_connection" || return 1
+  write_runtime_value last_good_ssid "$current_ssid" || return 1
+  write_runtime_value bootstrap_state "baselined" || return 1
+  write_runtime_value bootstrap_source "current-healthy-wifi" || return 1
+  write_runtime_value bootstrap_at "$(timestamp)" || return 1
+  write_runtime_value baseline_quality "$new_baseline_quality" || return 1
+  log_event "bootstrap-baseline-created" "source=current-healthy-wifi current_connection=$current_connection current_ssid=$current_ssid baseline_quality=$new_baseline_quality"
+  return 0
 }
 
 ap_recovery_active() {
@@ -508,9 +634,9 @@ config_values() {
       unstable_triggered=yes
     fi
   fi
+  classify_bootstrap_state
   if [ "$enabled" = "true" ] && [ -z "$last_good_ssid" ] && [ -z "$last_good_connection" ]; then
-    status="refused"
-    reason="${reason:-last-good-missing}"
+    reason="${reason:-$bootstrap_state}"
   fi
   effective_grace_seconds=$grace_seconds
   if is_positive_integer "$effective_grace_seconds" && [ "$effective_grace_seconds" -lt "$min_unavailable_seconds" ]; then
@@ -555,8 +681,13 @@ classify_health() {
     return 0
   fi
   if [ "$enabled" = "true" ] && [ "$last_good_configured" != "yes" ]; then
+    if [ "$bootstrap_state" = "baseline-pending" ]; then
+      health_status="healthy"
+      health_reason="bootstrap-baseline-pending"
+      return 0
+    fi
     health_status="unhealthy"
-    health_reason="last-good-missing"
+    health_reason="onboarding-required"
     return 0
   fi
   if [ "$runtime_match" != "true" ]; then
@@ -692,6 +823,9 @@ cmd_audit() {
   kv "default_route" "$default_route_present"
   kv "gateway" "$gateway"
   kv "gateway_ping" "$gateway_ping_status"
+  kv "bootstrap_state" "$bootstrap_state"
+  kv "bootstrap_source" "$bootstrap_source"
+  kv "baseline_quality" "$baseline_quality"
   kv "runtime_match" "$runtime_match"
   kv "runtime_reason" "$runtime_reason"
   kv "health_status" "$health_status"
@@ -728,6 +862,7 @@ cmd_plan() {
   kv "02.grace" "wait until runtime is unavailable continuously for effective grace"
   kv "02b.min_unavailable" "effective grace is at least 120 seconds by default"
   kv "02c.instability" "short repeated failures are logged as diagnostic-only; they do not force AP by themselves"
+  kv "02d.bootstrap" "if last_good is absent and current Wi-Fi is healthy, write the initial baseline to runtime.conf only"
   kv "03.cancel" "if last_good returns during grace, log recovery-cancelled link-restored"
   kv "04.recover" "if still disconnected from last_good, call wrapper start-ap-mode"
   kv "05.ap" "AP return-check loop handles periodic last_good retry from AP recovery"
@@ -738,6 +873,14 @@ cmd_plan() {
 cmd_run() {
   require_root
   config_values
+  if [ "$last_good_configured" != "yes" ]; then
+    if current_wifi_baseline_eligible; then
+      auto_baseline_current_wifi || log_event "bootstrap-baseline-failed" "current_connection=${current_connection:-unknown} current_ssid=${current_ssid:-unknown}"
+      config_values
+    else
+      log_event "bootstrap-onboarding-required" "reason=no-current-healthy-wifi current_connection=${current_connection:-unknown} current_ssid=${current_ssid:-unknown} ip=${iface_ipv4:-none} default_route=$default_route_present gateway=${gateway:-none} gateway_ping=$gateway_ping_status"
+    fi
+  fi
   if ! is_positive_integer "$ui_repair_min_seconds"; then
     ui_repair_min_seconds=60
   fi
@@ -772,6 +915,10 @@ cmd_run() {
   last_normal_ui_repair_attempt=0
   while :; do
     config_values
+    if [ "$last_good_configured" != "yes" ] && current_wifi_baseline_eligible; then
+      auto_baseline_current_wifi || log_event "bootstrap-baseline-failed" "current_connection=${current_connection:-unknown} current_ssid=${current_ssid:-unknown}"
+      config_values
+    fi
     if [ "$enabled" != "true" ]; then
       log_event "stopping" "runtime-recovery-disabled"
       write_state "disabled" "runtime-recovery-disabled" ""

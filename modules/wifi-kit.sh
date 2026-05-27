@@ -43,6 +43,7 @@ module_wifi_kit_plan() {
   echo "- installer: modules/wifi-kit/install-wifi-kit-runtime.sh"
   echo "- command: sh seed-kit.sh install wifi-kit"
   echo "- alternate: sh seed-kit.sh --apply --modules=wifi-kit"
+  echo "- prerequisite: wifi-stability is applied first on Raspberry Pi targets"
   echo "- installs: /opt runtime, strict sudoers, normal UI service, boot guard service, runtime watchdog service"
   echo "- safety: install/reinstall prompt before real install"
   echo "- safety: no AP start, no Wi-Fi change, no profile deletion, no reboot"
@@ -69,6 +70,16 @@ module_wifi_kit_apply() {
   if [ ! -f "$installer" ]; then
     echo "[wifi-kit] installer missing: $installer" >&2
     return 1
+  fi
+
+  if command -v apply_module_wifi_stability >/dev/null 2>&1; then
+    echo "[wifi-kit] prerequisite: wifi-stability"
+    if ! apply_module_wifi_stability; then
+      echo "[wifi-kit] blocked: wifi-stability prerequisite failed" >&2
+      return 2
+    fi
+  else
+    echo "[wifi-kit] warning: wifi-stability prerequisite is unavailable in this runner" >&2
   fi
 
   audit_output=$(sh "$installer" audit)

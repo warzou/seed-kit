@@ -14,9 +14,9 @@ The following behavior has been validated on the current pocket-node:
   reachable on port `54321`.
 - NetworkManager hotspot recovery starts and serves the recovery UI at
   `http://192.168.50.1:80`.
-- Windows and iPhone captive portal flows reach the node.
-- Captive probes are routed through `/portal`, with the full recovery UI still
-  available at `/recovery`.
+- Captive probes can be routed through `/portal`, with the full recovery UI
+  still available at `/recovery`, but Windows captive auto-open is not a
+  guaranteed recovery path.
 - Recovery UI can return the node to the Flint network.
 - Update check is read-only and reports branch, remote, local commit, and
   update status.
@@ -44,6 +44,7 @@ The following behavior has been validated on the current pocket-node:
   - Known captive endpoints redirect to `/portal`.
   - `/portal` is a minimal landing page.
   - The full Wi-Fi recovery UI remains at `/recovery`.
+  - Reliable manual access remains `http://192.168.50.1`.
 - Update/reinstall flow:
   - `/updates/check` is read-only.
   - `/updates/install` requires confirmation and refuses dirty repositories.
@@ -67,12 +68,14 @@ The following behavior has been validated on the current pocket-node:
 2. Normal operation exposes the UI on port `54321`.
 3. If recovery is needed, the node starts the NetworkManager hotspot.
 4. A Windows, iPhone, or Android client joins the recovery AP.
-5. Captive portal probes open `/portal`.
-6. The operator opens the full recovery UI at `http://192.168.50.1/recovery`.
-7. The operator selects a Wi-Fi network and starts connection from the UI.
-8. If the node joins Wi-Fi successfully, the AP disappears and the normal UI
+5. If captive auto-open appears, it opens `/portal`.
+6. If captive auto-open does not appear, the operator opens
+   `http://192.168.50.1` manually.
+7. The operator opens the full recovery UI at `http://192.168.50.1/recovery`.
+8. The operator selects a Wi-Fi network and starts connection from the UI.
+9. If the node joins Wi-Fi successfully, the AP disappears and the normal UI
    returns on the LAN.
-9. Operators can then use update check, update install/reinstall, reboot, and
+10. Operators can then use update check, update install/reinstall, reboot, and
    shutdown through SAFE UI actions.
 
 ## Experimental Or Known Limits
@@ -87,6 +90,11 @@ The following behavior has been validated on the current pocket-node:
   domain, channel, AP/client transitions, and local RF conditions.
 - NM-hotspot scan/connect behavior is the preferred path, but fresh hardware
   validation must still confirm captive portal and Wi-Fi transition stability.
+- Windows captive auto-open may fail or be delayed. The supported fallback is:
+  join `Wifi-Kit-<hostname>`, then open `http://192.168.50.1` manually.
+- SSH in AP recovery uses the node user account, for example
+  `ssh warzy@192.168.50.1`. The AP password is only the Wi-Fi WPA passphrase;
+  it is not the SSH password.
 - Boot guard and runtime recovery must remain distinct:
   - boot can use last-good, then primary/return Wi-Fi, then AP recovery.
   - runtime recovery must not fall back automatically to the primary/return
@@ -126,10 +134,17 @@ Use this as the planned operator flow for the blank Pi Zero 2 W test:
   - node answers on `192.168.50.1`;
   - recovery UI is reachable on port `80`.
 - Captive portal:
-  - Windows captive flow reaches the portal;
-  - iPhone captive flow reaches the portal;
+  - Windows captive flow reaches the portal when captive DNS/browser behavior
+    cooperates;
+  - iPhone captive flow reaches the portal when captive DNS/browser behavior
+    cooperates;
   - `/portal` opens;
   - `/recovery` opens from the portal.
+- Manual recovery access:
+  - `http://192.168.50.1` opens after joining `Wifi-Kit-<hostname>`;
+  - `ssh warzy@192.168.50.1` is available when SSH is enabled and credentials
+    are known;
+  - the AP password is not reused as the SSH password.
 - Wi-Fi return:
   - recovery UI can return to the selected Wi-Fi;
   - return to Flint remains available when explicitly selected;
