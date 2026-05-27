@@ -2407,6 +2407,8 @@
             </label>
             <button id="updates-install-button" class="button secondary" type="button" disabled>Installer la mise a jour</button>
             <div id="updates-check-result" class="callout recovery-result update-result" hidden></div>
+            <button id="ui-restart-button" class="button secondary" type="button" hidden>Redemarrer l'interface</button>
+            <div id="ui-restart-result" class="callout recovery-result" hidden></div>
           </div>
           <div class="action-card maintenance-card maintenance-reboot-card">
             <span class="chip">Danger</span>
@@ -3240,6 +3242,20 @@
       target.hidden = false;
     }
 
+    function setUiRestartVisible(visible) {
+      const button = document.getElementById('ui-restart-button');
+      if (button) button.hidden = !visible;
+      const result = document.getElementById('ui-restart-result');
+      if (!visible && result) result.hidden = true;
+    }
+
+    function showUiRestartResult(message) {
+      const target = document.getElementById('ui-restart-result');
+      if (!target) return;
+      target.textContent = message;
+      target.hidden = false;
+    }
+
     function showDiagnosticExportResult(message) {
       ['diagnostic-export-result', 'recovery-diagnostic-export-result'].forEach((id) => {
         const target = document.getElementById(id);
@@ -3726,6 +3742,7 @@
           button.disabled = true;
           button.textContent = 'Verification...';
         }
+        setUiRestartVisible(false);
         const response = await fetch('/updates/check', {
           cache: 'no-store',
           method: 'POST',
@@ -3817,9 +3834,14 @@
         if (payload.reinstall_message) lines.push(payload.reinstall_message);
         if (payload.reinstall_error) lines.push(`Erreur reinstall: ${payload.reinstall_error}`);
         if (payload.needs_reinstall) lines.push(payload.reinstall_message || 'Reinstallation runtime requise.');
+        const runtimeDeployOk = payload.runtime_deploy_synced === true || (payload.reinstall_status === 'success' && payload.runtime_synced === true);
+        if (runtimeDeployOk) {
+          lines.push("Mise a jour installee. Redemarrage de l'interface requis.");
+        }
         if (payload.reinstall_log && payload.reinstall_log !== payload.log) lines.push(`Log reinstall: ${payload.reinstall_log}`);
         if (payload.log) lines.push(`Log: ${payload.log}`);
         showUpdateCheckResult(lines.join('\n'));
+        setUiRestartVisible(runtimeDeployOk);
         if (payload.update_status === 'already-up-to-date') {
           lastUpdateCheck = { ...lastUpdateCheck, status: 'up-to-date', local_commit: payload.local_commit, local_commit_short: payload.local_commit_short };
         } else if (payload.update_status === 'updated') {
@@ -3833,6 +3855,37 @@
           button.textContent = originalText;
         }
         updateInstallButton();
+      }
+    }
+
+    async function restartInterface() {
+      const button = document.getElementById('ui-restart-button');
+      const originalText = button ? button.textContent : '';
+      if (window.location.protocol === 'file:') {
+        showUiRestartResult("Redemarrage de l'interface indisponible depuis cette page locale.");
+        return;
+      }
+      try {
+        if (button) {
+          button.disabled = true;
+          button.textContent = 'Redemarrage...';
+        }
+        showUiRestartResult("Redemarrage de l'interface demande. Recharge la page dans quelques secondes.");
+        const response = await fetch('/ui/restart', {
+          cache: 'no-store',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        const payload = await response.json();
+        showUiRestartResult(payload.message || "Interface en redemarrage, recharge la page dans quelques secondes.");
+      } catch (error) {
+        showUiRestartResult("Interface en redemarrage, recharge la page dans quelques secondes.");
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = originalText;
+        }
       }
     }
 
@@ -4591,6 +4644,7 @@
     });
     document.getElementById('updates-check-button')?.addEventListener('click', checkUpdates);
     document.getElementById('updates-install-button')?.addEventListener('click', installUpdate);
+    document.getElementById('ui-restart-button')?.addEventListener('click', restartInterface);
     document.querySelectorAll('.diagnostic-export-trigger').forEach((button) => {
       button.addEventListener('click', exportDiagnostic);
     });

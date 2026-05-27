@@ -128,6 +128,7 @@ AP_RETURN_CHECK_ONCE_LOG = action_log_path("ap-return-check")
 FAILSAFE_MODE_LOG = action_log_path("failsafe-mode")
 SYSTEM_REBOOT_LOG = unique_action_log_path("system-reboot")
 SYSTEM_SHUTDOWN_LOG = unique_action_log_path("system-shutdown")
+UI_RESTART_LOG = unique_action_log_path("ui-restart")
 UPDATE_INSTALL_LOG_ACTION = "update-install"
 SCAN_FROM_AP_LOG = action_log_path("scan-from-ap-recovery")
 SCAN_FROM_AP_CACHE = ACTION_LOG_DIR / "scan-from-ap-recovery-cache.json"
@@ -183,6 +184,7 @@ ACTION_PATHS = {
     "/api/ap-return-check-once": "ap-return-check-once",
     "/system-reboot": "reboot-system",
     "/system-shutdown": "shutdown-system",
+    "/ui/restart": "restart-ui",
     "/updates/install": "updates-install",
     "/exit-recovery": "exit-recovery",
     "/reboot-recovery": "reboot-recovery",
@@ -1639,6 +1641,7 @@ def backend_status(recovery: dict | None = None) -> dict[str, object]:
             "ap_return_check_once": privileged_ready,
             "reboot_system": privileged_ready and system_power_gate_enabled("reboot-system"),
             "shutdown_system": privileged_ready and system_power_gate_enabled("shutdown-system"),
+            "restart_ui": privileged_ready,
         },
         "runtime": {
             "config_exists": RUNTIME_CONFIG_PATH.exists(),
@@ -2196,6 +2199,80 @@ def system_power_action(payload: dict, action: str) -> tuple[dict, int]:
         "returncode": result.returncode,
         "log": str(log_path),
     }, 202 if result.returncode == 0 else 500
+
+
+def restart_ui_action(payload: dict) -> tuple[dict, int]:
+    action = "restart-ui"
+    log_path = UI_RESTART_LOG
+    dry_run = bool_payload(payload.get("dry_run"))
+    if dry_run or not privileged_actions_enabled():
+        append_action_log(
+            log_path,
+            action=action,
+            status="planned",
+            privileged_actions_enabled=privileged_actions_enabled(),
+            service=UI_SERVICE_NAME,
+        )
+        return {
+            "status": "planned",
+            "action": action,
+            "ui_restart_requested": False,
+            "privileged_actions_enabled": privileged_actions_enabled(),
+            "service": UI_SERVICE_NAME,
+            "would_call": f"{action_wrapper_path()} {action}",
+            "log": str(log_path),
+            "message": "Redemarrage de l'interface non execute: mode local ou dry-run.",
+        }, 200
+
+    command, error = privileged_action_command(action)
+    if error:
+        append_action_log(log_path, action=action, status="failure", error=error, service=UI_SERVICE_NAME)
+        response = privileged_error_response(action, error)
+        response.update(
+            {
+                "ui_restart_requested": False,
+                "service": UI_SERVICE_NAME,
+                "log": str(log_path),
+                "message": "Redemarrage de l'interface impossible: droits SAFE indisponibles.",
+            }
+        )
+        return response, 403 if error == "wifi-kit-network-rights-not-installed" else 500
+
+    append_action_log(log_path, action=action, status="starting", service=UI_SERVICE_NAME, command=" ".join(command))
+    try:
+        handle = open_action_log(log_path)
+        try:
+            subprocess.Popen(
+                command,
+                cwd=str(SCRIPT_DIR.parent),
+                start_new_session=True,
+                stdin=subprocess.DEVNULL,
+                stdout=handle,
+                stderr=subprocess.STDOUT,
+            )
+        finally:
+            handle.close()
+    except OSError as exc:
+        append_action_log(log_path, action=action, status="failure", error=f"start-failed: {exc}", service=UI_SERVICE_NAME)
+        return {
+            "status": "failure",
+            "action": action,
+            "error": f"start-failed: {exc}",
+            "ui_restart_requested": False,
+            "service": UI_SERVICE_NAME,
+            "log": str(log_path),
+            "message": "Impossible de lancer le redemarrage de l'interface.",
+        }, 500
+
+    append_action_log(log_path, action=action, status="started", service=UI_SERVICE_NAME)
+    return {
+        "status": "started",
+        "action": action,
+        "ui_restart_requested": True,
+        "service": UI_SERVICE_NAME,
+        "log": str(log_path),
+        "message": "Redemarrage de l'interface demande. Recharge la page dans quelques secondes.",
+    }, 202
 
 
 def start_reconnect_previous() -> dict:
@@ -3756,6 +3833,11 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
             self.send_action_json("shutdown-system", payload, status=status)
             return
 
+        if path == "/ui/restart":
+            payload, status = restart_ui_action(parse_post_payload(self))
+            self.send_action_json("restart-ui", payload, status=status)
+            return
+
         if path == "/updates/check":
             payload, status = update_check_status()
             self.send_json(payload, status=status)
@@ -3860,7 +3942,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
 
         if path in ACTION_PATHS:
             action = ACTION_PATHS[path]
-            runtime_actions = {"reconnect-previous", "start-ap-mode", "return-default-network", "ap-return-check-once", "reboot-system", "shutdown-system", "updates-install"}
+            runtime_actions = {"reconnect-previous", "start-ap-mode", "return-default-network", "ap-return-check-once", "reboot-system", "shutdown-system", "restart-ui", "updates-install"}
             self.send_json(
                 {
                     "status": "runtime-gated" if action in runtime_actions else "unavailable",

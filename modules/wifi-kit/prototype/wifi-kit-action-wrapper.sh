@@ -17,6 +17,7 @@ ap_timeout_seconds="300"
 connect_timeout_seconds="180"
 reboot_cmd="/sbin/reboot"
 shutdown_cmd="/sbin/poweroff"
+ui_service_name="wifi-kit-ui.service"
 
 default_repo_dir() {
   if [ -r "$repo_dir_file" ]; then
@@ -259,7 +260,7 @@ require_root() {
 
 if [ "$#" -ne 1 ]; then
   log_event "unknown" "refused" "usage"
-  reply "refused" "unknown" "usage: wifi-kit-action-wrapper.sh start-ap-mode|return-default-network|connect-wifi|ap-return-check-once|reboot-system|shutdown-system|reinstall-runtime"
+  reply "refused" "unknown" "usage: wifi-kit-action-wrapper.sh start-ap-mode|return-default-network|connect-wifi|ap-return-check-once|reboot-system|shutdown-system|reinstall-runtime|restart-ui"
   exit 2
 fi
 
@@ -403,6 +404,24 @@ case "$action" in
     fi
     log_event "$action" "failure" "repo_dir=$repo_dir command=$command exit_code=$rc"
     reply "failure" "$action" "runtime-reinstall-failed exit_code=$rc"
+    exit "$rc"
+    ;;
+  restart-ui)
+    require_root "$action"
+    systemctl_cmd=$(command -v systemctl 2>/dev/null || true)
+    [ -n "$systemctl_cmd" ] || { log_event "$action" "failure" "systemctl-missing"; reply "failure" "$action" "systemctl-missing"; exit 1; }
+    log_event "$action" "requested" "service=$ui_service_name command=$systemctl_cmd restart $ui_service_name"
+    set +e
+    "$systemctl_cmd" restart "$ui_service_name"
+    rc=$?
+    set -e
+    if [ "$rc" -eq 0 ]; then
+      log_event "$action" "success" "service=$ui_service_name exit_code=$rc"
+      reply "success" "$action" "ui-restart-requested service=$ui_service_name exit_code=$rc"
+      exit 0
+    fi
+    log_event "$action" "failure" "service=$ui_service_name exit_code=$rc"
+    reply "failure" "$action" "ui-restart-failed service=$ui_service_name exit_code=$rc"
     exit "$rc"
     ;;
   reboot-system)
