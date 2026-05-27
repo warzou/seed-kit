@@ -43,7 +43,7 @@ Concrete lab modes, dry-run by default:
   sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh return-last-good
   sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh return-primary
 
-Captive portal lab modes, dry-run/read-only only in this first lot:
+Captive portal lab modes, dry-run by default:
   sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-audit
   sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-plan
   sh modules/wifi-kit/prototype/wifi-kit-nm-ap-lab.sh captive-enable-dry-run
@@ -174,7 +174,10 @@ captive_conf_path() {
 
 captive_domains() {
   printf '%s\n' \
+    "msftconnecttest.com" \
     "www.msftconnecttest.com" \
+    "ipv6.msftconnecttest.com" \
+    "dns.msftncsi.com" \
     "www.msftncsi.com" \
     "captive.apple.com" \
     "connectivitycheck.gstatic.com" \
@@ -186,8 +189,11 @@ print_captive_dnsmasq_config() {
   printf '%s\n' \
     "# Wifi-Kit NM-hotspot captive DNS lab." \
     "# Intended for NetworkManager shared-mode dnsmasq." \
-    "# Keep disabled until validated on the target node." \
+    "# Installed before the recovery hotspot starts; no NetworkManager restart." \
+    "address=/msftconnecttest.com/$ip" \
     "address=/www.msftconnecttest.com/$ip" \
+    "address=/ipv6.msftconnecttest.com/$ip" \
+    "address=/dns.msftncsi.com/$ip" \
     "address=/www.msftncsi.com/$ip" \
     "address=/captive.apple.com/$ip" \
     "address=/connectivitycheck.gstatic.com/$ip" \
@@ -229,6 +235,35 @@ captive_backup_path() {
 captive_disabled_path() {
   path=$(captive_conf_path)
   printf '%s.disabled.%s\n' "$path" "$(date -u +%Y%m%dT%H%M%SZ)"
+}
+
+install_captive_conf() {
+  path=$(captive_conf_path)
+  tmp="$path.tmp.$$"
+  mkdir -p "$captive_conf_dir" || return 1
+  print_captive_dnsmasq_config > "$tmp" || {
+    rm -f "$tmp" 2>/dev/null || true
+    return 1
+  }
+  chmod 0644 "$tmp" || {
+    rm -f "$tmp" 2>/dev/null || true
+    return 1
+  }
+  if [ -e "$path" ] && ! cmp -s "$path" "$tmp"; then
+    backup=$(captive_backup_path)
+    cp -p "$path" "$backup" || {
+      rm -f "$tmp" 2>/dev/null || true
+      return 1
+    }
+    kv "captive_backup" "$backup"
+  fi
+  mv "$tmp" "$path" || {
+    rm -f "$tmp" 2>/dev/null || true
+    return 1
+  }
+  chmod 0644 "$path" || return 1
+  kv "captive_result" "captive-conf-installed"
+  kv "captive_conf_path" "$path"
 }
 
 pid_is_alive() {
@@ -524,10 +559,10 @@ cmd_captive_audit() {
   kv "ap_ip" "$(captive_ap_ip)"
   kv "ui_url" "http://$ui_host:$ui_port"
   kv "backend_http_paths" "/generate_204,/gen_204,/hotspot-detect.html,/library/test/success.html,/connecttest.txt,/ncsi.txt"
-  kv "windows_probe_hosts" "www.msftconnecttest.com,www.msftncsi.com"
+  kv "windows_probe_hosts" "msftconnecttest.com,www.msftconnecttest.com,ipv6.msftconnecttest.com,dns.msftncsi.com,www.msftncsi.com"
   kv "android_probe_hosts" "connectivitycheck.gstatic.com,clients3.google.com"
   kv "ios_probe_hosts" "captive.apple.com"
-  kv "dns_hijack_currently_configured_by_helper" "false"
+  kv "dns_hijack_currently_configured_by_helper" "$(captive_conf_expected_ok && printf true || printf false)"
   kv "probable_windows_gap" "probe hostnames may not resolve to $ui_host in NM shared mode"
   kv "candidate_conf_dir" "$captive_conf_dir"
   kv "candidate_conf_path" "$(captive_conf_path)"
@@ -541,17 +576,17 @@ cmd_captive_audit() {
   else
     kv "candidate_conf_exists" "false"
   fi
-  kv "safe_first_lot" "audit-plan-only; start-hotspot does not enable captive DNS"
+  kv "policy" "start-hotspot installs captive DNS before starting the NM shared hotspot"
 }
 
 cmd_captive_plan() {
   section "nm-ap-lab-captive-plan"
   kv "status" "planned"
   kv "network_writes" "false"
-  kv "apply_supported" "false-in-this-lot"
+  kv "apply_supported" "true"
   kv "goal" "make platform captive probe hostnames resolve to $(captive_ap_ip) while NM-hotspot recovery is active"
   kv "candidate_conf_path" "$(captive_conf_path)"
-  kv "activation_policy" "manual-future-lot-only; not called by start-hotspot"
+  kv "activation_policy" "installed automatically by start-hotspot in apply mode; manual captive-enable remains available"
   kv "rollback_policy" "remove only $(captive_conf_path), then restart/reconnect NM hotspot only after explicit validation"
   kv "risk" "NetworkManager may require reconnecting the shared hotspot or reloading its dnsmasq child before the file is used"
 
@@ -568,7 +603,7 @@ cmd_captive_plan() {
   kv "01_create_dir" "install -d -m 0755 $captive_conf_dir"
   kv "02_write_conf" "write the candidate config to $(captive_conf_path)"
   kv "03_chmod" "chmod 0644 $(captive_conf_path)"
-  kv "04_validate" "reconnect NM hotspot in a controlled lab window, then test Windows captive prompt"
+  kv "04_validate" "start or reconnect only the NM hotspot in a controlled lab window, then test Windows captive prompt"
 }
 
 cmd_captive_enable_dry_run() {
@@ -576,7 +611,7 @@ cmd_captive_enable_dry_run() {
   kv "status" "dry-run"
   kv "network_writes" "false"
   kv "apply_ignored" "$apply"
-  kv "reason" "first captive lot intentionally does not write system files"
+  kv "reason" "dry-run only; start-hotspot apply installs this same config before NM shared dnsmasq starts"
   kv "candidate_conf_path" "$(captive_conf_path)"
   section "would-write"
   print_captive_dnsmasq_config
@@ -650,16 +685,11 @@ cmd_captive_enable() {
   print_captive_dnsmasq_config
 
   if [ "$apply" = "1" ]; then
-    mkdir -p "$captive_conf_dir"
-    print_captive_dnsmasq_config > "$tmp"
-    chmod 0644 "$tmp"
-    if [ -e "$path" ] && ! cmp -s "$path" "$tmp"; then
-      backup=$(captive_backup_path)
-      cp -p "$path" "$backup"
-      kv "backup" "$backup"
-    fi
-    mv "$tmp" "$path"
-    chmod 0644 "$path"
+    install_captive_conf || {
+      kv "result" "refused"
+      kv "reason" "captive-conf-install-failed"
+      exit 1
+    }
     kv "result" "captive-conf-installed"
     kv "next_step" "restart or reconnect only the NM hotspot in a controlled lab window"
   fi
@@ -747,6 +777,7 @@ cmd_start_hotspot() {
   kv "status" "$([ "$apply" = "1" ] && printf applying || printf dry-run)"
   kv "network_writes" "$([ "$apply" = "1" ] && printf true || printf false)"
   kv "command" "nmcli connection up $ap_profile ifname $iface"
+  kv "captive_dns" "install $(captive_conf_path) before starting hotspot so NM shared dnsmasq can route captive probes"
   kv "follow_up" "start-ui"
   kv "follow_up_command" "$(ui_start_command "$ssid")"
   if [ "$apply" = "1" ]; then
@@ -754,6 +785,12 @@ cmd_start_hotspot() {
     if ! connection_exists "$ap_profile"; then
       kv "profile" "missing-create-before-start"
       cmd_create_profile
+    fi
+    if install_captive_conf; then
+      kv "captive_policy" "enabled-for-this-hotspot-start"
+    else
+      kv "captive_result" "failed-best-effort"
+      kv "captive_policy" "manual-fallback-still-available"
     fi
     "$nmcli_bin" connection up "$ap_profile" ifname "$iface"
     kv "result" "hotspot-start-requested"

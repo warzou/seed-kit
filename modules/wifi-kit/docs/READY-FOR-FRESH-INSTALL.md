@@ -92,6 +92,9 @@ The following behavior has been validated on the current pocket-node:
   validation must still confirm captive portal and Wi-Fi transition stability.
 - Windows captive auto-open may fail or be delayed. The supported fallback is:
   join `Wifi-Kit-<hostname>`, then open `http://192.168.50.1` manually.
+- Wifi-Kit maps common Windows captive DNS probe hostnames to `192.168.50.1`
+  when the NM recovery hotspot starts, but Windows captive UI remains
+  best-effort rather than guaranteed.
 - SSH in AP recovery uses the node user account, for example
   `ssh warzy@192.168.50.1`. The AP password is only the Wi-Fi WPA passphrase;
   it is not the SSH password.

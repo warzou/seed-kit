@@ -316,14 +316,24 @@ The recovery UI already handles common captive probe paths when clients reach
 - iOS: `/hotspot-detect.html`, `/library/test/success.html`;
 - Windows: `/connecttest.txt`, `/ncsi.txt`.
 
-The current NM-hotspot lab does not yet install captive DNS interception.
-Windows may request:
+The NM-hotspot lab installs a small captive DNS mapping before starting the
+shared hotspot so NetworkManager's dnsmasq child can route common probe hosts to
+`192.168.50.1`. Windows may request:
 
+- `msftconnecttest.com`;
 - `www.msftconnecttest.com/connecttest.txt`;
+- `www.msftconnecttest.com/redirect`;
+- `ipv6.msftconnecttest.com`;
+- `dns.msftncsi.com`;
 - `www.msftncsi.com/ncsi.txt`.
 
-If those hostnames do not resolve to `192.168.50.1`, the HTTP endpoints are
-never reached and Windows may not open the captive portal automatically.
+If those hostnames still do not resolve to `192.168.50.1`, the HTTP endpoints
+are never reached and Windows may not open the captive portal automatically.
+This remains best-effort; the reliable operator fallback is to open:
+
+```text
+http://192.168.50.1
+```
 
 Read-only audit:
 
@@ -381,7 +391,10 @@ The captive lab uses a NetworkManager shared-mode dnsmasq snippet under:
 
 with explicit mappings for:
 
+- `msftconnecttest.com`;
 - `www.msftconnecttest.com`;
+- `ipv6.msftconnecttest.com`;
+- `dns.msftncsi.com`;
 - `www.msftncsi.com`;
 - `captive.apple.com`;
 - `connectivitycheck.gstatic.com`;
@@ -394,10 +407,9 @@ NetworkManager and does not reconnect the hotspot automatically.
 `captive-disable` only renames the target file when it contains the Wifi-Kit
 marker. It refuses to move an unrelated file.
 
-Do not enable the DNS snippet automatically with `start-hotspot` yet. After a
-real `captive-enable`, reconnect the NM hotspot only in a controlled lab window
-and then validate Windows/iOS/Android captive behavior before making it part of
-the normal NM-hotspot flow.
+`start-hotspot` installs the DNS snippet in apply mode before bringing up the
+NM hotspot. `captive-enable` and `captive-disable` remain available for manual
+operator control. No global NetworkManager restart is performed.
 
 ## NetworkManager Diagnostic Commands
 
