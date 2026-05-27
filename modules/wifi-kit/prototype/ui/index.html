@@ -1438,7 +1438,23 @@
     .maintenance-grid {
       display: grid;
       grid-template-columns: 1fr;
+      grid-template-areas:
+        "update"
+        "reboot"
+        "shutdown";
       gap: 12px;
+    }
+
+    .maintenance-update-card {
+      grid-area: update;
+    }
+
+    .maintenance-reboot-card {
+      grid-area: reboot;
+    }
+
+    .maintenance-shutdown-card {
+      grid-area: shutdown;
     }
 
     .config-recovery-stack {
@@ -1910,7 +1926,12 @@
       .action-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .status-pill-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .secondary-action-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-      .maintenance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .maintenance-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-areas:
+          "update update"
+          "reboot shutdown";
+      }
       .status-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .tab-button { font-size: 0.74rem; }
       .network-orb {
@@ -1928,10 +1949,6 @@
     }
 
     @media (min-width: 1080px) {
-      .maintenance-grid {
-        grid-template-columns: minmax(320px, 1.2fr) minmax(240px, 0.9fr) minmax(240px, 0.9fr);
-      }
-
       .status-summary-grid {
         grid-template-columns: repeat(4, minmax(0, 1fr));
       }
@@ -2379,7 +2396,7 @@
           <span class="chip">SAFE</span>
         </div>
         <div class="recovery-actions maintenance-grid">
-          <div class="action-card maintenance-card">
+          <div class="action-card maintenance-card maintenance-update-card">
             <span class="chip">Runtime</span>
             <strong>Verifier les mises a jour</strong>
             <p>Compare le commit local avec la branche distante.</p>
@@ -2391,7 +2408,7 @@
             <button id="updates-install-button" class="button secondary" type="button" disabled>Installer la mise a jour</button>
             <div id="updates-check-result" class="callout recovery-result update-result" hidden></div>
           </div>
-          <div class="action-card maintenance-card">
+          <div class="action-card maintenance-card maintenance-reboot-card">
             <span class="chip">Danger</span>
             <strong>Redemarrer</strong>
             <p>Le node va redemarrer proprement. L'interface sera indisponible puis devrait revenir sur le meme Wi-Fi.</p>
@@ -2402,7 +2419,7 @@
             <button id="system-reboot-button" class="button warn" type="button" data-system-action="system-reboot" disabled>Redemarrer</button>
             <div id="system-reboot-result" class="callout recovery-result" hidden></div>
           </div>
-          <div class="action-card maintenance-card">
+          <div class="action-card maintenance-card maintenance-shutdown-card">
             <span class="chip">Danger</span>
             <strong>Eteindre</strong>
             <p>Le node va s'eteindre proprement. Il faudra le rallumer physiquement.</p>
