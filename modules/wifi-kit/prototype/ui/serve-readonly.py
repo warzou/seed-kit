@@ -126,6 +126,7 @@ CONNECT_WRAPPER_ACTION = "connect-wifi"
 START_AP_MODE_LOG = action_log_path("start-ap-mode")
 RETURN_DEFAULT_NETWORK_LOG = action_log_path("return-default-network")
 AP_RETURN_CHECK_ONCE_LOG = action_log_path("ap-return-check")
+NODE_IP_LOG = unique_action_log_path("node-ip")
 FAILSAFE_MODE_LOG = action_log_path("failsafe-mode")
 SYSTEM_REBOOT_LOG = unique_action_log_path("system-reboot")
 SYSTEM_SHUTDOWN_LOG = unique_action_log_path("system-shutdown")
@@ -1795,6 +1796,7 @@ def backend_status(recovery: dict | None = None) -> dict[str, object]:
             "start_ap_mode": privileged_ready,
             "return_default_network": privileged_ready,
             "ap_return_check_once": privileged_ready,
+            "node_ip_static_test": privileged_ready,
             "reboot_system": privileged_ready and system_power_gate_enabled("reboot-system"),
             "shutdown_system": privileged_ready and system_power_gate_enabled("shutdown-system"),
             "restart_ui": privileged_ready,
@@ -2247,6 +2249,110 @@ def ap_return_check_once(payload: dict) -> tuple[dict, int]:
         "expected_behavior": "AP recovery stops briefly; known Wi-Fi is tried once; success stays normal; failure restarts AP recovery.",
         "log": str(AP_RETURN_CHECK_ONCE_LOG),
     }, 202
+
+
+def node_ip_action(payload: dict, action: str) -> tuple[dict, int]:
+    config = read_runtime_config()
+    dry_run = bool_payload(payload.get("dry_run"))
+    confirmed = bool_payload(payload.get("user_confirmed")) or bool_payload(payload.get("confirmed"))
+    dangerous_real_apply = bool_payload(payload.get("dangerous_real_apply"))
+    validation_seconds = str(payload.get("validation_seconds") or "120").strip()
+    if not validation_seconds.isdigit() or int(validation_seconds) < 30 or int(validation_seconds) > 600:
+        return {"status": "failure", "action": action, "error": "validation-seconds-invalid"}, 400
+
+    if action == "node-ip-test":
+        if config.get("node_ip_mode") != "static":
+            return {"status": "failure", "action": action, "error": "static-mode-required"}, 400
+        if not config.get("node_static_ip") or "/" not in config.get("node_static_ip", ""):
+            return {"status": "failure", "action": action, "error": "static-ip-cidr-required"}, 400
+        if not config.get("node_static_gateway"):
+            return {"status": "failure", "action": action, "error": "static-gateway-required"}, 400
+
+    if dry_run or not privileged_actions_enabled() or not confirmed or (action == "node-ip-test" and not dangerous_real_apply):
+        append_action_log(
+            NODE_IP_LOG,
+            action=action,
+            status="planned",
+            privileged_actions_enabled=privileged_actions_enabled(),
+            confirmed=confirmed,
+            dangerous_real_apply=dangerous_real_apply,
+            validation_seconds=validation_seconds,
+            node_ip_mode=config.get("node_ip_mode"),
+            node_static_ip=config.get("node_static_ip"),
+        )
+        return {
+            "status": "planned",
+            "action": action,
+            "privileged_actions_enabled": privileged_actions_enabled(),
+            "requires_user_confirmation": True,
+            "confirmation_kind": "strong",
+            "confirm_ok": confirmed,
+            "dangerous_real_apply": dangerous_real_apply,
+            "validation_seconds": validation_seconds,
+            "log": str(NODE_IP_LOG),
+            "message": "Action IP fixe planifiee; aucune modification reseau appliquee.",
+        }, 200
+
+    command, error = privileged_action_command(action)
+    if error:
+        append_action_log(NODE_IP_LOG, action=action, status="failure", error=error)
+        response = privileged_error_response(action, error)
+        response.update({"log": str(NODE_IP_LOG), "message": "Action IP fixe impossible: droits SAFE indisponibles."})
+        return response, 403 if error == "wifi-kit-network-rights-not-installed" else 500
+
+    stdin_lines = [f"user_confirmed={'true' if confirmed else 'false'}", f"validation_seconds={validation_seconds}"]
+    if action == "node-ip-test":
+        stdin_lines.append("dangerous_real_apply=true")
+    stdin_text = "\n".join(stdin_lines) + "\n"
+    env = os.environ.copy()
+    env["WIFI_KIT_RUNTIME_CONFIG"] = str(RUNTIME_CONFIG_PATH)
+    append_action_log(NODE_IP_LOG, action=action, status="starting", command=" ".join(command), validation_seconds=validation_seconds)
+    try:
+        result = subprocess.run(
+            command,
+            input=stdin_text,
+            cwd=str(SCRIPT_DIR.parent),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=40,
+            env=env,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        append_action_log(NODE_IP_LOG, action=action, status="failure", error=f"start-failed: {exc}")
+        return {"status": "failure", "action": action, "error": f"start-failed: {exc}", "log": str(NODE_IP_LOG)}, 500
+
+    wrapper_payload = parse_key_value_text(result.stdout)
+    append_action_log(
+        NODE_IP_LOG,
+        action=action,
+        status=wrapper_payload.get("status", "failure"),
+        returncode=result.returncode,
+        stdout=result.stdout.strip()[-500:],
+        stderr=result.stderr.strip()[-500:],
+    )
+    status_value = wrapper_payload.get("status") or ("success" if result.returncode == 0 else "failure")
+    http_status = 200 if result.returncode == 0 else 500
+    if status_value == "refused":
+        http_status = 400
+    elif status_value == "planned":
+        http_status = 200
+    message = {
+        "node-ip-test": "IP fixe appliquee en test. Confirme depuis la nouvelle adresse avant la fin du delai.",
+        "node-ip-confirm": "IP fixe confirmee.",
+        "node-ip-rollback": "Retour DHCP demande.",
+    }.get(action, "Action IP terminee.")
+    return {
+        **wrapper_payload,
+        "status": status_value,
+        "action": action,
+        "returncode": result.returncode,
+        "stdout": result.stdout.strip()[-1000:],
+        "stderr": result.stderr.strip()[-1000:],
+        "validation_seconds": validation_seconds,
+        "log": str(NODE_IP_LOG),
+        "message": message if result.returncode == 0 else wrapper_payload.get("reason", "Action IP fixe echouee."),
+    }, http_status
 
 
 def system_power_action(payload: dict, action: str) -> tuple[dict, int]:
@@ -4020,6 +4126,21 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
             self.send_action_json("ap-return-check-once", payload, status=status)
             return
 
+        if path == "/api/node-ip/test":
+            payload, status = node_ip_action(parse_post_payload(self), "node-ip-test")
+            self.send_action_json("node-ip-test", payload, status=status)
+            return
+
+        if path == "/api/node-ip/confirm":
+            payload, status = node_ip_action(parse_post_payload(self), "node-ip-confirm")
+            self.send_action_json("node-ip-confirm", payload, status=status)
+            return
+
+        if path == "/api/node-ip/rollback":
+            payload, status = node_ip_action(parse_post_payload(self), "node-ip-rollback")
+            self.send_action_json("node-ip-rollback", payload, status=status)
+            return
+
         if path == "/system-reboot":
             payload, status = system_power_action(parse_post_payload(self), "reboot-system")
             self.send_action_json("reboot-system", payload, status=status)
@@ -4139,7 +4260,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
 
         if path in ACTION_PATHS:
             action = ACTION_PATHS[path]
-            runtime_actions = {"reconnect-previous", "start-ap-mode", "return-default-network", "ap-return-check-once", "reboot-system", "shutdown-system", "restart-ui", "updates-install"}
+            runtime_actions = {"reconnect-previous", "start-ap-mode", "return-default-network", "ap-return-check-once", "node-ip-test", "node-ip-confirm", "node-ip-rollback", "reboot-system", "shutdown-system", "restart-ui", "updates-install"}
             self.send_json(
                 {
                     "status": "runtime-gated" if action in runtime_actions else "unavailable",

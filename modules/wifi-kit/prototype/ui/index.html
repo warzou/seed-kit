@@ -2426,7 +2426,15 @@
             </div>
             <small class="setting-help">Exemple : 192.168.8.50/24 avec passerelle 192.168.8.1. Une IP fixe mal configurée peut rendre le node inaccessible.</small>
             <small class="setting-help">L'application réelle de l'IP fixe nécessitera une validation SAFE avec retour possible en AP recovery.</small>
+            <small class="setting-help">Le test applique l'IP fixe pendant 120 secondes. Confirme depuis la nouvelle adresse pour la conserver; sinon Wifi-Kit revient au DHCP et tente l'AP recovery si le rollback échoue.</small>
+            <label class="confirm-line">
+              <input id="config-static-ip-confirm" type="checkbox">
+              <span>Je confirme le test IP fixe avec rollback automatique</span>
+            </label>
             <button id="config-save-network" class="button secondary setting-action" type="button">Enregistrer les réglages IP</button>
+            <button id="config-test-static-ip" class="button secondary setting-action" type="button">Tester l'IP fixe</button>
+            <button id="config-confirm-static-ip" class="button secondary setting-action" type="button">Confirmer l'IP fixe</button>
+            <button id="config-rollback-static-ip" class="button ghost setting-action" type="button">Revenir au DHCP</button>
             <div id="config-network-result" class="callout recovery-result" hidden></div>
           </section>
         </div>
@@ -3567,7 +3575,7 @@
     async function saveRuntimeConfig(partialConfig, resultTarget = 'recovery') {
       if (window.location.protocol === 'file:') {
         showRuntimeConfigResult('Configuration non persistee depuis un fichier local.', resultTarget);
-        return;
+        return null;
       }
 
       const response = await fetch('/api/runtime-config', {
@@ -3580,7 +3588,7 @@
       if (!response.ok) {
         const message = `Configuration refusee: ${payload.error || payload.status}`;
         showRuntimeConfigResult(message, resultTarget);
-        return;
+        return null;
       }
       data.runtime_config = payload.config;
       if (data.recovery) {
@@ -3622,6 +3630,7 @@
       renderAll();
       const message = `Configuration enregistree dans ${payload.config.path}.`;
       showRuntimeConfigResult(message, resultTarget);
+      return payload;
     }
 
     async function saveRecoveryConfig(resultTarget = 'recovery') {
@@ -3685,7 +3694,7 @@
         else showRecoveryConfigResult('Seuil instabilit&eacute;: minimum 1 coupure.');
         return;
       }
-      await saveRuntimeConfig({
+      const payload = await saveRuntimeConfig({
         ap_ssid: apSsid,
         ap_password: apPassword,
         return_ssid: returnSsid,
@@ -3712,7 +3721,7 @@
         showRuntimeConfigResult('Cible Internet requise.', 'diag-failsafe-result');
         return;
       }
-      await saveRuntimeConfig({
+      const payload = await saveRuntimeConfig({
         runtime_recovery_debug_passive: !automatic,
         runtime_recovery_internet_required: internetRequired,
         runtime_recovery_internet_probe: internetProbe
@@ -3730,11 +3739,16 @@
       showRuntimeConfigResult(`Délai avant Wi-Fi secours appliqué : ${runtimeRecoveryGrace} secondes.`, 'diag-recovery-delay-result');
     }
 
-    async function saveNodeNetworkConfig() {
+    function nodeNetworkConfigPayload() {
       const mode = document.getElementById('config-ip-mode-static')?.checked ? 'static' : 'dhcp';
       const staticIp = document.getElementById('config-static-ip-input')?.value.trim() || '';
       const gateway = document.getElementById('config-static-gateway-input')?.value.trim() || '';
       const dns = document.getElementById('config-static-dns-input')?.value.trim() || '';
+      return { mode, staticIp, gateway, dns };
+    }
+
+    async function saveNodeNetworkConfig() {
+      const { mode, staticIp, gateway, dns } = nodeNetworkConfigPayload();
       if (mode === 'static') {
         if (!staticIp) {
           showRuntimeConfigResult('Adresse IP fixe requise.', 'config-network-result');
@@ -3749,13 +3763,61 @@
           return;
         }
       }
-      await saveRuntimeConfig({
+      const payload = await saveRuntimeConfig({
         node_ip_mode: mode,
         node_static_ip: staticIp,
         node_static_gateway: gateway,
         node_static_dns: dns
       }, 'config-network-result');
+      if (!payload) return null;
       showRuntimeConfigResult('Réglages IP enregistrés. Aucune modification réseau n’a été appliquée.', 'config-network-result');
+      return payload;
+    }
+
+    async function postNodeIpAction(endpoint, body) {
+      const response = await fetch(endpoint, {
+        cache: 'no-store',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {})
+      });
+      const payload = await response.json();
+      const message = payload.message || payload.error || payload.reason || payload.status || 'Action IP terminée.';
+      showRuntimeConfigResult(message, 'config-network-result');
+      return { response, payload };
+    }
+
+    async function testStaticIp() {
+      const { mode } = nodeNetworkConfigPayload();
+      if (mode !== 'static') {
+        showRuntimeConfigResult('Passe d’abord le mode IP en IP fixe.', 'config-network-result');
+        return;
+      }
+      const confirmed = Boolean(document.getElementById('config-static-ip-confirm')?.checked);
+      if (!confirmed) {
+        showRuntimeConfigResult('Confirmation requise avant test IP fixe.', 'config-network-result');
+        return;
+      }
+      const saved = await saveNodeNetworkConfig();
+      if (!saved) return;
+      await postNodeIpAction('/api/node-ip/test', {
+        user_confirmed: true,
+        dangerous_real_apply: true,
+        validation_seconds: 120
+      });
+    }
+
+    async function confirmStaticIp() {
+      const confirmed = Boolean(document.getElementById('config-static-ip-confirm')?.checked);
+      if (!confirmed) {
+        showRuntimeConfigResult('Confirmation requise pour conserver l’IP fixe.', 'config-network-result');
+        return;
+      }
+      await postNodeIpAction('/api/node-ip/confirm', { user_confirmed: true });
+    }
+
+    async function rollbackStaticIp() {
+      await postNodeIpAction('/api/node-ip/rollback', { user_confirmed: true });
     }
 
     async function saveRuntimeWatchdogMode() {
@@ -4824,6 +4886,9 @@
     document.getElementById('config-apply-recovery-delay')?.addEventListener('click', saveRecoveryDelay);
     document.getElementById('config-apply-watchdog')?.addEventListener('click', saveRuntimeWatchdogMode);
     document.getElementById('config-save-network')?.addEventListener('click', saveNodeNetworkConfig);
+    document.getElementById('config-test-static-ip')?.addEventListener('click', testStaticIp);
+    document.getElementById('config-confirm-static-ip')?.addEventListener('click', confirmStaticIp);
+    document.getElementById('config-rollback-static-ip')?.addEventListener('click', rollbackStaticIp);
     document.getElementById('recovery-return-dropdown-button').addEventListener('click', (event) => {
       event.stopPropagation();
       const dropdown = document.getElementById('recovery-return-dropdown');

@@ -5,6 +5,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ap_setup_script="$script_dir/ap-setup-test.sh"
 connect_transaction_script="$script_dir/wifi-kit-connect-transaction.sh"
 ap_return_check_script="$script_dir/wifi-kit-ap-return-check.sh"
+node_ip_transaction_script="$script_dir/wifi-kit-node-ip-transaction.sh"
 nm_ap_lab_script="$script_dir/wifi-kit-nm-ap-lab.sh"
 repo_dir_file="$script_dir/repo-dir"
 log_file="/tmp/wifi-kit-action-wrapper.log"
@@ -236,6 +237,27 @@ read_reinstall_runtime_request() {
   done
 }
 
+read_node_ip_request() {
+  node_ip_confirmed="false"
+  node_ip_dangerous_real_apply="false"
+  node_ip_dry_run="false"
+  node_ip_validation_seconds="120"
+  [ -t 0 ] && return 0
+  while IFS= read -r line; do
+    key=${line%%=*}
+    value=${line#*=}
+    [ "$key" != "$line" ] || continue
+    safe_line_value "$key" "$value"
+    case "$key" in
+      user_confirmed) node_ip_confirmed=$value ;;
+      dangerous_real_apply) node_ip_dangerous_real_apply=$value ;;
+      dry_run) node_ip_dry_run=$value ;;
+      validation_seconds) node_ip_validation_seconds=$value ;;
+      *) ;;
+    esac
+  done
+}
+
 validate_runtime_installer() {
   [ -r "$repo_dir_file" ] || { log_event "$1" "refused" "repo-dir-file-missing=$repo_dir_file"; reply "refused" "$1" "repo-dir-file-missing"; exit 2; }
   case "$repo_dir" in
@@ -260,7 +282,7 @@ require_root() {
 
 if [ "$#" -ne 1 ]; then
   log_event "unknown" "refused" "usage"
-  reply "refused" "unknown" "usage: wifi-kit-action-wrapper.sh start-ap-mode|return-default-network|connect-wifi|ap-return-check-once|reboot-system|shutdown-system|reinstall-runtime|restart-ui"
+  reply "refused" "unknown" "usage: wifi-kit-action-wrapper.sh start-ap-mode|return-default-network|connect-wifi|ap-return-check-once|node-ip-test|node-ip-confirm|node-ip-rollback|reboot-system|shutdown-system|reinstall-runtime|restart-ui"
   exit 2
 fi
 
@@ -371,6 +393,47 @@ case "$action" in
     WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$ap_return_check_script" stop-loop >/dev/null 2>&1 || true
     log_event "$action" "started" "mode=run-once"
     WIFI_KIT_RUNTIME_CONFIG="$runtime_config" exec sh "$ap_return_check_script" run-once
+    ;;
+  node-ip-test)
+    read_node_ip_request
+    require_root "$action"
+    [ -f "$node_ip_transaction_script" ] || { reply "failure" "$action" "node-ip-transaction-missing"; exit 1; }
+    require_number "validation_seconds" "$node_ip_validation_seconds" "600"
+    if [ "$node_ip_confirmed" != "true" ] && [ "$node_ip_confirmed" != "1" ]; then
+      log_event "$action" "refused" "confirmation-required"
+      reply "refused" "$action" "confirmation-required"
+      exit 2
+    fi
+    if [ "$node_ip_dangerous_real_apply" != "true" ] && [ "$node_ip_dangerous_real_apply" != "1" ]; then
+      log_event "$action" "planned" "dangerous-real-apply-required"
+      reply "planned" "$action" "dangerous-real-apply-required"
+      exit 0
+    fi
+    if [ "$node_ip_dry_run" = "true" ] || [ "$node_ip_dry_run" = "1" ]; then
+      log_event "$action" "planned" "dry-run validation_seconds=$node_ip_validation_seconds"
+      reply "planned" "$action" "validation_seconds=$node_ip_validation_seconds"
+      exit 0
+    fi
+    log_event "$action" "started" "validation_seconds=$node_ip_validation_seconds"
+    WIFI_KIT_RUNTIME_CONFIG="$runtime_config" WIFI_KIT_NODE_IP_VALIDATION_SECONDS="$node_ip_validation_seconds" exec sh "$node_ip_transaction_script" test
+    ;;
+  node-ip-confirm)
+    read_node_ip_request
+    require_root "$action"
+    [ -f "$node_ip_transaction_script" ] || { reply "failure" "$action" "node-ip-transaction-missing"; exit 1; }
+    if [ "$node_ip_confirmed" != "true" ] && [ "$node_ip_confirmed" != "1" ]; then
+      log_event "$action" "refused" "confirmation-required"
+      reply "refused" "$action" "confirmation-required"
+      exit 2
+    fi
+    log_event "$action" "started" "confirm-static-ip"
+    WIFI_KIT_RUNTIME_CONFIG="$runtime_config" exec sh "$node_ip_transaction_script" confirm
+    ;;
+  node-ip-rollback)
+    require_root "$action"
+    [ -f "$node_ip_transaction_script" ] || { reply "failure" "$action" "node-ip-transaction-missing"; exit 1; }
+    log_event "$action" "started" "manual-rollback"
+    WIFI_KIT_RUNTIME_CONFIG="$runtime_config" exec sh "$node_ip_transaction_script" rollback
     ;;
   reinstall-runtime)
     read_reinstall_runtime_request
