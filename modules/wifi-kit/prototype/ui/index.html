@@ -2320,12 +2320,18 @@
           <section class="recovery-setting" aria-labelledby="diag-log-policy-heading">
             <h3 class="recovery-setting-title" id="diag-log-policy-heading">Logs</h3>
             <label class="field-label">
-              Fenetre diagnostic instabilite
-              <input id="runtime-recovery-window-input" class="password-local" type="number" min="1" step="1" inputmode="numeric" placeholder="10">
+              Fenêtre diagnostic d'instabilité
+              <span class="input-with-unit">
+                <input id="runtime-recovery-window-input" class="password-local" type="number" min="1" step="1" inputmode="numeric" placeholder="10">
+                <span class="input-unit">minutes</span>
+              </span>
             </label>
             <label class="field-label">
               Seuil diagnostic
-              <input id="runtime-recovery-threshold-input" class="password-local" type="number" min="1" step="1" inputmode="numeric" placeholder="3">
+              <span class="input-with-unit">
+                <input id="runtime-recovery-threshold-input" class="password-local" type="number" min="1" step="1" inputmode="numeric" placeholder="3">
+                <span class="input-unit">événements</span>
+              </span>
             </label>
             <small class="setting-help">Futur : retention 31 jours, maximum 10 Mo, et option Tailscale obligatoire separee.</small>
           </section>
@@ -3781,7 +3787,7 @@
       const apSsid = config.ap_ssid || 'Wifi-Kit-node';
       const plans = {
         'reconnect-previous': "Retour au Wi-Fi precedent: le mode AP, DHCP, DNS et cette UI vont s'arreter, puis wlan0 revient a NetworkManager. Le portail peut disparaitre pendant le retour.",
-        'start-ap-mode': `Activer le mode AP: snapshot NetworkManager, passer wlan0 en AP-only, lancer ${apSsid}, dnsmasq DHCP/DNS captive et l'UI locale sur 192.168.50.1:80. Timeout prototype: 300 s.`,
+        'start-ap-mode': `Activer le mode AP: snapshot NetworkManager, passer wlan0 en AP-only, lancer ${apSsid}, dnsmasq DHCP/DNS captive et l'UI locale sur 192.168.50.1:80. Timeout prototype: 300 secondes.`,
         'return-default-network': `Retour Wi-Fi principal: demander a NetworkManager de reconnecter ${returnSsid} via le profil ${returnConnection}. L'acces reseau peut couper quelques secondes.`,
         'ap-return-check-once': `Tester le retour au Wi-Fi connu: stoppe temporairement l'AP, tente ${returnSsid} via ${returnConnection}, puis relance l'AP si le retour echoue.`
       };
