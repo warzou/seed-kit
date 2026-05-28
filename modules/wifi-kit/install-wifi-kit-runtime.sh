@@ -316,6 +316,7 @@ ensure_runtime_config() {
       printf 'ap_ssid=Wifi-Kit-%s\n' "$(hostname 2>/dev/null || printf node)"
       printf 'ap_password=12345678\n'
       printf 'runtime_recovery_enabled=true\n'
+      printf 'runtime_recovery_debug_passive=true\n'
       printf 'runtime_recovery_grace_seconds=30\n'
       printf 'runtime_recovery_internet_required=true\n'
       printf 'runtime_recovery_internet_probe=1.1.1.1\n'

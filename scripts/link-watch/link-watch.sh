@@ -20,7 +20,21 @@ hostname_value() {
 detect_interface() {
   target=$1
   if command -v ip >/dev/null 2>&1; then
-    ip route get "$target" 2>/dev/null | awk '
+    interface=$(ip route get "$target" 2>/dev/null | awk '
+      {
+        for (i = 1; i <= NF; i++) {
+          if ($i == "dev" && (i + 1) <= NF) {
+            print $(i + 1)
+            exit
+          }
+        }
+      }'
+    )
+    if [ -n "$interface" ]; then
+      printf '%s\n' "$interface"
+      return 0
+    fi
+    ip route show default 2>/dev/null | awk '
       {
         for (i = 1; i <= NF; i++) {
           if ($i == "dev" && (i + 1) <= NF) {
@@ -32,6 +46,23 @@ detect_interface() {
     return 0
   fi
   printf 'unknown\n'
+}
+
+human_duration() {
+  total=${1:-0}
+  case "$total" in
+    ''|*[!0-9]*) total=0 ;;
+  esac
+  hours=$((total / 3600))
+  minutes=$(((total % 3600) / 60))
+  seconds=$((total % 60))
+  if [ "$hours" -gt 0 ]; then
+    printf '%sh%02dm%02ds\n' "$hours" "$minutes" "$seconds"
+  elif [ "$minutes" -gt 0 ]; then
+    printf '%sm%02ds\n' "$minutes" "$seconds"
+  else
+    printf '%ss\n' "$seconds"
+  fi
 }
 
 ensure_log_dir() {
@@ -115,7 +146,7 @@ monitor() {
       write_state ok "$target" "$latency" "$interface"
       if [ "$previous_state" = "down" ]; then
         duration=$((now - down_since))
-        log_event internet-restored "target=$target" "latency_ms=$latency" "interface=$interface" "duration_seconds=$duration"
+        log_event internet-restored "target=$target" "latency_ms=$latency" "interface=$interface" "duration_seconds=$duration" "duration_human=$(human_duration "$duration")"
       elif [ "$previous_state" != "ok" ]; then
         log_event internet-ok "target=$target" "latency_ms=$latency" "interface=$interface"
       fi
@@ -143,6 +174,12 @@ status() {
   else
     echo "state=unknown"
     echo "state_file=$STATE_FILE"
+  fi
+  if [ -r "$LOG_FILE" ]; then
+    last_event=$(tail -n 1 "$LOG_FILE" 2>/dev/null || true)
+    if [ -n "$last_event" ]; then
+      echo "last_event=$last_event"
+    fi
   fi
 }
 

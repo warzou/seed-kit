@@ -2263,18 +2263,18 @@
         </div>
         <div class="config-recovery-stack diagnostic-settings" aria-label="Options watchdog">
           <section class="recovery-setting" aria-labelledby="config-failsafe-heading">
-            <h3 class="recovery-setting-title" id="config-failsafe-heading">Mode watchdog</h3>
+            <h3 class="recovery-setting-title" id="config-failsafe-heading">Watchdog</h3>
             <strong class="recovery-setting-current" id="config-failsafe-mode">...</strong>
             <label class="confirm-line">
               <input id="runtime-failsafe-automatic-input" type="checkbox">
               <span>Failsafe automatique</span>
             </label>
-            <small class="setting-help">En mode observation, Wifi-Kit detecte et journalise seulement. En mode automatique, il peut ouvrir l'AP recovery apres une inaccessibilite durable.</small>
+            <small class="setting-help">Par defaut, le watchdog reste en observation : il detecte et journalise seulement. En mode automatique, il peut ouvrir l'AP recovery apres une inaccessibilite durable.</small>
             <button id="config-apply-failsafe" class="button secondary setting-action" type="button">Appliquer le mode watchdog</button>
             <div id="diag-failsafe-result" class="callout recovery-result" hidden></div>
           </section>
           <section class="recovery-setting" aria-labelledby="diag-internet-heading">
-            <h3 class="recovery-setting-title" id="diag-internet-heading">Condition Internet</h3>
+            <h3 class="recovery-setting-title" id="diag-internet-heading">Declencheurs AP</h3>
             <label class="confirm-line">
               <input id="runtime-internet-required-input" type="checkbox">
               <span>Internet obligatoire pour rester en mode normal</span>
@@ -2300,7 +2300,7 @@
             <div id="diag-recovery-delay-result" class="callout recovery-result" hidden></div>
           </section>
           <section class="recovery-setting" aria-labelledby="config-watchdog-heading">
-            <h3 class="recovery-setting-title" id="config-watchdog-heading">Retour depuis AP</h3>
+            <h3 class="recovery-setting-title" id="config-watchdog-heading">Retour automatique</h3>
             <strong class="recovery-setting-current" id="config-runtime-recovery-status">...</strong>
             <label class="confirm-line">
               <input id="runtime-recovery-enabled-input" type="checkbox">
@@ -2337,7 +2337,7 @@
           </section>
         </div>
         <div class="node-grid health-section">
-          <h3>Reseau</h3>
+          <h3>Sante reseau</h3>
           <div class="metric"><span>Hostname</span><strong id="node-hostname">...</strong></div>
           <div class="metric"><span>IP actuelle</span><strong id="node-ip">...</strong></div>
           <div class="metric"><span>Wi-Fi actuel</span><strong id="node-wifi">...</strong></div>
@@ -2743,6 +2743,10 @@
       }).format(new Date(timestamp));
     }
 
+    function formatLocalDateTime(value) {
+      return formatConnectAttemptDate(value);
+    }
+
     function setText(id, text) {
       const node = document.getElementById(id);
       if (node) node.textContent = String(text ?? 'inconnu');
@@ -2969,7 +2973,7 @@
     }
 
     function failsafeModeLabel() {
-      const debugPassive = String(runtimeConfig().runtime_recovery_debug_passive || watchdogState().runtime_recovery_debug_passive || 'false') === 'true';
+      const debugPassive = String(runtimeConfig().runtime_recovery_debug_passive || watchdogState().runtime_recovery_debug_passive || 'true') === 'true';
       return debugPassive ? 'Mode observation' : 'Mode automatique';
     }
 
@@ -3047,7 +3051,7 @@
       const recovery = recoveryState();
       const watchdog = compactWatchdogData();
       const apActive = Boolean(system.recovery_active || recovery.active);
-      const debugPassive = String(config.runtime_recovery_debug_passive || watchdog.runtime_recovery_debug_passive || 'false') === 'true';
+      const debugPassive = String(config.runtime_recovery_debug_passive || watchdog.runtime_recovery_debug_passive || 'true') === 'true';
       const synced = runtimeSyncLabel() === 'synchronise';
       const mainHealth = mainNetworkHealthLabel();
       const target = pickValue(
@@ -3064,6 +3068,7 @@
       );
       const event = watchdog.action || watchdog.event || watchdog.status || '';
       const reason = watchdog.runtime_reason || watchdog.reason || watchdog.health_reason || '';
+      const eventTime = watchdog.last_event_local || watchdog.timestamp_local || formatLocalDateTime(watchdog.timestamp || '');
       let state = 'OK';
       if (apActive) state = 'AP actif';
       else if (debugPassive) state = 'Observation';
@@ -3086,7 +3091,7 @@
         badge: debugPassive ? 'Observation' : 'Automatique',
         state,
         mode: debugPassive ? 'Observation' : 'Automatique',
-        event: shortEventPhrase(event, reason),
+        event: eventTime ? `${shortEventPhrase(event, reason)} - ${eventTime}` : shortEventPhrase(event, reason),
         decision,
         delay: `${grace} s`,
         network: target,
@@ -3203,7 +3208,7 @@
       const runtimeRecoveryEnabled = String(config.runtime_recovery_enabled || 'true') === 'true';
       const runtimeRecoveryEnabledInput = document.getElementById('runtime-recovery-enabled-input');
       if (runtimeRecoveryEnabledInput) runtimeRecoveryEnabledInput.checked = runtimeRecoveryEnabled;
-      const runtimeRecoveryDebugPassive = String(config.runtime_recovery_debug_passive || 'false') === 'true';
+      const runtimeRecoveryDebugPassive = String(config.runtime_recovery_debug_passive || 'true') === 'true';
       const failsafeAutomaticInput = document.getElementById('runtime-failsafe-automatic-input');
       if (failsafeAutomaticInput) failsafeAutomaticInput.checked = !runtimeRecoveryDebugPassive;
       const internetRequiredInput = document.getElementById('runtime-internet-required-input');
@@ -3311,7 +3316,7 @@
       setText('diag-last-event', system.last_recovery_event || recovery.last_event || 'inconnu');
       setText('diag-runtime-watchdog', watchdog.status || 'inconnu');
       setText('diag-runtime-reason', watchdog.runtime_reason || watchdog.reason || 'inconnu');
-      setText('diag-runtime-debug-passive', String(watchdog.runtime_recovery_debug_passive || runtimeConfig().runtime_recovery_debug_passive || 'false'));
+      setText('diag-runtime-debug-passive', String(watchdog.runtime_recovery_debug_passive || runtimeConfig().runtime_recovery_debug_passive || 'true'));
       setText('diag-current-connection', watchdog.current_connection || watchdog.current_ssid || 'inconnu');
       setText('diag-last-good', watchdog.last_good_connection || watchdog.last_good_ssid || runtimeConfig().last_good_connection || runtimeConfig().last_good_ssid || 'inconnu');
       setText('diag-unstable-ssid', watchdog.unstable_ssid || 'aucun');

@@ -568,7 +568,7 @@ ensure_ap_recovery_ui() {
 config_values() {
   enabled_raw=$(runtime_value runtime_recovery_enabled true)
   enabled=$(normalize_bool "$enabled_raw")
-  debug_passive_raw=$(runtime_value runtime_recovery_debug_passive false)
+  debug_passive_raw=$(runtime_value runtime_recovery_debug_passive true)
   debug_passive=$(normalize_bool "$debug_passive_raw")
   grace_seconds=$(runtime_value runtime_recovery_grace_seconds 30)
   internet_required_raw=$(runtime_value runtime_recovery_internet_required true)
@@ -693,6 +693,20 @@ is_runtime_healthy() {
   return 1
 }
 
+current_wifi_usable() {
+  [ -n "$current_connection" ] || return 1
+  [ -n "$current_ssid" ] || return 1
+  case "$current_ssid" in
+    Wifi-Kit-*|wifi-kit-*) return 1 ;;
+  esac
+  [ -n "$iface_ipv4" ] || return 1
+  [ "$default_route_present" = "yes" ] || return 1
+  if [ "$internet_required" = "true" ]; then
+    [ "$internet_ping_status" = "ok" ] || return 1
+  fi
+  return 0
+}
+
 classify_health() {
   if ap_recovery_active; then
     health_status="healthy"
@@ -715,6 +729,11 @@ classify_health() {
     return 0
   fi
   if [ "$runtime_match" != "true" ]; then
+    if current_wifi_usable; then
+      health_status="healthy"
+      health_reason="available-current-wifi"
+      return 0
+    fi
     health_status="unhealthy"
     health_reason="$runtime_reason"
     return 0
