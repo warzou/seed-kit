@@ -268,7 +268,7 @@ if ! bootstrap_runtime_ready; then
   fi
 fi
 
-MODULES="git docker tailscale wifi-stability cloudflared caddy homer homepage wifi-kit"
+MODULES="git docker tailscale wifi-stability network-watch cloudflared caddy homer homepage wifi-kit"
 
 load_backend_file() {
   backend_file=$1
@@ -1722,6 +1722,9 @@ run_apply_modules() {
       wifi-stability)
         apply_module_wifi_stability
         ;;
+      network-watch)
+        run_module_apply "$module"
+        ;;
       cloudflared)
         apply_module_cloudflared
         ;;
@@ -1810,6 +1813,15 @@ seed_detect_os
 load_backend
 
 case "${1:-}" in
+  network-watch)
+    shift
+    if [ ! -f "$ROOT_DIR/modules/network-watch.sh" ]; then
+      echo "network-watch module missing" >&2
+      exit 1
+    fi
+    . "$ROOT_DIR/modules/network-watch.sh"
+    module_network_watch_command "$@"
+    ;;
   install)
     shift
     install_target="${1:-}"
