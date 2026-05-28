@@ -156,11 +156,14 @@ RUNTIME_CONFIG_KEYS = {
     "ap_password",
     "return_check_enabled",
     "return_check_interval_minutes",
+    "return_check_interval_seconds",
     "return_check_target",
     "return_check_mode",
     "runtime_recovery_enabled",
     "runtime_recovery_debug_passive",
     "runtime_recovery_grace_seconds",
+    "runtime_recovery_internet_required",
+    "runtime_recovery_internet_probe",
     "runtime_recovery_instability_window_minutes",
     "runtime_recovery_instability_threshold",
 }
@@ -217,6 +220,8 @@ def public_recovery_status(recovery: dict | None) -> dict:
         "runtime_recovery_enabled",
         "runtime_recovery_debug_passive",
         "runtime_recovery_grace_seconds",
+        "runtime_recovery_internet_required",
+        "runtime_recovery_internet_probe",
         "runtime_recovery_instability_window_minutes",
         "runtime_recovery_instability_threshold",
         "runtime_watchdog",
@@ -892,11 +897,14 @@ def default_runtime_config() -> dict[str, str]:
         "ap_password": os.environ.get("WIFI_KIT_AP_PSK", RECOVERY_AP_TEST_PASSWORD),
         "return_check_enabled": "false",
         "return_check_interval_minutes": "1",
+        "return_check_interval_seconds": "300",
         "return_check_target": "last_good_ssid",
         "return_check_mode": "periodic-from-ap",
         "runtime_recovery_enabled": "true",
         "runtime_recovery_debug_passive": "false",
-        "runtime_recovery_grace_seconds": "120",
+        "runtime_recovery_grace_seconds": "30",
+        "runtime_recovery_internet_required": "true",
+        "runtime_recovery_internet_probe": "1.1.1.1",
         "runtime_recovery_instability_window_minutes": "10",
         "runtime_recovery_instability_threshold": "3",
     }
@@ -955,11 +963,14 @@ def redact_runtime_config(config: dict[str, str]) -> dict[str, object]:
         "ap_password_set": bool(config["ap_password"]),
         "return_check_enabled": config.get("return_check_enabled", "false"),
         "return_check_interval_minutes": config.get("return_check_interval_minutes", "1"),
+        "return_check_interval_seconds": config.get("return_check_interval_seconds", "300"),
         "return_check_target": config.get("return_check_target", "last_good_ssid"),
         "return_check_mode": config.get("return_check_mode", "periodic-from-ap"),
         "runtime_recovery_enabled": config.get("runtime_recovery_enabled", "true"),
         "runtime_recovery_debug_passive": config.get("runtime_recovery_debug_passive", "false"),
-        "runtime_recovery_grace_seconds": config.get("runtime_recovery_grace_seconds", "120"),
+        "runtime_recovery_grace_seconds": config.get("runtime_recovery_grace_seconds", "30"),
+        "runtime_recovery_internet_required": config.get("runtime_recovery_internet_required", "true"),
+        "runtime_recovery_internet_probe": config.get("runtime_recovery_internet_probe", "1.1.1.1"),
         "runtime_recovery_instability_window_minutes": config.get("runtime_recovery_instability_window_minutes", "10"),
         "runtime_recovery_instability_threshold": config.get("runtime_recovery_instability_threshold", "3"),
         "path": str(RUNTIME_CONFIG_PATH),
@@ -1067,11 +1078,14 @@ def write_runtime_config(config: dict[str, str]) -> None:
         f"ap_password={config['ap_password']}",
         f"return_check_enabled={config.get('return_check_enabled', 'false')}",
         f"return_check_interval_minutes={config.get('return_check_interval_minutes', '1')}",
+        f"return_check_interval_seconds={config.get('return_check_interval_seconds', '300')}",
         f"return_check_target={config.get('return_check_target', 'last_good_ssid')}",
         f"return_check_mode={config.get('return_check_mode', 'periodic-from-ap')}",
         f"runtime_recovery_enabled={config.get('runtime_recovery_enabled', 'true')}",
         f"runtime_recovery_debug_passive={config.get('runtime_recovery_debug_passive', 'false')}",
-        f"runtime_recovery_grace_seconds={config.get('runtime_recovery_grace_seconds', '120')}",
+        f"runtime_recovery_grace_seconds={config.get('runtime_recovery_grace_seconds', '30')}",
+        f"runtime_recovery_internet_required={config.get('runtime_recovery_internet_required', 'true')}",
+        f"runtime_recovery_internet_probe={config.get('runtime_recovery_internet_probe', '1.1.1.1')}",
         f"runtime_recovery_instability_window_minutes={config.get('runtime_recovery_instability_window_minutes', '10')}",
         f"runtime_recovery_instability_threshold={config.get('runtime_recovery_instability_threshold', '3')}",
     ]
@@ -1156,9 +1170,14 @@ def update_runtime_config(payload: dict) -> tuple[dict, int]:
             return {"status": "failure", "error": "return-check-enabled-invalid"}, 400
     if "return_check_interval_minutes" in payload:
         interval = str(payload.get("return_check_interval_minutes", "")).strip()
-        if not interval.isdigit() or int(interval) < 1:
+        if not interval.isdigit() or int(interval) < 0:
             return {"status": "failure", "error": "return-check-interval-invalid"}, 400
         config["return_check_interval_minutes"] = str(int(interval))
+    if "return_check_interval_seconds" in payload:
+        interval_seconds = str(payload.get("return_check_interval_seconds", "")).strip()
+        if not interval_seconds.isdigit() or int(interval_seconds) < 0:
+            return {"status": "failure", "error": "return-check-interval-seconds-invalid"}, 400
+        config["return_check_interval_seconds"] = str(int(interval_seconds))
     if "return_check_target" in payload:
         target = str(payload.get("return_check_target", "")).strip()
         if target != "last_good_ssid":
@@ -1187,9 +1206,22 @@ def update_runtime_config(payload: dict) -> tuple[dict, int]:
             return {"status": "failure", "error": "runtime-recovery-debug-passive-invalid"}, 400
     if "runtime_recovery_grace_seconds" in payload:
         grace = str(payload.get("runtime_recovery_grace_seconds", "")).strip()
-        if not grace.isdigit() or int(grace) < 1:
+        if not grace.isdigit() or int(grace) < 0:
             return {"status": "failure", "error": "runtime-recovery-grace-invalid"}, 400
         config["runtime_recovery_grace_seconds"] = str(int(grace))
+    if "runtime_recovery_internet_required" in payload:
+        internet_required = str(payload.get("runtime_recovery_internet_required", "")).strip().lower()
+        if internet_required in {"true", "1", "yes", "on"}:
+            config["runtime_recovery_internet_required"] = "true"
+        elif internet_required in {"false", "0", "no", "off", ""}:
+            config["runtime_recovery_internet_required"] = "false"
+        else:
+            return {"status": "failure", "error": "runtime-recovery-internet-required-invalid"}, 400
+    if "runtime_recovery_internet_probe" in payload:
+        probe = str(payload.get("runtime_recovery_internet_probe", "")).strip()
+        if has_line_break(probe) or not probe:
+            return {"status": "failure", "error": "runtime-recovery-internet-probe-invalid"}, 400
+        config["runtime_recovery_internet_probe"] = probe
     if "runtime_recovery_instability_window_minutes" in payload:
         window = str(payload.get("runtime_recovery_instability_window_minutes", "")).strip()
         if not window.isdigit() or int(window) < 1:
@@ -1650,7 +1682,9 @@ def backend_status(recovery: dict | None = None) -> dict[str, object]:
             "last_good_configured": bool(runtime_config_value("last_good_connection") or runtime_config_value("last_good_ssid")),
             "runtime_recovery_enabled": config.get("runtime_recovery_enabled", "true"),
             "runtime_recovery_debug_passive": config.get("runtime_recovery_debug_passive", "false"),
-            "runtime_recovery_grace_seconds": config.get("runtime_recovery_grace_seconds", "120"),
+            "runtime_recovery_grace_seconds": config.get("runtime_recovery_grace_seconds", "30"),
+            "runtime_recovery_internet_required": config.get("runtime_recovery_internet_required", "true"),
+            "runtime_recovery_internet_probe": config.get("runtime_recovery_internet_probe", "1.1.1.1"),
             "runtime_recovery_instability_window_minutes": config.get("runtime_recovery_instability_window_minutes", "10"),
             "runtime_recovery_instability_threshold": config.get("runtime_recovery_instability_threshold", "3"),
             "runtime_watchdog": runtime_watchdog_status(),
@@ -3579,7 +3613,9 @@ def system_info(diagnose: dict, recovery: dict | None = None) -> dict:
         "return_connection": config["return_connection"],
         "runtime_recovery_enabled": config.get("runtime_recovery_enabled", "true"),
         "runtime_recovery_debug_passive": config.get("runtime_recovery_debug_passive", "false"),
-        "runtime_recovery_grace_seconds": config.get("runtime_recovery_grace_seconds", "120"),
+        "runtime_recovery_grace_seconds": config.get("runtime_recovery_grace_seconds", "30"),
+        "runtime_recovery_internet_required": config.get("runtime_recovery_internet_required", "true"),
+        "runtime_recovery_internet_probe": config.get("runtime_recovery_internet_probe", "1.1.1.1"),
         "runtime_recovery_instability_window_minutes": config.get("runtime_recovery_instability_window_minutes", "10"),
         "runtime_recovery_instability_threshold": config.get("runtime_recovery_instability_threshold", "3"),
         "runtime_watchdog": runtime_watchdog_status(),
@@ -3619,7 +3655,9 @@ def ui_data(recovery: dict | None = None) -> dict:
         "return_connection": config["return_connection"],
         "runtime_recovery_enabled": config.get("runtime_recovery_enabled", "true"),
         "runtime_recovery_debug_passive": config.get("runtime_recovery_debug_passive", "false"),
-        "runtime_recovery_grace_seconds": config.get("runtime_recovery_grace_seconds", "120"),
+        "runtime_recovery_grace_seconds": config.get("runtime_recovery_grace_seconds", "30"),
+        "runtime_recovery_internet_required": config.get("runtime_recovery_internet_required", "true"),
+        "runtime_recovery_internet_probe": config.get("runtime_recovery_internet_probe", "1.1.1.1"),
         "runtime_recovery_instability_window_minutes": config.get("runtime_recovery_instability_window_minutes", "10"),
         "runtime_recovery_instability_threshold": config.get("runtime_recovery_instability_threshold", "3"),
         "runtime_watchdog": runtime_watchdog_status(),
@@ -3637,7 +3675,9 @@ def ui_data(recovery: dict | None = None) -> dict:
         recovery_payload["return_connection"] = config["return_connection"]
         recovery_payload["runtime_recovery_enabled"] = config.get("runtime_recovery_enabled", "true")
         recovery_payload["runtime_recovery_debug_passive"] = config.get("runtime_recovery_debug_passive", "false")
-        recovery_payload["runtime_recovery_grace_seconds"] = config.get("runtime_recovery_grace_seconds", "120")
+        recovery_payload["runtime_recovery_grace_seconds"] = config.get("runtime_recovery_grace_seconds", "30")
+        recovery_payload["runtime_recovery_internet_required"] = config.get("runtime_recovery_internet_required", "true")
+        recovery_payload["runtime_recovery_internet_probe"] = config.get("runtime_recovery_internet_probe", "1.1.1.1")
         recovery_payload["runtime_recovery_instability_window_minutes"] = config.get("runtime_recovery_instability_window_minutes", "10")
         recovery_payload["runtime_recovery_instability_threshold"] = config.get("runtime_recovery_instability_threshold", "3")
         recovery_payload["runtime_watchdog"] = runtime_watchdog_status()

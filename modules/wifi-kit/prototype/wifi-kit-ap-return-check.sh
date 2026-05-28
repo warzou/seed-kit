@@ -22,8 +22,8 @@ Modes:
          recovery, try the configured target once with bounded timeouts, and
          restart AP recovery if the return attempt fails.
   run-loop
-         From AP recovery only, sleep return_check_interval_minutes between
-         run-once attempts. This is not AP+STA parallel mode.
+         From AP recovery only, sleep return_check_interval_seconds between
+         run-once attempts. 0 disables automatic return checks.
   stop-loop
          Stop the background AP return-check loop, if it is running.
 
@@ -35,7 +35,7 @@ EOF
 iface="${WIFI_KIT_RETURN_CHECK_IFACE:-wlan0}"
 connect_wait_seconds="${WIFI_KIT_RETURN_CHECK_CONNECT_WAIT:-30}"
 ping_wait_seconds="${WIFI_KIT_RETURN_CHECK_PING_WAIT:-3}"
-internet_probe="${WIFI_KIT_RETURN_CHECK_PROBE:-1.1.1.1}"
+default_internet_probe="${WIFI_KIT_RETURN_CHECK_PROBE:-1.1.1.1}"
 ap_restart_wait_seconds="${WIFI_KIT_RETURN_CHECK_AP_RESTART_WAIT:-30}"
 ap_min_stable_seconds="${WIFI_KIT_RETURN_CHECK_AP_MIN_STABLE_SECONDS:-120}"
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -73,6 +73,13 @@ is_positive_integer() {
   case "$1" in
     ''|*[!0-9]*) return 1 ;;
     0) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+is_non_negative_integer() {
+  case "$1" in
+    ''|*[!0-9]*) return 1 ;;
     *) return 0 ;;
   esac
 }
@@ -124,6 +131,28 @@ normalize_bool() {
 
 return_check_interval_minutes() {
   runtime_value return_check_interval_minutes 1
+}
+
+return_check_interval_seconds() {
+  seconds=$(runtime_value return_check_interval_seconds "")
+  if [ -n "$seconds" ]; then
+    printf '%s\n' "$seconds"
+    return 0
+  fi
+  minutes=$(return_check_interval_minutes)
+  if is_non_negative_integer "$minutes"; then
+    printf '%s\n' "$((minutes * 60))"
+    return 0
+  fi
+  printf '300\n'
+}
+
+internet_required() {
+  normalize_bool "$(runtime_value runtime_recovery_internet_required true)"
+}
+
+internet_probe() {
+  runtime_value runtime_recovery_internet_probe "$default_internet_probe"
 }
 
 return_check_target() {
@@ -237,13 +266,21 @@ stop_loop_best_effort() {
   rm -f "$loop_pid_file" 2>/dev/null || true
 }
 
-internet_ok() {
+local_network_ok() {
   ip_bin=$(find_tool ip 2>/dev/null || true)
-  ping_bin=$(find_tool ping 2>/dev/null || true)
   [ -n "$ip_bin" ] || return 1
-  [ -n "$ping_bin" ] || return 1
+  "$ip_bin" -o -4 addr show dev "$iface" scope global 2>/dev/null | grep -q . || return 1
   "$ip_bin" route show default 2>/dev/null | grep -q . || return 1
-  "$ping_bin" -c 1 -W "$ping_wait_seconds" "$internet_probe" >/dev/null 2>&1
+}
+
+internet_ok() {
+  required=$(internet_required)
+  [ "$required" = "true" ] || return 0
+  ping_bin=$(find_tool ping 2>/dev/null || true)
+  [ -n "$ping_bin" ] || return 1
+  internet_probe_value=$(internet_probe)
+  [ -n "$internet_probe_value" ] || return 1
+  "$ping_bin" -c 1 -W "$ping_wait_seconds" "$internet_probe_value" >/dev/null 2>&1
 }
 
 require_number() {
@@ -269,6 +306,9 @@ audit_values() {
   enabled_raw=$(return_check_enabled)
   enabled=$(normalize_bool "$enabled_raw")
   interval=$(return_check_interval_minutes)
+  interval_seconds=$(return_check_interval_seconds)
+  internet_required_value=$(internet_required)
+  internet_probe_value=$(internet_probe)
   target=$(return_check_target)
   mode=$(return_check_mode)
   last_good_ssid=$(runtime_value last_good_ssid "")
@@ -285,9 +325,21 @@ audit_values() {
     true|false) ;;
     *) status="refused"; reason="return-check-enabled-invalid" ;;
   esac
-  if ! is_positive_integer "$interval"; then
+  if ! is_non_negative_integer "$interval_seconds"; then
     status="refused"
-    reason="${reason:-return-check-interval-invalid}"
+    reason="${reason:-return-check-interval-seconds-invalid}"
+  fi
+  if [ "$interval_seconds" = "0" ] && [ "$enabled" = "true" ]; then
+    enabled="false"
+    reason="${reason:-return-check-disabled-by-interval-zero}"
+  fi
+  if [ "$internet_required_value" = "invalid" ]; then
+    status="refused"
+    reason="${reason:-internet-required-invalid}"
+  fi
+  if [ -z "$internet_probe_value" ]; then
+    status="refused"
+    reason="${reason:-internet-probe-missing}"
   fi
   if [ "$mode" != "periodic-from-ap" ]; then
     status="refused"
@@ -316,6 +368,9 @@ cmd_audit() {
   kv "return_check_enabled" "$enabled"
   kv "return_check_enabled_raw" "$enabled_raw"
   kv "return_check_interval_minutes" "$interval"
+  kv "return_check_interval_seconds" "$interval_seconds"
+  kv "runtime_recovery_internet_required" "$internet_required_value"
+  kv "runtime_recovery_internet_probe" "$internet_probe_value"
   kv "return_check_target" "$target"
   kv "return_check_mode" "$mode"
   kv "target_ssid" "${target_ssid:-}"
@@ -350,7 +405,7 @@ cmd_plan() {
   kv "sudo" "not-used"
   kv "reboot" "not-used"
   kv "future_01_scope" "only from AP recovery"
-  kv "future_02_wait" "sleep at least 120 seconds, or return_check_interval_minutes if longer, before attempts"
+  kv "future_02_wait" "sleep at least 120 seconds, or return_check_interval_seconds if longer, before attempts; 0 disables automatic return"
   kv "future_03_leave_ap" "temporarily leave AP recovery; do not use permanent AP+STA"
   kv "future_04_try_target" "try only last_good NetworkManager connection with bounded timeout"
   kv "future_05_success" "stay normal and leave AP recovery stopped"
@@ -375,7 +430,7 @@ cmd_run_loop() {
   kv "run_once_pidfile" "$run_once_pid_file"
   kv "runtime_config" "$runtime_config"
   kv "return_check_enabled" "$enabled"
-  kv "return_check_interval_minutes" "$interval"
+  kv "return_check_interval_seconds" "$interval_seconds"
   kv "return_check_target" "$target"
   kv "return_check_mode" "$mode"
   kv "target_connection" "${target_connection:-}"
@@ -390,14 +445,12 @@ cmd_run_loop() {
     log_event "refused" "${reason:-return-check-disabled}"
     exit 2
   fi
-  require_number "return-check-interval-minutes" "$interval" "1440"
+  require_number "return-check-interval-seconds" "$interval_seconds" "86400"
   require_number "ap-restart-wait-seconds" "$ap_restart_wait_seconds" "120"
   require_number "ap-min-stable-seconds" "$ap_min_stable_seconds" "3600"
   if [ -n "${WIFI_KIT_RETURN_CHECK_INTERVAL_SECONDS:-}" ]; then
     require_number "return-check-interval-seconds" "$WIFI_KIT_RETURN_CHECK_INTERVAL_SECONDS" "86400"
     interval_seconds=$WIFI_KIT_RETURN_CHECK_INTERVAL_SECONDS
-  else
-    interval_seconds=$((interval * 60))
   fi
   existing_pid=$(loop_pid)
   if [ -n "$existing_pid" ] && is_loop_pid "$existing_pid"; then
@@ -483,7 +536,8 @@ cmd_run_once() {
   kv "target_ssid" "${target_ssid:-}"
   kv "iface" "$iface"
   kv "connect_wait_seconds" "$connect_wait_seconds"
-  kv "internet_probe" "$internet_probe"
+  kv "runtime_recovery_internet_required" "$internet_required_value"
+  kv "runtime_recovery_internet_probe" "$internet_probe_value"
   kv "secret_policy" "no client Wi-Fi password is read, logged, or stored"
   log_event "started" "mode=run-once"
   require_root
@@ -524,10 +578,12 @@ cmd_run_once() {
   kv "connect" "starting"
   log_event "connect-starting" "target_connection=$target_connection"
   if "$nmcli_bin" --wait "$connect_wait_seconds" connection up "$target_connection" ifname "$iface" >/dev/null 2>&1 &&
+    local_network_ok &&
     internet_ok; then
     kv "status" "done"
     kv "decision" "normal"
-    kv "internet" "ok"
+    kv "network" "ok"
+    kv "internet" "$([ "$internet_required_value" = "true" ] && printf ok || printf not-required)"
     log_event "recovery-exit-success" "target_connection=$target_connection"
     exit 0
   fi

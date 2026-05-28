@@ -316,9 +316,15 @@ ensure_runtime_config() {
       printf 'ap_ssid=Wifi-Kit-%s\n' "$(hostname 2>/dev/null || printf node)"
       printf 'ap_password=12345678\n'
       printf 'runtime_recovery_enabled=true\n'
-      printf 'runtime_recovery_grace_seconds=120\n'
+      printf 'runtime_recovery_grace_seconds=30\n'
+      printf 'runtime_recovery_internet_required=true\n'
+      printf 'runtime_recovery_internet_probe=1.1.1.1\n'
       printf 'runtime_recovery_instability_window_minutes=10\n'
       printf 'runtime_recovery_instability_threshold=3\n'
+      printf 'return_check_enabled=false\n'
+      printf 'return_check_interval_seconds=300\n'
+      printf 'return_check_target=last_good_ssid\n'
+      printf 'return_check_mode=periodic-from-ap\n'
     } > "$runtime_config"
   fi
   chown "$install_user:$install_user" "$runtime_config"

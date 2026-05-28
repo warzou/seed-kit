@@ -160,7 +160,7 @@ event_line() {
   if [ -n "$detail" ]; then
     printf ' detail=%s' "$detail"
   fi
-  printf ' health_status=%s health_reason=%s runtime_match=%s runtime_reason=%s current_connection=%s current_ssid=%s last_good_connection=%s last_good_ssid=%s ip=%s default_route=%s gateway=%s gateway_ping=%s bootstrap_state=%s bootstrap_source=%s baseline_quality=%s config_readable=%s unstable_triggered=%s unstable_count=%s recovery_decision=%s\n' \
+  printf ' health_status=%s health_reason=%s runtime_match=%s runtime_reason=%s current_connection=%s current_ssid=%s last_good_connection=%s last_good_ssid=%s ip=%s default_route=%s gateway=%s gateway_ping=%s internet_required=%s internet_probe=%s internet_ping=%s bootstrap_state=%s bootstrap_source=%s baseline_quality=%s config_readable=%s unstable_triggered=%s unstable_count=%s recovery_decision=%s\n' \
     "${health_status:-unknown}" \
     "${health_reason:-unknown}" \
     "${runtime_match:-}" \
@@ -173,6 +173,9 @@ event_line() {
     "${default_route_present:-}" \
     "${gateway:-}" \
     "${gateway_ping_status:-}" \
+    "${internet_required:-}" \
+    "${internet_probe:-}" \
+    "${internet_ping_status:-}" \
     "${bootstrap_state:-}" \
     "${bootstrap_source:-}" \
     "${baseline_quality:-}" \
@@ -219,6 +222,9 @@ write_state() {
     kv "default_route" "${default_route_present:-}"
     kv "gateway" "${gateway:-}"
     kv "gateway_ping" "${gateway_ping_status:-}"
+    kv "internet_required" "${internet_required:-}"
+    kv "internet_probe" "${internet_probe:-}"
+    kv "internet_ping" "${internet_ping_status:-}"
     kv "bootstrap_state" "${bootstrap_state:-}"
     kv "bootstrap_source" "${bootstrap_source:-}"
     kv "baseline_quality" "${baseline_quality:-}"
@@ -253,6 +259,9 @@ write_state() {
       kv "default_route" "${default_route_present:-}"
       kv "gateway" "${gateway:-}"
       kv "gateway_ping" "${gateway_ping_status:-}"
+      kv "internet_required" "${internet_required:-}"
+      kv "internet_probe" "${internet_probe:-}"
+      kv "internet_ping" "${internet_ping_status:-}"
       kv "bootstrap_state" "${bootstrap_state:-}"
       kv "bootstrap_source" "${bootstrap_source:-}"
       kv "baseline_quality" "${baseline_quality:-}"
@@ -561,8 +570,12 @@ config_values() {
   enabled=$(normalize_bool "$enabled_raw")
   debug_passive_raw=$(runtime_value runtime_recovery_debug_passive false)
   debug_passive=$(normalize_bool "$debug_passive_raw")
-  grace_seconds=$(runtime_value runtime_recovery_grace_seconds 120)
-  min_unavailable_seconds="${WIFI_KIT_RUNTIME_WATCHDOG_MIN_UNAVAILABLE_SECONDS:-120}"
+  grace_seconds=$(runtime_value runtime_recovery_grace_seconds 30)
+  internet_required_raw=$(runtime_value runtime_recovery_internet_required true)
+  internet_required=$(normalize_bool "$internet_required_raw")
+  internet_probe=$(runtime_value runtime_recovery_internet_probe "${WIFI_KIT_RUNTIME_WATCHDOG_INTERNET_PROBE:-1.1.1.1}")
+  internet_ping_status=$(ping_internet_probe)
+  min_unavailable_seconds="${WIFI_KIT_RUNTIME_WATCHDOG_MIN_UNAVAILABLE_SECONDS:-0}"
   window_minutes=$(runtime_value runtime_recovery_instability_window_minutes 10)
   threshold=$(runtime_value runtime_recovery_instability_threshold 3)
   last_good_ssid=$(runtime_value last_good_ssid "")
@@ -614,12 +627,23 @@ config_values() {
     true|false) ;;
     *) status="refused"; reason="${reason:-runtime-recovery-debug-passive-invalid}" ;;
   esac
-  if ! is_positive_integer "$grace_seconds"; then
+  case "$internet_required" in
+    true|false) ;;
+    *) status="refused"; reason="${reason:-runtime-recovery-internet-required-invalid}" ;;
+  esac
+  case "$grace_seconds" in
+    ''|*[!0-9]*)
+      status="refused"
+      reason="${reason:-runtime-recovery-grace-invalid}"
+      grace_seconds=30
+      ;;
+  esac
+  case "$min_unavailable_seconds" in
+    ''|*[!0-9]*) min_unavailable_seconds=0 ;;
+  esac
+  if [ -z "$internet_probe" ]; then
     status="refused"
-    reason="${reason:-runtime-recovery-grace-invalid}"
-  fi
-  if ! is_positive_integer "$min_unavailable_seconds"; then
-    min_unavailable_seconds=120
+    reason="${reason:-runtime-recovery-internet-probe-invalid}"
   fi
   if ! is_positive_integer "$window_minutes"; then
     status="refused"
@@ -639,7 +663,7 @@ config_values() {
     reason="${reason:-$bootstrap_state}"
   fi
   effective_grace_seconds=$grace_seconds
-  if is_positive_integer "$effective_grace_seconds" && [ "$effective_grace_seconds" -lt "$min_unavailable_seconds" ]; then
+  if [ "$effective_grace_seconds" -gt 0 ] && [ "$effective_grace_seconds" -lt "$min_unavailable_seconds" ]; then
     effective_grace_seconds=$min_unavailable_seconds
   fi
   if [ -n "$last_good_connection" ] && [ "$current_connection" = "$last_good_connection" ]; then
@@ -705,9 +729,9 @@ classify_health() {
     health_reason="no-default-route"
     return 0
   fi
-  if [ "$gateway_ping_status" = "failed" ]; then
+  if [ "$internet_required" = "true" ] && [ "$internet_ping_status" = "failed" ]; then
     health_status="unhealthy"
-    health_reason="gateway-unreachable"
+    health_reason="internet-unreachable"
     return 0
   fi
   health_status="healthy"
@@ -718,6 +742,8 @@ classify_recovery_decision() {
   recovery_decision="none"
   if ap_recovery_active; then
     recovery_decision="ap-recovery-active"
+  elif [ "$effective_grace_seconds" = "0" ] && [ "$health_reason" = "internet-unreachable" ]; then
+    recovery_decision="internet-check-disabled-by-timeout-zero"
   elif [ "$health_status" != "healthy" ]; then
     recovery_decision="start-ap-recovery-after-unavailable-grace"
   fi
@@ -809,6 +835,9 @@ cmd_audit() {
   kv "runtime_recovery_grace_seconds" "$grace_seconds"
   kv "runtime_recovery_effective_grace_seconds" "$effective_grace_seconds"
   kv "runtime_recovery_min_unavailable_seconds" "$min_unavailable_seconds"
+  kv "runtime_recovery_internet_required" "$internet_required"
+  kv "runtime_recovery_internet_required_raw" "$internet_required_raw"
+  kv "runtime_recovery_internet_probe" "$internet_probe"
   kv "runtime_recovery_instability_window_minutes" "$window_minutes"
   kv "runtime_recovery_instability_threshold" "$threshold"
   kv "runtime_recovery_instability_policy" "diagnostic-only"
@@ -823,6 +852,7 @@ cmd_audit() {
   kv "default_route" "$default_route_present"
   kv "gateway" "$gateway"
   kv "gateway_ping" "$gateway_ping_status"
+  kv "internet_ping" "$internet_ping_status"
   kv "bootstrap_state" "$bootstrap_state"
   kv "bootstrap_source" "$bootstrap_source"
   kv "baseline_quality" "$baseline_quality"
@@ -860,8 +890,9 @@ cmd_plan() {
   kv "runtime_scope" "watch last_good only; never try return_connection"
   kv "01.detect" "when last_good was active and wlan0 leaves it, record runtime-disconnect detected"
   kv "02.grace" "wait until runtime is unavailable continuously for effective grace"
-  kv "02b.min_unavailable" "effective grace is at least 120 seconds by default"
+  kv "02b.timeout" "runtime_recovery_grace_seconds defaults to 30; 0 disables AP recovery for internet-only failures"
   kv "02c.instability" "short repeated failures are logged as diagnostic-only; they do not force AP by themselves"
+  kv "02c.internet" "if runtime_recovery_internet_required=true, internet probe failure can trigger AP after grace"
   kv "02d.bootstrap" "if last_good is absent and current Wi-Fi is healthy, write the initial baseline to runtime.conf only"
   kv "03.cancel" "if last_good returns during grace, log recovery-cancelled link-restored"
   kv "04.recover" "if still disconnected from last_good, call wrapper start-ap-mode"
@@ -976,6 +1007,13 @@ cmd_run() {
     fi
     now=$(epoch_seconds)
     elapsed=$((now - grace_start))
+    if [ "$effective_grace_seconds" = "0" ] && [ "$health_reason" = "internet-unreachable" ]; then
+      log_event "internet-check-timeout-zero" "health_reason=$health_reason recovery_decision=$recovery_decision"
+      grace_active=0
+      write_state "watching" "$health_reason" "${current_ssid:-$last_good_ssid}"
+      sleep "$poll_seconds"
+      continue
+    fi
     if [ "$elapsed" -lt "$effective_grace_seconds" ]; then
       sleep "$poll_seconds"
       continue
