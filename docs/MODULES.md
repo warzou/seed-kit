@@ -4,6 +4,14 @@ Modules are shell capabilities stored in `modules/` inside the Seed-Kit monorepo
 
 They should stay small, readable, and boring. A module should explain what it will do before it changes anything, and any system-changing action should be explicit through `--apply --modules=<name>`.
 
+Seed-Kit stays a single repository for now. The scalable documentation boundary is:
+
+- one module = one module folder when the module grows beyond a single shell file;
+- one module = one short README for operators;
+- one module = optional `docs/` for architecture, runtime, safety, logging, and troubleshooting detail.
+
+Single-file modules such as `modules/cloudflared.sh` can stay as files until they need dedicated docs or assets. Growing modules should add a sibling folder such as `modules/link-watch/` without moving the shell entrypoint immediately.
+
 ## Minimal convention
 
 Each module should expose, at minimum:
@@ -21,12 +29,48 @@ module_<name>_plan
 
 Apply support is currently handled in `seed-kit.sh` for the first real path (`git`). Future modules should keep their action boundaries just as explicit.
 
+## Documentation convention
+
+Global docs stay in `docs/` and explain Seed-Kit as a product:
+
+- [ARCHITECTURE.md](ARCHITECTURE.md): core layout and runtime modes.
+- [MODULES.md](MODULES.md): module conventions and module index.
+- [OPERATOR-GUIDE.md](OPERATOR-GUIDE.md): safe operator workflow.
+- [PRODUCT-DIRECTION.md](PRODUCT-DIRECTION.md): project philosophy and non-goals.
+
+Module docs stay near the module:
+
+```text
+modules/<module>/
+  README.md
+  docs/
+    ARCHITECTURE.md
+    TROUBLESHOOTING.md
+    SAFETY.md
+```
+
+Do not create empty documentation trees just to satisfy the shape. Add files when they carry useful operator or maintenance knowledge.
+
+Current mapping:
+
+| Module | Current entrypoint | Module docs status | Next documentation step |
+| --- | --- | --- | --- |
+| `wifi-kit` | `modules/wifi-kit.sh` plus `modules/wifi-kit/` | Rich but too broad | Split long docs into `WATCHDOG.md`, `NETWORKING.md`, `UI.md`, and `FRESH-INSTALL.md` later |
+| `link-watch` | `modules/link-watch.sh` | README added | Add `docs/LOGGING.md` after first overnight run |
+| `wifi-stability` | `modules/wifi-stability.sh` | README added | Add Raspberry Pi troubleshooting notes when more field data exists |
+| `cloudflared` | `modules/cloudflared.sh` | Global-only | Add module README when apply path grows beyond install-only |
+| `homer` | `modules/homer.sh` | Global-only | Add module README when static placeholder becomes a real service |
+| `tailscale`, `caddy`, `docker`, `homepage` | `modules/*.sh` | Global-only | Keep in global module matrix until implementation expands |
+
+Existing Wifi-Kit docs should not be moved wholesale yet. Prefer small redirects or index updates first, then move one topic at a time when links can be checked.
+
 ## Priority modules
 
 Near-term modules:
 
 - `tailscale`
 - `wifi-stability`
+- `link-watch`
 - `cloudflared`
 - `caddy`
 - `homer`

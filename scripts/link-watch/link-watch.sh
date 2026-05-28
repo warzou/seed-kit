@@ -1,13 +1,13 @@
 #!/bin/sh
 set -eu
 
-LOG_DIR=${NETWORK_WATCH_LOG_DIR:-/var/log/seed-kit/network-watch}
-LOG_FILE=${NETWORK_WATCH_LOG_FILE:-$LOG_DIR/network-watch.log}
-STATE_FILE=${NETWORK_WATCH_STATE_FILE:-$LOG_DIR/network-watch.state}
-TARGETS=${NETWORK_WATCH_TARGETS:-1.1.1.1}
-INTERVAL_SECONDS=${NETWORK_WATCH_INTERVAL_SECONDS:-5}
-PING_TIMEOUT_SECONDS=${NETWORK_WATCH_PING_TIMEOUT_SECONDS:-2}
-PING_BIN=${NETWORK_WATCH_PING_BIN:-ping}
+LOG_DIR=${LINK_WATCH_LOG_DIR:-/var/log/seed-kit/link-watch}
+LOG_FILE=${LINK_WATCH_LOG_FILE:-$LOG_DIR/link-watch.log}
+STATE_FILE=${LINK_WATCH_STATE_FILE:-$LOG_DIR/link-watch.state}
+TARGETS=${LINK_WATCH_TARGETS:-1.1.1.1}
+INTERVAL_SECONDS=${LINK_WATCH_INTERVAL_SECONDS:-5}
+PING_TIMEOUT_SECONDS=${LINK_WATCH_PING_TIMEOUT_SECONDS:-2}
+PING_BIN=${LINK_WATCH_PING_BIN:-ping}
 
 timestamp() {
   date -u '+%Y-%m-%dT%H:%M:%SZ'
@@ -90,12 +90,12 @@ check_targets() {
 monitor() {
   case "$INTERVAL_SECONDS" in
     ''|*[!0-9]*)
-      echo "NETWORK_WATCH_INTERVAL_SECONDS must be a positive integer" >&2
+      echo "LINK_WATCH_INTERVAL_SECONDS must be a positive integer" >&2
       return 2
       ;;
   esac
   if [ "$INTERVAL_SECONDS" -lt 1 ]; then
-    echo "NETWORK_WATCH_INTERVAL_SECONDS must be >= 1" >&2
+    echo "LINK_WATCH_INTERVAL_SECONDS must be >= 1" >&2
     return 2
   fi
 
@@ -148,7 +148,7 @@ status() {
 
 logs() {
   if [ -r "$LOG_FILE" ]; then
-    tail -n "${NETWORK_WATCH_LOG_LINES:-80}" "$LOG_FILE"
+    tail -n "${LINK_WATCH_LOG_LINES:-80}" "$LOG_FILE"
   else
     echo "log_file=$LOG_FILE"
     echo "logs=unavailable"
@@ -178,7 +178,7 @@ case "${1:-monitor}" in
     follow
     ;;
   *)
-    echo "usage: sh network-watch.sh [monitor|status|logs|follow]" >&2
+    echo "usage: sh link-watch.sh [monitor|status|logs|follow]" >&2
     exit 2
     ;;
 esac
