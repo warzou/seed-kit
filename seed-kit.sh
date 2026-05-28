@@ -4,6 +4,7 @@ set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 RUNTIME_OS="$ROOT_DIR/lib/os.sh"
+APPLY_AUTO=${APPLY_AUTO:-0}
 
 if [ -z "${NO_COLOR:-}" ] && [ -t 1 ] && [ "${TERM:-}" != "dumb" ]; then
   COLOR_RESET=$(printf '\033[0m')
