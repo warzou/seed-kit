@@ -1475,6 +1475,25 @@
       border-top: 0;
     }
 
+    .network-mode-options {
+      display: grid;
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .network-address-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    @media (max-width: 760px) {
+      .network-address-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
     .recovery-setting-title {
       margin: 0;
       color: var(--soft);
@@ -2353,6 +2372,57 @@
     </div>
 
     <div class="page appliance-stack" data-page="config" hidden>
+      <section class="panel config-panel appliance-card" aria-labelledby="config-network-title">
+        <div class="section-head">
+          <div>
+            <h2 id="config-network-title">Réseau du node</h2>
+            <p class="section-copy">Préparation IP fixe. Aucune modification réseau n'est appliquée dans cette version.</p>
+          </div>
+          <span class="chip">Futur</span>
+        </div>
+        <div class="config-recovery-stack">
+          <section class="recovery-setting" aria-labelledby="config-ip-mode-heading">
+            <h3 class="recovery-setting-title" id="config-ip-mode-heading">Mode IP</h3>
+            <div class="network-mode-options">
+              <label class="confirm-line">
+                <input id="config-ip-mode-dhcp" name="config-ip-mode" type="radio" value="dhcp" checked>
+                <span>DHCP automatique</span>
+              </label>
+              <label class="confirm-line">
+                <input id="config-ip-mode-static" name="config-ip-mode" type="radio" value="static">
+                <span>IP fixe</span>
+              </label>
+            </div>
+            <small class="setting-help">Laisser en DHCP pour utiliser l'adresse fournie par la box/routeur.</small>
+            <div class="status-summary-grid">
+              <div class="status-summary-card"><span>IP actuelle</span><strong id="config-current-ip">...</strong></div>
+              <div class="status-summary-card"><span>Passerelle actuelle</span><strong id="config-current-gateway">...</strong></div>
+              <div class="status-summary-card"><span>DNS actuels</span><strong id="config-current-dns">...</strong></div>
+            </div>
+          </section>
+          <section class="recovery-setting" aria-labelledby="config-static-ip-heading">
+            <h3 class="recovery-setting-title" id="config-static-ip-heading">Paramètres IP fixe</h3>
+            <div class="network-address-grid">
+              <label class="field-label">
+                Adresse IP fixe
+                <input id="config-static-ip-input" class="password-local" type="text" inputmode="text" placeholder="192.168.8.50/24">
+              </label>
+              <label class="field-label">
+                Passerelle
+                <input id="config-static-gateway-input" class="password-local" type="text" inputmode="text" placeholder="192.168.8.1">
+              </label>
+              <label class="field-label">
+                DNS
+                <input id="config-static-dns-input" class="password-local" type="text" inputmode="text" placeholder="192.168.8.1, 1.1.1.1">
+              </label>
+            </div>
+            <small class="setting-help">Exemple : 192.168.8.50/24 avec passerelle 192.168.8.1. Une IP fixe mal configurée peut rendre le node inaccessible.</small>
+            <small class="setting-help">L'application réelle de l'IP fixe nécessitera une validation SAFE avec retour possible en AP recovery.</small>
+            <button id="config-save-network" class="button secondary setting-action" type="button">Enregistrer les réglages IP</button>
+          </section>
+        </div>
+      </section>
+
       <section class="panel config-panel appliance-card" aria-labelledby="config-password-title">
         <div class="section-head">
           <div>
@@ -3169,13 +3239,52 @@
       setText('node-last-event', system.last_recovery_event || 'inconnu');
     }
 
+    function gatewayFromRoute(route) {
+      const match = String(route || '').match(/\bvia\s+([0-9a-fA-F:.]+)/);
+      return match ? match[1] : '';
+    }
+
+    function staticIpSuggestion(ip) {
+      const current = String(ip || '').trim();
+      if (!current || current === 'unknown' || current === 'inconnu') return '';
+      if (current.includes('/')) return current;
+      if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(current)) return `${current}/24`;
+      return current;
+    }
+
+    function currentDnsServers() {
+      const diagnoseDns = data.diagnose?.dns_servers;
+      if (Array.isArray(diagnoseDns)) return diagnoseDns.filter(Boolean).join(', ');
+      if (typeof diagnoseDns === 'string') return diagnoseDns;
+      const systemDns = data.system?.dns_servers || data.snapshot?.dns_servers;
+      if (Array.isArray(systemDns)) return systemDns.filter(Boolean).join(', ');
+      if (typeof systemDns === 'string') return systemDns;
+      return '';
+    }
+
     function renderConfiguration() {
       const system = systemState();
       const recovery = recoveryState();
       const config = runtimeConfig();
+      const currentIp = resolveCurrentIp();
+      const currentGateway = data.diagnose?.gateway && data.diagnose.gateway !== 'unknown'
+        ? data.diagnose.gateway
+        : gatewayFromRoute(data.diagnose?.default_route || data.snapshot?.default_route || system.default_route || '');
+      const currentDns = currentDnsServers();
+      const nodeIpMode = config.node_ip_mode === 'static' ? 'static' : 'dhcp';
       setText('config-normal-port', system.normal_ui_port || recovery.normal_ui_port || 18089);
       setText('config-recovery-port', system.recovery_ui_port || recovery.recovery_ui_port || 80);
       setText('config-recovery-ssid', config.ap_ssid || recovery.ssid || system.recovery_ssid || 'Wifi-Kit-node');
+      setText('config-current-ip', currentIp);
+      setText('config-current-gateway', currentGateway || 'inconnu');
+      setText('config-current-dns', currentDns || 'inconnu');
+      const dhcpMode = document.getElementById('config-ip-mode-dhcp');
+      const staticMode = document.getElementById('config-ip-mode-static');
+      if (dhcpMode) dhcpMode.checked = nodeIpMode === 'dhcp';
+      if (staticMode) staticMode.checked = nodeIpMode === 'static';
+      setInputValue('config-static-ip-input', config.node_static_ip || staticIpSuggestion(currentIp));
+      setInputValue('config-static-gateway-input', config.node_static_gateway || currentGateway);
+      setInputValue('config-static-dns-input', config.node_static_dns || currentDns || (currentGateway ? `${currentGateway}, 1.1.1.1` : '1.1.1.1'));
       const currentApPassword = config.ap_password || recovery.ap_password_current || system.recovery_ap_password_current || '';
       setText('config-ap-password-current', `Mot de passe actuel : ${currentApPassword ? 'configuré' : 'non configuré'}`);
       setText('config-failsafe-mode', `Mode actuel : ${failsafeModeLabel()}`);
@@ -3611,6 +3720,34 @@
       }
       await saveRuntimeConfig({ runtime_recovery_grace_seconds: runtimeRecoveryGrace }, 'config');
       showConfigResult(`Délai avant Wi-Fi secours appliqué : ${runtimeRecoveryGrace} secondes.`);
+    }
+
+    async function saveNodeNetworkConfig() {
+      const mode = document.getElementById('config-ip-mode-static')?.checked ? 'static' : 'dhcp';
+      const staticIp = document.getElementById('config-static-ip-input')?.value.trim() || '';
+      const gateway = document.getElementById('config-static-gateway-input')?.value.trim() || '';
+      const dns = document.getElementById('config-static-dns-input')?.value.trim() || '';
+      if (mode === 'static') {
+        if (!staticIp) {
+          showConfigResult('Adresse IP fixe requise.');
+          return;
+        }
+        if (!staticIp.includes('/')) {
+          showConfigResult('Adresse IP fixe: CIDR requis, par exemple 192.168.8.50/24.');
+          return;
+        }
+        if (!gateway) {
+          showConfigResult('Passerelle requise en mode IP fixe.');
+          return;
+        }
+      }
+      await saveRuntimeConfig({
+        node_ip_mode: mode,
+        node_static_ip: staticIp,
+        node_static_gateway: gateway,
+        node_static_dns: dns
+      }, 'config');
+      showConfigResult('Réglages IP enregistrés. Aucune modification réseau n’a été appliquée.');
     }
 
     async function saveRuntimeWatchdogMode() {
@@ -4678,6 +4815,7 @@
     document.getElementById('config-apply-failsafe')?.addEventListener('click', saveFailsafeMode);
     document.getElementById('config-apply-recovery-delay')?.addEventListener('click', saveRecoveryDelay);
     document.getElementById('config-apply-watchdog')?.addEventListener('click', saveRuntimeWatchdogMode);
+    document.getElementById('config-save-network')?.addEventListener('click', saveNodeNetworkConfig);
     document.getElementById('recovery-return-dropdown-button').addEventListener('click', (event) => {
       event.stopPropagation();
       const dropdown = document.getElementById('recovery-return-dropdown');

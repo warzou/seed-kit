@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import os
 import re
@@ -166,6 +167,10 @@ RUNTIME_CONFIG_KEYS = {
     "runtime_recovery_internet_probe",
     "runtime_recovery_instability_window_minutes",
     "runtime_recovery_instability_threshold",
+    "node_ip_mode",
+    "node_static_ip",
+    "node_static_gateway",
+    "node_static_dns",
 }
 
 CAPTIVE_PATHS = {
@@ -907,6 +912,10 @@ def default_runtime_config() -> dict[str, str]:
         "runtime_recovery_internet_probe": "1.1.1.1",
         "runtime_recovery_instability_window_minutes": "10",
         "runtime_recovery_instability_threshold": "3",
+        "node_ip_mode": "dhcp",
+        "node_static_ip": "",
+        "node_static_gateway": "",
+        "node_static_dns": "",
     }
 
 
@@ -937,6 +946,8 @@ def read_runtime_config() -> dict[str, str]:
     )
     config["ap_ssid"] = safe_label(config.get("ap_ssid", ""), fallback=default_runtime_config()["ap_ssid"])
     config["ap_password"] = str(config.get("ap_password") or RECOVERY_AP_TEST_PASSWORD)
+    if config.get("node_ip_mode") not in {"dhcp", "static"}:
+        config["node_ip_mode"] = "dhcp"
     return config
 
 
@@ -973,6 +984,10 @@ def redact_runtime_config(config: dict[str, str]) -> dict[str, object]:
         "runtime_recovery_internet_probe": config.get("runtime_recovery_internet_probe", "1.1.1.1"),
         "runtime_recovery_instability_window_minutes": config.get("runtime_recovery_instability_window_minutes", "10"),
         "runtime_recovery_instability_threshold": config.get("runtime_recovery_instability_threshold", "3"),
+        "node_ip_mode": config.get("node_ip_mode", "dhcp"),
+        "node_static_ip": config.get("node_static_ip", ""),
+        "node_static_gateway": config.get("node_static_gateway", ""),
+        "node_static_dns": config.get("node_static_dns", ""),
         "path": str(RUNTIME_CONFIG_PATH),
         "password_policy": "min-8-chars",
         "secret_policy": "stores AP recovery password only; never stores client Wi-Fi passwords",
@@ -1088,6 +1103,10 @@ def write_runtime_config(config: dict[str, str]) -> None:
         f"runtime_recovery_internet_probe={config.get('runtime_recovery_internet_probe', '1.1.1.1')}",
         f"runtime_recovery_instability_window_minutes={config.get('runtime_recovery_instability_window_minutes', '10')}",
         f"runtime_recovery_instability_threshold={config.get('runtime_recovery_instability_threshold', '3')}",
+        f"node_ip_mode={config.get('node_ip_mode', 'dhcp')}",
+        f"node_static_ip={config.get('node_static_ip', '')}",
+        f"node_static_gateway={config.get('node_static_gateway', '')}",
+        f"node_static_dns={config.get('node_static_dns', '')}",
     ]
     fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
@@ -1100,6 +1119,45 @@ def write_runtime_config(config: dict[str, str]) -> None:
             tmp_path.unlink()
         except OSError:
             pass
+
+
+def validate_ip_address(value: str, error: str) -> tuple[str, dict | None]:
+    candidate = str(value or "").strip()
+    if has_line_break(candidate):
+        return "", {"status": "failure", "error": error}
+    try:
+        ipaddress.ip_address(candidate)
+    except ValueError:
+        return "", {"status": "failure", "error": error}
+    return candidate, None
+
+
+def validate_static_ip_cidr(value: str) -> tuple[str, dict | None]:
+    candidate = str(value or "").strip()
+    if has_line_break(candidate) or "/" not in candidate:
+        return "", {"status": "failure", "error": "node-static-ip-cidr-required"}
+    try:
+        ipaddress.ip_interface(candidate)
+    except ValueError:
+        return "", {"status": "failure", "error": "node-static-ip-invalid"}
+    return candidate, None
+
+
+def normalize_dns_list(value: str) -> tuple[str, dict | None]:
+    raw = str(value or "").strip()
+    if not raw:
+        return "", None
+    if has_line_break(raw):
+        return "", {"status": "failure", "error": "node-static-dns-invalid"}
+    servers = [item for item in re.split(r"[\s,]+", raw) if item]
+    normalized: list[str] = []
+    for server in servers:
+        try:
+            ipaddress.ip_address(server)
+        except ValueError:
+            return "", {"status": "failure", "error": "node-static-dns-invalid"}
+        normalized.append(server)
+    return ", ".join(normalized), None
 
 
 def update_runtime_config(payload: dict) -> tuple[dict, int]:
@@ -1232,6 +1290,42 @@ def update_runtime_config(payload: dict) -> tuple[dict, int]:
         if not threshold.isdigit() or int(threshold) < 1:
             return {"status": "failure", "error": "runtime-recovery-threshold-invalid"}, 400
         config["runtime_recovery_instability_threshold"] = str(int(threshold))
+    if "node_ip_mode" in payload:
+        node_ip_mode = str(payload.get("node_ip_mode", "")).strip().lower()
+        if node_ip_mode not in {"dhcp", "static"}:
+            return {"status": "failure", "error": "node-ip-mode-invalid"}, 400
+        config["node_ip_mode"] = node_ip_mode
+    if "node_static_ip" in payload:
+        raw_static_ip = str(payload.get("node_static_ip", "")).strip()
+        if raw_static_ip:
+            static_ip, error = validate_static_ip_cidr(raw_static_ip)
+            if error:
+                return error, 400
+            config["node_static_ip"] = static_ip
+        else:
+            config["node_static_ip"] = ""
+    if "node_static_gateway" in payload:
+        raw_gateway = str(payload.get("node_static_gateway", "")).strip()
+        if raw_gateway:
+            gateway, error = validate_ip_address(raw_gateway, "node-static-gateway-invalid")
+            if error:
+                return error, 400
+            config["node_static_gateway"] = gateway
+        else:
+            config["node_static_gateway"] = ""
+    if "node_static_dns" in payload:
+        dns, error = normalize_dns_list(str(payload.get("node_static_dns", "")))
+        if error:
+            return error, 400
+        config["node_static_dns"] = dns
+
+    if config.get("node_ip_mode", "dhcp") == "static":
+        if not config.get("node_static_ip"):
+            return {"status": "failure", "error": "node-static-ip-required"}, 400
+        if "/" not in config.get("node_static_ip", ""):
+            return {"status": "failure", "error": "node-static-ip-cidr-required"}, 400
+        if not config.get("node_static_gateway"):
+            return {"status": "failure", "error": "node-static-gateway-required"}, 400
 
     write_runtime_config(config)
     if config.get("runtime_recovery_debug_passive", "false") != previous_debug_passive:
@@ -2386,10 +2480,40 @@ def current_ip_for_iface(iface: str) -> str:
     return ""
 
 
+def default_route_for_iface(iface: str) -> str:
+    route = run_text_command(["ip", "route", "show", "default", "dev", iface])
+    if route:
+        return route.splitlines()[0]
+    route = run_text_command(["ip", "route", "show", "default"])
+    return route.splitlines()[0] if route else ""
+
+
+def gateway_from_route(route: str) -> str:
+    match = re.search(r"\bvia\s+([0-9a-fA-F:.]+)", route or "")
+    return match.group(1) if match else ""
+
+
+def resolv_conf_dns_servers() -> list[str]:
+    servers: list[str] = []
+    try:
+        for line in Path("/etc/resolv.conf").read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("nameserver "):
+                continue
+            parts = stripped.split()
+            if len(parts) >= 2:
+                servers.append(parts[1])
+    except OSError:
+        pass
+    return servers
+
+
 def safe_diagnose() -> dict:
     iface = "wlan0"
     current_ip = current_ip_for_iface(iface)
     current_ssid = wlan_ssid()
+    default_route = default_route_for_iface(iface)
+    gateway = gateway_from_route(default_route)
     backend = "raspberrypi-networkmanager" if networkmanager_owns_wlan0() else "runtime-readonly"
     scan_status = "available" if (find_tool("nmcli") or find_tool("iw") or find_tool("wpa_cli")) else "unavailable"
     return {
@@ -2399,6 +2523,9 @@ def safe_diagnose() -> dict:
         "interface": iface,
         "current_ssid_state": current_ssid if current_ssid != "unknown" else "unknown",
         "current_ip": current_ip or "unknown",
+        "default_route": default_route or "unknown",
+        "gateway": gateway or "unknown",
+        "dns_servers": resolv_conf_dns_servers(),
         "ssh_route_interface": "unknown",
         "network_writes": False,
         "scan_status": scan_status,
