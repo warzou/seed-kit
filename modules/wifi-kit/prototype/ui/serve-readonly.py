@@ -1815,6 +1815,7 @@ def backend_status(recovery: dict | None = None) -> dict[str, object]:
             "runtime_recovery_instability_threshold": config.get("runtime_recovery_instability_threshold", "3"),
             "runtime_watchdog": runtime_watchdog_status(),
             "runtime_version": runtime_version,
+            "ap_recovery_health": ap_recovery_health_status(),
         },
         "install": {
             "app_dir_exists": app_dir_exists,
@@ -2855,6 +2856,118 @@ def nm_hotspot_recovery_status() -> dict[str, bool]:
     }
 
 
+def run_key_value_script(args: list[str], timeout: float = 4.0, env: dict[str, str] | None = None) -> tuple[dict[str, str], dict[str, object]]:
+    try:
+        result = subprocess.run(args, check=False, capture_output=True, text=True, timeout=timeout, env=env)
+    except subprocess.TimeoutExpired:
+        return {}, {"returncode": None, "error": "timeout", "stdout": "", "stderr": ""}
+    except OSError as exc:
+        return {}, {"returncode": None, "error": exc.__class__.__name__, "stdout": "", "stderr": str(exc)}
+    values: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("["):
+            continue
+        parsed = parse_key_value_text(stripped)
+        values.update(parsed)
+    return values, {
+        "returncode": result.returncode,
+        "error": "",
+        "stdout": result.stdout.strip()[-2000:],
+        "stderr": result.stderr.strip()[-1000:],
+    }
+
+
+def ap_recovery_health_status() -> dict[str, object]:
+    config = read_runtime_config()
+    helper_path = INSTALLED_NM_AP_LAB_SH if INSTALLED_NM_AP_LAB_SH.exists() else SCRIPT_DIR.parent / "wifi-kit-nm-ap-lab.sh"
+    nmcli_bin = find_tool("nmcli")
+    ip_bin = find_tool("ip")
+    ap_ip = "192.168.50.1"
+    ap_cidr = "192.168.50.1/24"
+    expected_ssid = config.get("ap_ssid") or f"Wifi-Kit-{socket.gethostname() or 'node'}"
+    status_values: dict[str, str] = {}
+    status_meta: dict[str, object] = {"returncode": None, "error": "helper-missing", "stdout": "", "stderr": ""}
+    captive_values: dict[str, str] = {}
+    captive_meta: dict[str, object] = {"returncode": None, "error": "helper-missing", "stdout": "", "stderr": ""}
+    if helper_path.exists():
+        env = os.environ.copy()
+        env["WIFI_KIT_RUNTIME_CONFIG"] = str(RUNTIME_CONFIG_PATH)
+        status_values, status_meta = run_key_value_script(["sh", str(helper_path), "status"], timeout=5.0, env=env)
+        captive_values, captive_meta = run_key_value_script(["sh", str(helper_path), "captive-status"], timeout=5.0, env=env)
+
+    ap_profile_present = False
+    if nmcli_bin:
+        profile_output = run_text_command([nmcli_bin, "-t", "--escape", "no", "-f", "NAME,TYPE", "connection", "show"], timeout=3.0)
+        for line in profile_output.splitlines():
+            name, typ = (line.split(":") + ["", ""])[:2]
+            if name == NM_AP_LAB_PROFILE and typ in {"wifi", "802-11-wireless"}:
+                ap_profile_present = True
+                break
+
+    wlan0_ip_ap = False
+    if ip_bin:
+        addr_output = run_text_command([ip_bin, "-o", "-4", "addr", "show", "dev", "wlan0"], timeout=2.0)
+        wlan0_ip_ap = ap_cidr in addr_output
+
+    status_live = nm_hotspot_recovery_status()
+    ui_script_path = Path(os.environ.get("WIFI_KIT_NM_AP_UI_SCRIPT", str(INSTALLED_APP_DIR / "ui" / "serve-readonly.py")))
+    captive_path = Path(str(captive_values.get("candidate_conf_path") or "/etc/NetworkManager/dnsmasq-shared.d/wifi-kit-nm-hotspot-captive.conf"))
+    ap_configured = bool(helper_path.exists() and nmcli_bin and config.get("ap_password"))
+    readiness_ok = bool(ap_configured and ui_script_path.exists())
+    active_ok = bool(status_live["hotspot_active"] and wlan0_ip_ap and status_live["ui_recovery_active"] and status_live["port_80_listening"])
+    last_ap_log = read_text_tail(START_AP_MODE_LOG, max_lines=20, max_chars=3000)
+    return {
+        "ok": True,
+        "mode": "read-only",
+        "network_writes": False,
+        "summary": "active-ok" if active_ok else ("ready" if readiness_ok else "not-ready"),
+        "manual_fallback_url": "http://192.168.50.1",
+        "ssh_fallback": "ssh warzy@192.168.50.1",
+        "expected": {
+            "ssid": expected_ssid,
+            "profile": NM_AP_LAB_PROFILE,
+            "ip": ap_cidr,
+            "ui_recovery_url": "http://192.168.50.1/recovery",
+            "normal_ui_port": 54321,
+        },
+        "checks": {
+            "helper_present": helper_path.exists(),
+            "nmcli_present": bool(nmcli_bin),
+            "ap_password_configured": bool(config.get("ap_password")),
+            "ap_configured": ap_configured,
+            "ap_profile_present": ap_profile_present,
+            "wlan0_ip_ap_present": wlan0_ip_ap,
+            "hotspot_active": bool(status_live["hotspot_active"]),
+            "ui_script_present": ui_script_path.exists(),
+            "ui_recovery_process_or_port": bool(status_live["ui_recovery_active"]),
+            "port_80_listening": bool(status_live["port_80_listening"]),
+            "normal_ui_54321_listening": tcp_port_open("127.0.0.1", 54321, timeout=0.5),
+            "captive_conf_exists": bool(captive_values.get("candidate_conf_exists") == "true" or captive_path.exists()),
+            "captive_conf_expected": captive_values.get("candidate_conf_expected_content") == "ok",
+            "readiness_ok": readiness_ok,
+            "active_ok": active_ok,
+        },
+        "paths": {
+            "helper": str(helper_path),
+            "ui_script": str(ui_script_path),
+            "captive_conf": str(captive_path),
+            "ui_pidfile": str(NM_AP_LAB_UI_PID),
+            "start_ap_log": str(START_AP_MODE_LOG),
+        },
+        "helper_status": status_values,
+        "helper_status_meta": status_meta,
+        "captive_status": captive_values,
+        "captive_status_meta": captive_meta,
+        "last_start_ap_log_tail": last_ap_log,
+        "limits": [
+            "This check does not start the AP.",
+            "SSID visibility, DHCP lease delivery, DNS answers, and client usability require a real AP test.",
+            "Windows captive portal remains best-effort; manual fallback is http://192.168.50.1.",
+        ],
+    }
+
+
 def nm_hotspot_scan(refresh: bool = True) -> dict:
     action = "scan-from-ap-recovery"
     nmcli_bin = find_tool("nmcli") or "nmcli"
@@ -3883,6 +3996,7 @@ def system_info(diagnose: dict, recovery: dict | None = None) -> dict:
         "runtime_recovery_instability_threshold": config.get("runtime_recovery_instability_threshold", "3"),
         "runtime_watchdog": runtime_watchdog_status(),
         "runtime_config_path": str(RUNTIME_CONFIG_PATH),
+        "ap_recovery_health": ap_recovery_health_status(),
         "ui_access_password": "future-not-configured",
         "last_recovery_event": "recovery-captive-ui-validated" if recovery_active else "normal-client-mode",
     }
@@ -3924,6 +4038,7 @@ def ui_data(recovery: dict | None = None) -> dict:
         "runtime_recovery_instability_window_minutes": config.get("runtime_recovery_instability_window_minutes", "10"),
         "runtime_recovery_instability_threshold": config.get("runtime_recovery_instability_threshold", "3"),
         "runtime_watchdog": runtime_watchdog_status(),
+        "ap_recovery_health": ap_recovery_health_status(),
         "runtime_config_path": str(RUNTIME_CONFIG_PATH),
         "ui_access_password": "future-not-configured",
     }
@@ -3944,6 +4059,7 @@ def ui_data(recovery: dict | None = None) -> dict:
         recovery_payload["runtime_recovery_instability_window_minutes"] = config.get("runtime_recovery_instability_window_minutes", "10")
         recovery_payload["runtime_recovery_instability_threshold"] = config.get("runtime_recovery_instability_threshold", "3")
         recovery_payload["runtime_watchdog"] = runtime_watchdog_status()
+        recovery_payload["ap_recovery_health"] = ap_recovery_health_status()
         recovery_payload["runtime_config_path"] = str(RUNTIME_CONFIG_PATH)
     recovery_payload["ap_client_count"] = ap_client_count() if recovery_active else None
     current_ui_client_count = ui_client_count()
@@ -4308,6 +4424,10 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         if path == "/api/backend-status":
             log_route("match-backend-status", raw_path, path)
             self.send_json(backend_status(self.recovery))
+            return
+
+        if path == "/api/ap-recovery-health":
+            self.send_json(ap_recovery_health_status())
             return
 
         if path == "/api/diagnostic-export":

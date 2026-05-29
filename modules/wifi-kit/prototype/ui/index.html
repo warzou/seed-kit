@@ -2112,6 +2112,36 @@
             <div class="status-summary-card"><span>Dernier incident</span><strong id="recovery-watchdog-summary">...</strong></div>
           </div>
         </article>
+        <article class="appliance-card" aria-label="Verification secours AP">
+          <div class="appliance-card-header">
+            <div>
+              <h3>Vérification secours AP</h3>
+              <p class="appliance-copy" id="ap-health-summary">Lecture en cours...</p>
+            </div>
+            <span id="ap-health-badge" class="chip">Lecture seule</span>
+          </div>
+          <div class="status-summary-grid">
+            <div class="status-summary-card"><span>Configuration</span><strong id="ap-health-configured">...</strong></div>
+            <div class="status-summary-card"><span>Profil AP</span><strong id="ap-health-profile">...</strong></div>
+            <div class="status-summary-card"><span>IP AP</span><strong id="ap-health-ip">...</strong></div>
+            <div class="status-summary-card"><span>UI recovery</span><strong id="ap-health-ui">...</strong></div>
+            <div class="status-summary-card"><span>Port 80</span><strong id="ap-health-port">...</strong></div>
+            <div class="status-summary-card"><span>DNS captive</span><strong id="ap-health-captive">...</strong></div>
+          </div>
+          <div class="recovery-actions">
+            <button id="ap-health-refresh" class="button secondary" type="button">Vérifier le secours AP</button>
+            <span class="muted">Lecture seule : ne démarre pas l’AP.</span>
+          </div>
+          <details class="return-profile-details-panel">
+            <summary>Détails AP recovery</summary>
+            <dl class="detail-grid">
+              <dt>SSID attendu</dt><dd><span id="ap-health-ssid">...</span></dd>
+              <dt>URL manuelle</dt><dd><span id="ap-health-url">http://192.168.50.1</span></dd>
+              <dt>SSH</dt><dd><span id="ap-health-ssh">ssh warzy@192.168.50.1</span></dd>
+              <dt>Dernier log</dt><dd><span id="ap-health-log">...</span></dd>
+            </dl>
+          </details>
+        </article>
         <details class="advanced-details" id="recovery-advanced">
           <summary>Parametres avances</summary>
           <div class="advanced-details-body recovery-settings" aria-label="Configuration recovery">
@@ -2721,6 +2751,10 @@
       return data.runtime_config || {};
     }
 
+    function apRecoveryHealthState() {
+      return recoveryState().ap_recovery_health || data.ap_recovery_health || systemState().ap_recovery_health || {};
+    }
+
     function knownWifiConnections() {
       return Array.isArray(data.known_wifi_connections) ? data.known_wifi_connections : [];
     }
@@ -2996,6 +3030,9 @@
     }
 
     function apRecoveryHealthLabel() {
+      const health = apRecoveryHealthState();
+      if (health.summary === 'active-ok') return 'AP actif';
+      if (health.summary === 'ready') return 'AP prêt';
       if (systemState().recovery_active || recoveryState().active) {
         const uiState = serviceLabel(recoveryState().ui || systemState().ui_state);
         if (uiState === 'actif' || uiState === 'lecture seule') return 'AP actif';
@@ -3003,6 +3040,36 @@
       }
       if (systemState().actions?.start_ap_mode) return 'AP pret';
       return 'AP inactif';
+    }
+
+    function okKo(value) {
+      return value ? 'OK' : 'KO';
+    }
+
+    function renderApRecoveryHealth() {
+      const health = apRecoveryHealthState();
+      const checks = health.checks || {};
+      const expected = health.expected || {};
+      const paths = health.paths || {};
+      const summary = health.summary || 'not-ready';
+      const active = summary === 'active-ok';
+      const ready = summary === 'ready' || active;
+      setText('ap-health-summary', active
+        ? 'AP recovery actif et UI joignable selon les signaux locaux.'
+        : ready
+          ? 'Les briques du secours AP sont prêtes. Ce test ne démarre pas l’AP.'
+          : 'Secours AP incomplet : vérifie les détails avant d’activer un watchdog automatique.');
+      setText('ap-health-badge', active ? 'AP actif' : (ready ? 'Prêt' : 'À vérifier'));
+      setText('ap-health-configured', okKo(checks.ap_configured));
+      setText('ap-health-profile', checks.ap_profile_present ? 'présent' : 'absent');
+      setText('ap-health-ip', checks.wlan0_ip_ap_present ? '192.168.50.1 OK' : 'inactive');
+      setText('ap-health-ui', checks.ui_recovery_process_or_port ? 'OK' : 'KO');
+      setText('ap-health-port', checks.port_80_listening ? 'OK' : 'KO');
+      setText('ap-health-captive', checks.captive_conf_expected ? 'OK' : (checks.captive_conf_exists ? 'à vérifier' : 'absent'));
+      setText('ap-health-ssid', expected.ssid || recoveryState().ssid || 'Wifi-Kit-node');
+      setText('ap-health-url', health.manual_fallback_url || 'http://192.168.50.1');
+      setText('ap-health-ssh', health.ssh_fallback || 'ssh warzy@192.168.50.1');
+      setText('ap-health-log', paths.start_ap_log || 'non disponible');
     }
 
     function runtimeSyncLabel() {
@@ -3188,6 +3255,7 @@
       setText('recovery-watchdog-decision', summary.decision);
       setText('recovery-watchdog-delay', summary.delay);
       setText('recovery-watchdog-network', summary.network);
+      renderApRecoveryHealth();
       const startApButton = document.getElementById('start-ap-mode-button');
       const returnButton = document.getElementById('return-default-network-button');
       if (startApButton) {
@@ -3818,6 +3886,22 @@
 
     async function rollbackStaticIp() {
       await postNodeIpAction('/api/node-ip/rollback', { user_confirmed: true });
+    }
+
+    async function refreshApRecoveryHealth() {
+      if (window.location.protocol === 'file:') return;
+      showRuntimeConfigResult('Vérification AP recovery en cours...', 'start-ap-mode-result');
+      try {
+        const response = await fetch('/api/ap-recovery-health', { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        data.recovery = data.recovery || {};
+        data.recovery.ap_recovery_health = payload;
+        renderApRecoveryHealth();
+        showRuntimeConfigResult('Vérification AP recovery terminée. Aucune action réseau lancée.', 'start-ap-mode-result');
+      } catch (error) {
+        showRuntimeConfigResult(`Vérification AP recovery impossible: ${error.message}`, 'start-ap-mode-result');
+      }
     }
 
     async function saveRuntimeWatchdogMode() {
@@ -4889,6 +4973,7 @@
     document.getElementById('config-test-static-ip')?.addEventListener('click', testStaticIp);
     document.getElementById('config-confirm-static-ip')?.addEventListener('click', confirmStaticIp);
     document.getElementById('config-rollback-static-ip')?.addEventListener('click', rollbackStaticIp);
+    document.getElementById('ap-health-refresh')?.addEventListener('click', refreshApRecoveryHealth);
     document.getElementById('recovery-return-dropdown-button').addEventListener('click', (event) => {
       event.stopPropagation();
       const dropdown = document.getElementById('recovery-return-dropdown');
