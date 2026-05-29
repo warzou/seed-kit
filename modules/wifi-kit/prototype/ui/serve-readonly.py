@@ -15,7 +15,7 @@ import sys
 import threading
 import time
 from datetime import datetime, timezone
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -4462,7 +4462,8 @@ def main() -> None:
         raise SystemExit(0)
     hostname = socket.gethostname() or "node"
     config = read_runtime_config()
-    server = ThreadingHTTPServer((args.host, args.port), WifiKitReadOnlyHandler)
+    server_class = HTTPServer if args.recovery_mode else ThreadingHTTPServer
+    server = server_class((args.host, args.port), WifiKitReadOnlyHandler)
     server.wifi_kit_recovery = {
         "active": bool(args.recovery_mode),
         "ssid": args.recovery_ssid or config["ap_ssid"] or f"Wifi-Kit-{hostname}",
