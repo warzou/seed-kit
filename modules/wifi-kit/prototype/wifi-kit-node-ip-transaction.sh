@@ -8,6 +8,7 @@ iface="${WIFI_KIT_NODE_IP_IFACE:-wlan0}"
 state_file="${WIFI_KIT_NODE_IP_STATE:-/tmp/wifi-kit-node-ip-test.state}"
 log_file="${WIFI_KIT_NODE_IP_LOG:-/tmp/wifi-kit-actions/node-ip-transaction-$(id -u).log}"
 validation_seconds="${WIFI_KIT_NODE_IP_VALIDATION_SECONDS:-120}"
+transaction_id="${WIFI_KIT_NODE_IP_TRANSACTION_ID:-}"
 
 timestamp() {
   date -u '+%Y-%m-%dT%H:%M:%SZ'
@@ -103,9 +104,11 @@ validate_config() {
 }
 
 write_state() {
+  transaction_id="$(date -u '+%Y%m%d%H%M%S')-$$"
   mkdir -p "$(dirname -- "$state_file")" 2>/dev/null || true
   {
     kv timestamp "$(timestamp)"
+    kv transaction_id "$transaction_id"
     kv state testing
     kv iface "$iface"
     kv connection "$connection"
@@ -127,6 +130,19 @@ state_value() {
   key=$1
   [ -r "$state_file" ] || return 0
   sed -n "s/^$key=//p" "$state_file" 2>/dev/null | sed -n '1p'
+}
+
+cancel_rollback_guard() {
+  guard_unit=$(state_value guard_unit)
+  guard_pid=$(state_value guard_pid)
+  if [ -n "$guard_unit" ]; then
+    systemctl stop "$guard_unit.timer" "$guard_unit.service" >/dev/null 2>&1 || true
+    log_event "static-ip-rollback-guard-cancelled" "type=systemd-run unit=$guard_unit"
+  fi
+  if [ -n "$guard_pid" ]; then
+    kill "$guard_pid" >/dev/null 2>&1 || true
+    log_event "static-ip-rollback-guard-cancelled" "type=background-sleep pid=$guard_pid"
+  fi
 }
 
 restore_previous_profile() {
@@ -180,6 +196,7 @@ start_rollback_guard() {
       --setenv=WIFI_KIT_NODE_IP_STATE="$state_file" \
       --setenv=WIFI_KIT_RUNTIME_CONFIG="$runtime_config" \
       --setenv=WIFI_KIT_NODE_IP_LOG="$log_file" \
+      --setenv=WIFI_KIT_NODE_IP_TRANSACTION_ID="$transaction_id" \
       /bin/sh "$script_dir/wifi-kit-node-ip-transaction.sh" rollback >/dev/null 2>&1; then
       printf 'guard_unit=%s\n' "$unit" >> "$state_file" 2>/dev/null || true
       log_event "static-ip-rollback-guard-started" "type=systemd-run unit=$unit validation_seconds=$validation_seconds"
@@ -188,7 +205,7 @@ start_rollback_guard() {
   fi
   (
     sleep "$validation_seconds"
-    WIFI_KIT_NODE_IP_STATE="$state_file" WIFI_KIT_RUNTIME_CONFIG="$runtime_config" WIFI_KIT_NODE_IP_LOG="$log_file" sh "$script_dir/wifi-kit-node-ip-transaction.sh" rollback >> "$log_file" 2>&1
+    WIFI_KIT_NODE_IP_STATE="$state_file" WIFI_KIT_RUNTIME_CONFIG="$runtime_config" WIFI_KIT_NODE_IP_LOG="$log_file" WIFI_KIT_NODE_IP_TRANSACTION_ID="$transaction_id" sh "$script_dir/wifi-kit-node-ip-transaction.sh" rollback >> "$log_file" 2>&1
   ) >/dev/null 2>&1 &
   guard_pid=$!
   printf 'guard_pid=%s\n' "$guard_pid" >> "$state_file" 2>/dev/null || true
@@ -230,6 +247,7 @@ cmd_confirm() {
   nmcli=$(find_tool nmcli 2>/dev/null || true)
   [ -n "$nmcli" ] || { kv status failure; kv reason nmcli-missing; exit 1; }
   persist_static_profile "$nmcli" >> "$log_file" 2>&1 || { kv status failure; kv reason persist-static-failed; exit 1; }
+  cancel_rollback_guard
   sed 's/^confirmed=.*/confirmed=yes/' "$state_file" > "$state_file.$$"
   mv "$state_file.$$" "$state_file"
   log_event "static-ip-confirmed" "connection=$(state_value connection) static_ip=$(state_value static_ip)"
@@ -241,6 +259,13 @@ cmd_confirm() {
 
 cmd_rollback() {
   [ -r "$state_file" ] || { kv status skipped; kv reason no-pending-test; exit 0; }
+  state_transaction_id=$(state_value transaction_id)
+  if [ -n "$transaction_id" ] && [ -n "$state_transaction_id" ] && [ "$transaction_id" != "$state_transaction_id" ]; then
+    log_event "static-ip-rollback-skipped" "reason=stale-guard transaction_id=$transaction_id state_transaction_id=$state_transaction_id"
+    kv status skipped
+    kv reason stale-guard
+    exit 0
+  fi
   if [ "$(state_value confirmed)" = "yes" ]; then
     log_event "static-ip-rollback-skipped" "reason=confirmed"
     kv status skipped
@@ -249,6 +274,7 @@ cmd_rollback() {
   fi
   nmcli=$(find_tool nmcli 2>/dev/null || true)
   [ -n "$nmcli" ] || { kv status failure; kv reason nmcli-missing; start_ap_fallback; exit 1; }
+  cancel_rollback_guard
   log_event "static-ip-rollback-started" "connection=$(state_value connection)"
   if rollback_active_device "$nmcli" >> "$log_file" 2>&1; then
     log_event "static-ip-rollback-success" "connection=$(state_value connection)"
