@@ -575,6 +575,7 @@ config_values() {
   internet_required=$(normalize_bool "$internet_required_raw")
   internet_probe=$(runtime_value runtime_recovery_internet_probe "${WIFI_KIT_RUNTIME_WATCHDOG_INTERNET_PROBE:-1.1.1.1}")
   internet_ping_status=$(ping_internet_probe)
+  minimal_ap_safety_seconds="${WIFI_KIT_RUNTIME_WATCHDOG_MINIMAL_AP_SAFETY_SECONDS:-300}"
   min_unavailable_seconds="${WIFI_KIT_RUNTIME_WATCHDOG_MIN_UNAVAILABLE_SECONDS:-0}"
   window_minutes=$(runtime_value runtime_recovery_instability_window_minutes 10)
   threshold=$(runtime_value runtime_recovery_instability_threshold 3)
@@ -641,6 +642,9 @@ config_values() {
   case "$min_unavailable_seconds" in
     ''|*[!0-9]*) min_unavailable_seconds=0 ;;
   esac
+  case "$minimal_ap_safety_seconds" in
+    ''|*[!0-9]*) minimal_ap_safety_seconds=300 ;;
+  esac
   if [ -z "$internet_probe" ]; then
     status="refused"
     reason="${reason:-runtime-recovery-internet-probe-invalid}"
@@ -680,6 +684,9 @@ config_values() {
     runtime_reason="mismatch-last-good"
   fi
   classify_health
+  if minimal_ap_safety_active && [ "$effective_grace_seconds" -lt "$minimal_ap_safety_seconds" ]; then
+    effective_grace_seconds=$minimal_ap_safety_seconds
+  fi
   classify_recovery_decision
 }
 
@@ -707,6 +714,20 @@ current_wifi_usable() {
   return 0
 }
 
+minimal_ap_safety_active() {
+  [ -n "$current_connection" ] || return 1
+  [ -n "$current_ssid" ] || return 1
+  case "$current_ssid" in
+    Wifi-Kit-*|wifi-kit-*) return 1 ;;
+  esac
+  [ -n "$iface_ipv4" ] || return 1
+  [ "$default_route_present" = "yes" ] || return 1
+  [ -n "$gateway" ] || return 1
+  [ "$gateway_ping_status" = "failed" ] || return 1
+  [ "$internet_ping_status" = "failed" ] || return 1
+  return 0
+}
+
 classify_health() {
   if ap_recovery_active; then
     health_status="healthy"
@@ -716,6 +737,11 @@ classify_health() {
   if [ "$enabled" = "true" ] && [ "$runtime_config_readable" != "yes" ]; then
     health_status="unhealthy"
     health_reason="config-unreadable"
+    return 0
+  fi
+  if minimal_ap_safety_active; then
+    health_status="unhealthy"
+    health_reason="gateway-and-internet-unreachable"
     return 0
   fi
   if [ "$enabled" = "true" ] && [ "$last_good_configured" != "yes" ]; then
@@ -766,7 +792,7 @@ classify_recovery_decision() {
   elif [ "$health_status" != "healthy" ]; then
     recovery_decision="start-ap-recovery-after-unavailable-grace"
   fi
-  if [ "$debug_passive" = "true" ] && [ "$recovery_decision" != "none" ] && [ "$recovery_decision" != "ap-recovery-active" ]; then
+  if [ "$debug_passive" = "true" ] && [ "$health_reason" != "gateway-and-internet-unreachable" ] && [ "$recovery_decision" != "none" ] && [ "$recovery_decision" != "ap-recovery-active" ]; then
     recovery_decision="debug-passive-suppressed-$recovery_decision"
   fi
 }
@@ -819,10 +845,13 @@ start_ap_recovery() {
     write_state "ap-recovery-active" "$trigger" "$last_good_ssid"
     return 0
   fi
-  if [ "$debug_passive" = "true" ]; then
+  if [ "$debug_passive" = "true" ] && [ "$trigger" != "gateway-and-internet-unreachable" ]; then
     log_event "debug-passive-suppressed-action" "would_start_ap_recovery=yes trigger=$trigger health_reason=$health_reason runtime_reason=$runtime_reason current_connection=${current_connection:-unknown} current_ssid=${current_ssid:-unknown} last_good_connection=${last_good_connection:-unknown} last_good_ssid=${last_good_ssid:-unknown} unstable_count=${unstable_count:-0} threshold=$threshold"
     write_state "debug-passive-suppressed-action" "$trigger" "$last_good_ssid"
     return 0
+  fi
+  if [ "$debug_passive" = "true" ]; then
+    log_event "minimal-ap-safety-bypass-debug-passive" "trigger=$trigger gateway=$gateway gateway_ping=$gateway_ping_status internet_ping=$internet_ping_status elapsed_grace=$effective_grace_seconds"
   fi
   log_event "recovery-enter" "trigger=$trigger last_good_ssid=${last_good_ssid:-unknown} health_reason=$health_reason runtime_reason=$runtime_reason grace_seconds=$effective_grace_seconds"
   log_event "starting-ap-recovery" "trigger=$trigger action=start-ap-recovery last_good_ssid=${last_good_ssid:-unknown} health_reason=$health_reason unstable_count=${unstable_count:-0} threshold=$threshold"
@@ -853,6 +882,12 @@ cmd_audit() {
   kv "runtime_recovery_debug_passive_raw" "$debug_passive_raw"
   kv "runtime_recovery_grace_seconds" "$grace_seconds"
   kv "runtime_recovery_effective_grace_seconds" "$effective_grace_seconds"
+  kv "runtime_recovery_minimal_ap_safety_seconds" "$minimal_ap_safety_seconds"
+  if minimal_ap_safety_active; then
+    kv "runtime_recovery_minimal_ap_safety_active" "yes"
+  else
+    kv "runtime_recovery_minimal_ap_safety_active" "no"
+  fi
   kv "runtime_recovery_min_unavailable_seconds" "$min_unavailable_seconds"
   kv "runtime_recovery_internet_required" "$internet_required"
   kv "runtime_recovery_internet_required_raw" "$internet_required_raw"
@@ -914,9 +949,9 @@ cmd_plan() {
   kv "02c.internet" "if runtime_recovery_internet_required=true, internet probe failure can trigger AP after grace"
   kv "02d.bootstrap" "if last_good is absent and current Wi-Fi is healthy, write the initial baseline to runtime.conf only"
   kv "03.cancel" "if last_good returns during grace, log recovery-cancelled link-restored"
-  kv "04.recover" "if still disconnected from last_good, call wrapper start-ap-mode"
+  kv "04.recover" "if still disconnected from last_good, or gateway+internet stay unreachable past safety grace, call wrapper start-ap-mode"
   kv "05.ap" "AP return-check loop handles periodic last_good retry from AP recovery"
-  kv "debug_passive" "if runtime_recovery_debug_passive=true, log the decision but suppress start-ap-mode"
+  kv "debug_passive" "if runtime_recovery_debug_passive=true, suppress start-ap-mode except the prolonged gateway+internet safety net"
   kv "non_actions" "no reboot, no profile deletion, no AP+STA permanent mode, no return_connection runtime retry"
 }
 
