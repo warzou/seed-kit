@@ -4099,6 +4099,110 @@ def render_index(recovery: dict | None = None) -> str:
     return f"{before}{start}\n{data}\n  {end}{after}"
 
 
+def render_recovery_lite(recovery: dict | None = None) -> str:
+    recovery = recovery or {}
+    recovery_ip = recovery.get("ip") or "192.168.50.1"
+    recovery_ssid = recovery.get("ssid") or "Wifi-Kit"
+    recovery_url = f"http://{recovery_ip}"
+    full_ui_url = f"http://{recovery_ip}:{NORMAL_UI_PORT}"
+    return f"""<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wifi-Kit Recovery</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f7fb;
+      color: #142033;
+    }}
+    body {{
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 22px;
+      box-sizing: border-box;
+    }}
+    main {{
+      width: min(100%, 430px);
+      display: grid;
+      gap: 16px;
+    }}
+    h1 {{
+      margin: 0;
+      font-size: 2rem;
+      line-height: 1.05;
+      letter-spacing: 0;
+    }}
+    p {{
+      margin: 0;
+      color: #4d5b70;
+      line-height: 1.45;
+    }}
+    .panel {{
+      display: grid;
+      gap: 10px;
+      border: 1px solid #d8e0ec;
+      border-radius: 8px;
+      background: #fff;
+      padding: 14px;
+    }}
+    .label {{
+      color: #65758d;
+      font-size: .82rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }}
+    code, a {{
+      color: #1769e0;
+      overflow-wrap: anywhere;
+    }}
+    a.button {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 46px;
+      border-radius: 8px;
+      background: #1769e0;
+      color: #fff;
+      padding: 0 16px;
+      font-weight: 800;
+      text-decoration: none;
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Wifi-Kit Recovery</h1>
+    <p>Le node est en Wi-Fi de secours. Cette page volontairement légère reste accessible même si le portail captif est instable.</p>
+    <section class="panel">
+      <div>
+        <div class="label">SSID</div>
+        <div>{recovery_ssid}</div>
+      </div>
+      <div>
+        <div class="label">URL directe</div>
+        <a href="{recovery_url}">{recovery_url}</a>
+      </div>
+      <div>
+        <div class="label">SSH</div>
+        <code>ssh warzy@{recovery_ip}</code>
+      </div>
+    </section>
+    <section class="panel">
+      <p>L'interface complete peut etre disponible sur le port normal si le service runtime est actif.</p>
+      <a class="button" href="{full_ui_url}">Ouvrir l'interface complete</a>
+      <p><a href="{full_ui_url}">{full_ui_url}</a></p>
+    </section>
+  </main>
+</body>
+</html>
+"""
+
+
 def render_portal(recovery: dict | None = None) -> str:
     recovery = recovery or {}
     recovery_ip = recovery.get("ip") or "192.168.50.1"
@@ -4349,6 +4453,9 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
             return
 
         if path in ("/", "/index.html", "/recovery"):
+            if self.recovery.get("active"):
+                self.send_bytes(200, "text/html; charset=utf-8", render_recovery_lite(self.recovery).encode("utf-8"))
+                return
             self.send_bytes(200, "text/html; charset=utf-8", render_index(self.recovery).encode("utf-8"))
             return
 
