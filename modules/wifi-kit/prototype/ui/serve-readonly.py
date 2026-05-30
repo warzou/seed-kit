@@ -4445,10 +4445,16 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         log_route("get", raw_path, path)
 
         if path in CAPTIVE_PATHS:
+            if self.recovery.get("active"):
+                self.send_bytes(200, "text/html; charset=utf-8", render_recovery_lite(self.recovery).encode("utf-8"))
+                return
             self.send_captive_redirect(raw_path, path)
             return
 
         if path == "/portal":
+            if self.recovery.get("active"):
+                self.send_bytes(200, "text/html; charset=utf-8", render_recovery_lite(self.recovery).encode("utf-8"))
+                return
             self.send_bytes(200, "text/html; charset=utf-8", render_portal(self.recovery).encode("utf-8"))
             return
 
