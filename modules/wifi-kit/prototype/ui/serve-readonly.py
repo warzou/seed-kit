@@ -4109,6 +4109,15 @@ def render_recovery_lite(recovery: dict | None = None) -> str:
     recovery_ip = recovery.get("ip") or "192.168.50.1"
     recovery_ssid = recovery.get("ssid") or "Wifi-Kit"
     recovery_url = f"http://{recovery_ip}"
+    full_ui_port = 54321
+    full_ui_url = f"http://{recovery_ip}:{full_ui_port}"
+    full_ui_panel = ""
+    if tcp_port_open("127.0.0.1", full_ui_port, timeout=0.25):
+        full_ui_panel = f"""
+    <section class="panel">
+      <p>L'interface complète est disponible sur le port normal.</p>
+      <a class="button" href="{full_ui_url}">Ouvrir l'interface complète</a>
+    </section>"""
     return f"""<!doctype html>
 <html lang="fr">
 <head>
@@ -4164,6 +4173,18 @@ def render_recovery_lite(recovery: dict | None = None) -> str:
       color: #1769e0;
       overflow-wrap: anywhere;
     }}
+    a.button {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 46px;
+      border-radius: 8px;
+      background: #1769e0;
+      color: #fff;
+      padding: 0 16px;
+      font-weight: 800;
+      text-decoration: none;
+    }}
   </style>
 </head>
 <body>
@@ -4184,6 +4205,7 @@ def render_recovery_lite(recovery: dict | None = None) -> str:
         <code>ssh warzy@{recovery_ip}</code>
       </div>
     </section>
+{full_ui_panel}
   </main>
 </body>
 </html>
