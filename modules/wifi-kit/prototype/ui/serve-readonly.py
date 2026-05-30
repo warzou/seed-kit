@@ -251,6 +251,11 @@ def log_route(event: str, raw_path: str, path: str) -> None:
     )
 
 
+def log_recovery_trace(event: str, **fields: object) -> None:
+    details = " ".join(f"{key}={json.dumps(value)}" for key, value in fields.items())
+    print(f"wifi-kit-recovery-trace event={event} monotonic={time.monotonic():.6f} {details}".rstrip(), flush=True)
+
+
 def run_json_command(args: list[str]) -> dict:
     if not WIFI_KIT_SH.exists():
         return {
@@ -4437,6 +4442,8 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         self.do_POST()
 
     def do_GET(self) -> None:
+        if self.recovery.get("active"):
+            log_recovery_trace("recovery-enter", raw_path=self.path)
         record_ui_client(self.client_address[0] if self.client_address else "")
         parsed = urlparse(self.path)
         raw_path = parsed.path
@@ -4446,21 +4453,36 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
 
         if path in CAPTIVE_PATHS:
             if self.recovery.get("active"):
-                self.send_bytes(200, "text/html; charset=utf-8", render_recovery_lite(self.recovery).encode("utf-8"))
+                log_recovery_trace("recovery-before-render", route="captive", path=path)
+                body = render_recovery_lite(self.recovery).encode("utf-8")
+                log_recovery_trace("recovery-after-render", route="captive", path=path, bytes=len(body))
+                log_recovery_trace("recovery-before-send", route="captive", path=path, bytes=len(body))
+                self.send_bytes(200, "text/html; charset=utf-8", body)
+                log_recovery_trace("recovery-after-send", route="captive", path=path, bytes=len(body))
                 return
             self.send_captive_redirect(raw_path, path)
             return
 
         if path == "/portal":
             if self.recovery.get("active"):
-                self.send_bytes(200, "text/html; charset=utf-8", render_recovery_lite(self.recovery).encode("utf-8"))
+                log_recovery_trace("recovery-before-render", route="portal", path=path)
+                body = render_recovery_lite(self.recovery).encode("utf-8")
+                log_recovery_trace("recovery-after-render", route="portal", path=path, bytes=len(body))
+                log_recovery_trace("recovery-before-send", route="portal", path=path, bytes=len(body))
+                self.send_bytes(200, "text/html; charset=utf-8", body)
+                log_recovery_trace("recovery-after-send", route="portal", path=path, bytes=len(body))
                 return
             self.send_bytes(200, "text/html; charset=utf-8", render_portal(self.recovery).encode("utf-8"))
             return
 
         if path in ("/", "/index.html", "/recovery"):
             if self.recovery.get("active"):
-                self.send_bytes(200, "text/html; charset=utf-8", render_recovery_lite(self.recovery).encode("utf-8"))
+                log_recovery_trace("recovery-before-render", route="recovery", path=path)
+                body = render_recovery_lite(self.recovery).encode("utf-8")
+                log_recovery_trace("recovery-after-render", route="recovery", path=path, bytes=len(body))
+                log_recovery_trace("recovery-before-send", route="recovery", path=path, bytes=len(body))
+                self.send_bytes(200, "text/html; charset=utf-8", body)
+                log_recovery_trace("recovery-after-send", route="recovery", path=path, bytes=len(body))
                 return
             self.send_bytes(200, "text/html; charset=utf-8", render_index(self.recovery).encode("utf-8"))
             return
