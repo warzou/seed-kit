@@ -2921,6 +2921,16 @@ def ap_recovery_health_status() -> dict[str, object]:
         wlan0_ip_ap = ap_cidr in addr_output
 
     status_live = nm_hotspot_recovery_status()
+    radio_status = {
+        "ap_band_configured": status_values.get("radio_status_ap_band_configured") or status_values.get("radio_after_start_ap_band_configured") or "bg",
+        "ap_channel_configured": status_values.get("radio_status_ap_channel_configured") or status_values.get("radio_after_start_ap_channel_configured") or "6",
+        "nm_profile_band": status_values.get("radio_status_nm_profile_band") or "",
+        "nm_profile_channel": status_values.get("radio_status_nm_profile_channel") or "",
+        "iw_type": status_values.get("radio_status_iw_type") or "",
+        "iw_channel": status_values.get("radio_status_iw_channel") or "",
+        "iw_frequency_mhz": status_values.get("radio_status_iw_frequency_mhz") or "",
+        "iw_width": status_values.get("radio_status_iw_width") or "",
+    }
     ui_script_path = Path(os.environ.get("WIFI_KIT_NM_AP_UI_SCRIPT", str(INSTALLED_APP_DIR / "ui" / "serve-readonly.py")))
     captive_path = Path(str(captive_values.get("candidate_conf_path") or "/etc/NetworkManager/dnsmasq-shared.d/wifi-kit-nm-hotspot-captive.conf"))
     ap_configured = bool(helper_path.exists() and nmcli_bin and config.get("ap_password"))
@@ -2940,7 +2950,10 @@ def ap_recovery_health_status() -> dict[str, object]:
             "ip": ap_cidr,
             "ui_recovery_url": "http://192.168.50.1/recovery",
             "normal_ui_port": 54321,
+            "ap_band_configured": radio_status["ap_band_configured"],
+            "ap_channel_configured": radio_status["ap_channel_configured"],
         },
+        "radio": radio_status,
         "checks": {
             "helper_present": helper_path.exists(),
             "nmcli_present": bool(nmcli_bin),

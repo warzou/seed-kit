@@ -359,6 +359,40 @@ nm_debug_snapshot() {
   kv "nm_${label}_active_profile" "${active_line:-missing}"
 }
 
+emit_radio_status() {
+  prefix=$1
+  kv "${prefix}_ap_band_configured" "$ap_band"
+  kv "${prefix}_ap_channel_configured" "$ap_channel"
+  nmcli_bin=$(nmcli_path)
+  if [ -n "$nmcli_bin" ] && connection_exists "$ap_profile"; then
+    profile_radio=$("$nmcli_bin" -t --escape no -f 802-11-wireless.band,802-11-wireless.channel connection show "$ap_profile" 2>/dev/null || true)
+    profile_band=$(printf '%s\n' "$profile_radio" | awk -F: '$1 == "802-11-wireless.band" { print $2; exit }')
+    profile_channel=$(printf '%s\n' "$profile_radio" | awk -F: '$1 == "802-11-wireless.channel" { print $2; exit }')
+    kv "${prefix}_nm_profile_band" "${profile_band:-missing}"
+    kv "${prefix}_nm_profile_channel" "${profile_channel:-missing}"
+  else
+    kv "${prefix}_nm_profile_band" "missing"
+    kv "${prefix}_nm_profile_channel" "missing"
+  fi
+  iw_bin=$(iw_path)
+  if [ -n "$iw_bin" ]; then
+    iw_info=$("$iw_bin" dev "$iface" info 2>/dev/null || true)
+    iw_type=$(printf '%s\n' "$iw_info" | awk '$1 == "type" { print $2; exit }')
+    iw_channel=$(printf '%s\n' "$iw_info" | awk '$1 == "channel" { print $2; exit }')
+    iw_frequency=$(printf '%s\n' "$iw_info" | awk '$1 == "channel" { gsub(/[^0-9]/, "", $3); print $3; exit }')
+    iw_width=$(printf '%s\n' "$iw_info" | sed -n 's/.*width:[[:space:]]*//p' | sed -n '1p')
+    kv "${prefix}_iw_type" "${iw_type:-missing}"
+    kv "${prefix}_iw_channel" "${iw_channel:-missing}"
+    kv "${prefix}_iw_frequency_mhz" "${iw_frequency:-missing}"
+    kv "${prefix}_iw_width" "${iw_width:-missing}"
+  else
+    kv "${prefix}_iw_type" "iw-missing"
+    kv "${prefix}_iw_channel" "iw-missing"
+    kv "${prefix}_iw_frequency_mhz" "iw-missing"
+    kv "${prefix}_iw_width" "iw-missing"
+  fi
+}
+
 port_is_listening() {
   ss_bin=$(ss_path)
   [ -n "$ss_bin" ] || return 1
@@ -824,6 +858,7 @@ cmd_start_hotspot() {
     set -e
     kv "nmcli_connection_up_exit_code" "$nmcli_up_rc"
     nm_debug_snapshot "after_start"
+    emit_radio_status "radio_after_start"
     if [ "$nmcli_up_rc" -ne 0 ]; then
       kv "result" "hotspot-start-failed"
       exit "$nmcli_up_rc"
@@ -940,6 +975,7 @@ cmd_status() {
   if ui_http_healthy; then kv "ui_http_healthy" "true"; else kv "ui_http_healthy" "false"; fi
   if ui_recovery_healthy; then kv "ui_recovery_healthy" "true"; else kv "ui_recovery_healthy" "false"; fi
   kv "ui_url" "http://$ui_host:$ui_port"
+  emit_radio_status "radio_status"
   kv "ui_pidfile" "$ui_pidfile"
   kv "ui_log" "$ui_log"
   kv "last_good_ssid" "${last_good_configured_ssid:-missing}"
