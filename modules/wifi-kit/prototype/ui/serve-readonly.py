@@ -183,6 +183,11 @@ CAPTIVE_PATHS = {
     "/connecttest.txt",
     "/ncsi.txt",
 }
+WINDOWS_CAPTIVE_PATHS = {
+    "/connecttest.txt",
+    "/ncsi.txt",
+    "/redirect",
+}
 
 ACTION_PATHS = {
     "/reconnect-previous": "reconnect-previous",
@@ -4320,6 +4325,19 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         log_route("captive-route-hit", raw_path, f"{path}->{target}")
         self.send_redirect(target)
 
+    def send_recovery_captive_response(self, raw_path: str, path: str) -> None:
+        if path in WINDOWS_CAPTIVE_PATHS:
+            target = f"http://{self.recovery.get('ip') or '192.168.50.1'}/"
+            log_route("captive-windows-redirect", raw_path, f"{path}->{target}")
+            self.send_redirect(target)
+            return
+        log_recovery_trace("recovery-before-render", route="captive", path=path)
+        body = render_recovery_lite(self.recovery).encode("utf-8")
+        log_recovery_trace("recovery-after-render", route="captive", path=path, bytes=len(body))
+        log_recovery_trace("recovery-before-send", route="captive", path=path, bytes=len(body))
+        self.send_bytes(200, "text/html; charset=utf-8", body)
+        log_recovery_trace("recovery-after-send", route="captive", path=path, bytes=len(body))
+
     @property
     def recovery(self) -> dict:
         return getattr(self.server, "wifi_kit_recovery", {})
@@ -4457,12 +4475,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
 
         if path in CAPTIVE_PATHS:
             if self.recovery.get("active"):
-                log_recovery_trace("recovery-before-render", route="captive", path=path)
-                body = render_recovery_lite(self.recovery).encode("utf-8")
-                log_recovery_trace("recovery-after-render", route="captive", path=path, bytes=len(body))
-                log_recovery_trace("recovery-before-send", route="captive", path=path, bytes=len(body))
-                self.send_bytes(200, "text/html; charset=utf-8", body)
-                log_recovery_trace("recovery-after-send", route="captive", path=path, bytes=len(body))
+                self.send_recovery_captive_response(raw_path, path)
                 return
             self.send_captive_redirect(raw_path, path)
             return

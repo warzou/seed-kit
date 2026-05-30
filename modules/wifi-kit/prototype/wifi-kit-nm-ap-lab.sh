@@ -180,6 +180,7 @@ captive_domains() {
     "dns.msftncsi.com" \
     "www.msftncsi.com" \
     "captive.apple.com" \
+    "www.apple.com" \
     "connectivitycheck.gstatic.com" \
     "clients3.google.com"
 }
@@ -196,6 +197,7 @@ print_captive_dnsmasq_config() {
     "address=/dns.msftncsi.com/$ip" \
     "address=/www.msftncsi.com/$ip" \
     "address=/captive.apple.com/$ip" \
+    "address=/www.apple.com/$ip" \
     "address=/connectivitycheck.gstatic.com/$ip" \
     "address=/clients3.google.com/$ip"
 }
