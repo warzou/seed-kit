@@ -4109,7 +4109,6 @@ def render_recovery_lite(recovery: dict | None = None) -> str:
     recovery_ip = recovery.get("ip") or "192.168.50.1"
     recovery_ssid = recovery.get("ssid") or "Wifi-Kit"
     recovery_url = f"http://{recovery_ip}"
-    full_ui_url = f"http://{recovery_ip}:{NORMAL_UI_PORT}"
     return f"""<!doctype html>
 <html lang="fr">
 <head>
@@ -4165,24 +4164,12 @@ def render_recovery_lite(recovery: dict | None = None) -> str:
       color: #1769e0;
       overflow-wrap: anywhere;
     }}
-    a.button {{
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 46px;
-      border-radius: 8px;
-      background: #1769e0;
-      color: #fff;
-      padding: 0 16px;
-      font-weight: 800;
-      text-decoration: none;
-    }}
   </style>
 </head>
 <body>
   <main>
     <h1>Wifi-Kit Recovery</h1>
-    <p>Le node est en Wi-Fi de secours. Cette page volontairement légère reste accessible même si le portail captif est instable.</p>
+    <p>Le node est en Wi-Fi de secours. Si la page captive ne s'ouvre pas, ouvrir manuellement <a href="{recovery_url}">{recovery_url}</a>.</p>
     <section class="panel">
       <div>
         <div class="label">SSID</div>
@@ -4196,11 +4183,6 @@ def render_recovery_lite(recovery: dict | None = None) -> str:
         <div class="label">SSH</div>
         <code>ssh warzy@{recovery_ip}</code>
       </div>
-    </section>
-    <section class="panel">
-      <p>L'interface complete peut etre disponible sur le port normal si le service runtime est actif.</p>
-      <a class="button" href="{full_ui_url}">Ouvrir l'interface complete</a>
-      <p><a href="{full_ui_url}">{full_ui_url}</a></p>
     </section>
   </main>
 </body>
