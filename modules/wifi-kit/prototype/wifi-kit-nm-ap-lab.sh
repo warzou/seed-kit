@@ -506,7 +506,8 @@ print_hotspot_recommendation() {
 create_profile_commands() {
   ssid=$1
   pass_marker=$(effective_ap_password_marker)
-  kv "01_create_ap" "nmcli connection add type wifi ifname $iface con-name $ap_profile autoconnect no ssid $(shell_quote "$ssid")"
+  kv "01_ensure_ap" "create $ap_profile only if missing, then reconcile it explicitly"
+  kv "01a_create_ap_if_missing" "nmcli connection add type wifi ifname $iface con-name $ap_profile autoconnect no ssid $(shell_quote "$ssid")"
   kv "02_mode" "nmcli connection modify $ap_profile 802-11-wireless.mode ap 802-11-wireless.band $ap_band 802-11-wireless.channel $ap_channel"
   kv "03_security" "nmcli connection modify $ap_profile wifi-sec.key-mgmt wpa-psk wifi-sec.psk $pass_marker wifi-sec.proto rsn wifi-sec.pairwise ccmp wifi-sec.group ccmp"
   kv "04_ipv4" "nmcli connection modify $ap_profile ipv4.method shared ipv4.addresses $ap_ip"
@@ -808,11 +809,13 @@ cmd_simulate_test_connection() {
   kv "risk" "on single-radio #channels<=1, target network on another channel may force AP down"
 }
 
-cmd_create_profile() {
+cmd_ensure_profile() {
   ssid=$(effective_ap_ssid)
-  section "nm-ap-lab-create-profile"
+  section "nm-ap-lab-ensure-profile"
   kv "status" "$([ "$apply" = "1" ] && printf applying || printf dry-run)"
   kv "network_writes" "$([ "$apply" = "1" ] && printf true || printf false)"
+  kv "profile_persistent_target" "true"
+  kv "profile_delete_still_legacy" "true"
   create_profile_commands "$ssid"
   if [ "$apply" = "1" ]; then
     nmcli_bin=$(require_apply_tool nmcli)
@@ -822,12 +825,23 @@ cmd_create_profile() {
       kv "reason" "ap-password-missing-in-runtime-config"
       exit 1
     fi
-    "$nmcli_bin" connection add type wifi ifname "$iface" con-name "$ap_profile" autoconnect no ssid "$ssid"
+    if connection_exists "$ap_profile"; then
+      profile_action="reconciled"
+    else
+      "$nmcli_bin" connection add type wifi ifname "$iface" con-name "$ap_profile" autoconnect no ssid "$ssid"
+      profile_action="created"
+    fi
+    "$nmcli_bin" connection modify "$ap_profile" connection.interface-name "$iface" 802-11-wireless.ssid "$ssid"
     "$nmcli_bin" connection modify "$ap_profile" 802-11-wireless.mode ap 802-11-wireless.band "$ap_band" 802-11-wireless.channel "$ap_channel"
     "$nmcli_bin" connection modify "$ap_profile" wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$ap_password" wifi-sec.proto rsn wifi-sec.pairwise ccmp wifi-sec.group ccmp
     "$nmcli_bin" connection modify "$ap_profile" ipv4.method shared ipv4.addresses "$ap_ip" ipv6.method ignore connection.autoconnect no
-    kv "result" "profile-created-or-updated"
+    kv "profile_action" "$profile_action"
+    kv "result" "profile-ensured"
   fi
+}
+
+cmd_create_profile() {
+  cmd_ensure_profile
 }
 
 cmd_start_hotspot() {
@@ -836,15 +850,14 @@ cmd_start_hotspot() {
   kv "status" "$([ "$apply" = "1" ] && printf applying || printf dry-run)"
   kv "network_writes" "$([ "$apply" = "1" ] && printf true || printf false)"
   kv "command" "nmcli connection up $ap_profile ifname $iface"
+  kv "profile_persistent_target" "true"
+  kv "profile_delete_still_legacy" "true"
   kv "captive_dns" "install $(captive_conf_path) before starting hotspot so NM shared dnsmasq can route captive probes"
   kv "follow_up" "start-ui"
   kv "follow_up_command" "$(ui_start_command "$ssid")"
   if [ "$apply" = "1" ]; then
     nmcli_bin=$(require_apply_tool nmcli)
-    if ! connection_exists "$ap_profile"; then
-      kv "profile" "missing-create-before-start"
-      cmd_create_profile
-    fi
+    cmd_ensure_profile
     if install_captive_conf; then
       kv "captive_policy" "enabled-for-this-hotspot-start"
     else
@@ -879,6 +892,8 @@ cmd_stop_hotspot() {
   kv "network_writes" "$([ "$apply" = "1" ] && printf true || printf false)"
   kv "command_01" "nmcli connection down $ap_profile"
   kv "command_02" "nmcli connection delete $ap_profile"
+  kv "profile_persistent_target" "true"
+  kv "profile_delete_still_legacy" "true"
   if [ "$apply" = "1" ]; then
     nmcli_bin=$(require_apply_tool nmcli)
     "$nmcli_bin" connection down "$ap_profile" 2>/dev/null || true
@@ -994,6 +1009,8 @@ cmd_rollback() {
   kv "command_02" "nmcli connection down $ap_profile"
   kv "command_03" "nmcli connection delete $ap_profile"
   kv "return_policy" "cleanup-only; use return-last-good or return-primary to reconnect"
+  kv "profile_persistent_target" "true"
+  kv "profile_delete_still_legacy" "true"
   if [ "$apply" = "1" ]; then
     cmd_stop_ui
     nmcli_bin=$(require_apply_tool nmcli)
@@ -1021,6 +1038,8 @@ cmd_return_target() {
   kv "command_01" "stop-ui"
   kv "command_02" "nmcli connection down $ap_profile"
   kv "command_03" "nmcli connection delete $ap_profile"
+  kv "profile_persistent_target" "true"
+  kv "profile_delete_still_legacy" "true"
   if [ -n "$resolved_connection" ]; then
     kv "command_04_return" "nmcli connection up $resolved_connection ifname $iface"
   else
