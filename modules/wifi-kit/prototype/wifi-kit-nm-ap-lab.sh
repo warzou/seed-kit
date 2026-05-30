@@ -334,6 +334,29 @@ hotspot_is_active() {
     awk -F: -v profile="$ap_profile" -v iface="$iface" '$1 == profile && ($2 == "wifi" || $2 == "802-11-wireless") && $3 == iface { found = 1 } END { exit found ? 0 : 1 }'
 }
 
+nm_debug_snapshot() {
+  label=$1
+  nmcli_bin=$(nmcli_path)
+  if [ -z "$nmcli_bin" ]; then
+    kv "nm_${label}_nmcli" "missing"
+    return 0
+  fi
+  device_line=$("$nmcli_bin" -t --escape no -f DEVICE,TYPE,STATE,CONNECTION device status 2>/dev/null |
+    awk -F: -v iface="$iface" '$1 == iface { print; exit }')
+  kv "nm_${label}_device" "${device_line:-missing}"
+  if connection_exists "$ap_profile"; then
+    kv "nm_${label}_profile_exists" "true"
+    profile_summary=$("$nmcli_bin" -t --escape no -f connection.id,802-11-wireless.ssid,802-11-wireless.mode,ipv4.method,ipv4.addresses connection show "$ap_profile" 2>/dev/null |
+      tr '\n' ',' | sed 's/,$//')
+    kv "nm_${label}_profile_summary" "${profile_summary:-unreadable}"
+  else
+    kv "nm_${label}_profile_exists" "false"
+  fi
+  active_line=$("$nmcli_bin" -t --escape no -f NAME,TYPE,DEVICE connection show --active 2>/dev/null |
+    awk -F: -v profile="$ap_profile" '$1 == profile { print; exit }')
+  kv "nm_${label}_active_profile" "${active_line:-missing}"
+}
+
 port_is_listening() {
   ss_bin=$(ss_path)
   [ -n "$ss_bin" ] || return 1
@@ -792,7 +815,22 @@ cmd_start_hotspot() {
       kv "captive_result" "failed-best-effort"
       kv "captive_policy" "manual-fallback-still-available"
     fi
+    nm_debug_snapshot "before_start"
+    set +e
     "$nmcli_bin" connection up "$ap_profile" ifname "$iface"
+    nmcli_up_rc=$?
+    set -e
+    kv "nmcli_connection_up_exit_code" "$nmcli_up_rc"
+    nm_debug_snapshot "after_start"
+    if [ "$nmcli_up_rc" -ne 0 ]; then
+      kv "result" "hotspot-start-failed"
+      exit "$nmcli_up_rc"
+    fi
+    if hotspot_is_active; then
+      kv "hotspot_active_after_start" "true"
+    else
+      kv "hotspot_active_after_start" "false"
+    fi
     kv "result" "hotspot-start-requested"
     cmd_start_ui
   fi
