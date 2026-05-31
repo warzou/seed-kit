@@ -114,6 +114,10 @@ iw_path() {
   find_tool iw 2>/dev/null || true
 }
 
+ip_path() {
+  find_tool ip 2>/dev/null || true
+}
+
 python_path() {
   find_tool python3 2>/dev/null || find_tool python 2>/dev/null || true
 }
@@ -334,6 +338,77 @@ hotspot_is_active() {
   [ -n "$nmcli_bin" ] || return 1
   "$nmcli_bin" -t --escape no -f NAME,TYPE,DEVICE connection show --active 2>/dev/null |
     awk -F: -v profile="$ap_profile" -v iface="$iface" '$1 == profile && ($2 == "wifi" || $2 == "802-11-wireless") && $3 == iface { found = 1 } END { exit found ? 0 : 1 }'
+}
+
+iw_ap_type() {
+  iw_bin=$(iw_path)
+  [ -n "$iw_bin" ] || return 1
+  "$iw_bin" dev "$iface" info 2>/dev/null | awk '$1 == "type" { print $2; exit }'
+}
+
+ap_ipv4_addr() {
+  ip_bin=$(ip_path)
+  [ -n "$ip_bin" ] || return 1
+  "$ip_bin" -o -4 addr show dev "$iface" 2>/dev/null | awk '{ print $4; exit }'
+}
+
+ap_ip_is_configured() {
+  target=${ap_ip%%/*}
+  [ -n "$target" ] || return 1
+  ap_addr=$(ap_ipv4_addr 2>/dev/null || true)
+  [ "$ap_addr" = "$ap_ip" ] || [ "${ap_addr%%/*}" = "$target" ]
+}
+
+http_local_is_ready() {
+  curl_bin=$(curl_path)
+  if [ -n "$curl_bin" ]; then
+    "$curl_bin" -fsS --max-time 2 "http://$ui_host:$ui_port/" >/dev/null 2>&1 && return 0
+    return 1
+  fi
+  port_is_listening
+}
+
+ap_local_ready_check() {
+  nm_ready=no
+  iw_ready=no
+  ap_ip_ready=no
+  port_ready=no
+  http_ready=no
+  iw_type=$(iw_ap_type 2>/dev/null || true)
+  ap_addr=$(ap_ipv4_addr 2>/dev/null || true)
+
+  if hotspot_is_active; then nm_ready=yes; fi
+  if [ "$iw_type" = "AP" ]; then iw_ready=yes; fi
+  if ap_ip_is_configured; then ap_ip_ready=yes; fi
+  if port_is_listening; then port_ready=yes; fi
+  if http_local_is_ready; then http_ready=yes; fi
+
+  kv "ap-ready-check" "nm-active=$nm_ready"
+  kv "ap-ready-check" "iw-type=${iw_type:-missing}"
+  kv "ap-ready-check" "ap-ip=$ap_ip_ready current=${ap_addr:-missing} expected=$ap_ip"
+  kv "ap-ready-check" "port-80=$port_ready"
+  kv "ap-ready-check" "http-local=$http_ready url=http://$ui_host:$ui_port/"
+
+  [ "$nm_ready" = "yes" ] &&
+    [ "$iw_ready" = "yes" ] &&
+    [ "$ap_ip_ready" = "yes" ] &&
+    [ "$port_ready" = "yes" ] &&
+    [ "$http_ready" = "yes" ]
+}
+
+wait_ap_local_ready() {
+  timeout=${1:-60}
+  elapsed=0
+  while [ "$elapsed" -le "$timeout" ]; do
+    kv "ap-ready-check-elapsed-seconds" "$elapsed"
+    if ap_local_ready_check; then
+      return 0
+    fi
+    [ "$elapsed" -ge "$timeout" ] && break
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+  return 1
 }
 
 nm_debug_snapshot() {
@@ -883,6 +958,12 @@ cmd_start_hotspot() {
     fi
     kv "result" "hotspot-start-requested"
     cmd_start_ui
+    if wait_ap_local_ready 60; then
+      kv "result" "ap-local-ready"
+    else
+      kv "result" "ap-local-not-ready-timeout"
+      exit 1
+    fi
   fi
 }
 
