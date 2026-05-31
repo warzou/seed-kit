@@ -411,6 +411,64 @@ wait_ap_local_ready() {
   return 1
 }
 
+nm_device_status_line() {
+  nmcli_bin=$(nmcli_path)
+  [ -n "$nmcli_bin" ] || return 1
+  LC_ALL=C "$nmcli_bin" -t --escape no -f DEVICE,TYPE,STATE,CONNECTION device status 2>/dev/null |
+    awk -F: -v iface="$iface" '$1 == iface { print; exit }'
+}
+
+sta_ready_after_ap_stop_check() {
+  ap_active=no
+  iw_type=""
+  ap_addr=""
+  nm_line=""
+  nm_type=""
+  nm_state=""
+  nm_connection=""
+  ap_ip_present=no
+
+  if hotspot_is_active; then ap_active=yes; fi
+  iw_type=$(iw_ap_type 2>/dev/null || true)
+  ap_addr=$(ap_ipv4_addr 2>/dev/null || true)
+  nm_line=$(nm_device_status_line 2>/dev/null || true)
+  nm_type=$(printf '%s\n' "$nm_line" | awk -F: '{ print $2 }')
+  nm_state=$(printf '%s\n' "$nm_line" | awk -F: '{ print $3 }')
+  nm_connection=$(printf '%s\n' "$nm_line" | awk -F: '{ print $4 }')
+
+  if [ "$ap_addr" = "$ap_ip" ]; then
+    ap_ip_present=yes
+  fi
+
+  kv "sta-ready-check" "ap-active=$ap_active"
+  kv "sta-ready-check" "iw-type=${iw_type:-missing}"
+  kv "sta-ready-check" "ap-ip-present=$ap_ip_present current=${ap_addr:-none} expected=$ap_ip"
+  kv "sta-ready-check" "nm-type=${nm_type:-missing}"
+  kv "sta-ready-check" "nm-state=${nm_state:-missing}"
+  kv "sta-ready-check" "nm-connection=${nm_connection:-missing}"
+
+  [ "$ap_active" = "no" ] &&
+    [ "$iw_type" != "AP" ] &&
+    [ "$ap_ip_present" = "no" ] &&
+    [ "$nm_type" = "wifi" ] &&
+    [ "$nm_state" = "disconnected" ]
+}
+
+wait_sta_ready_after_ap_stop() {
+  timeout=${1:-30}
+  elapsed=0
+  while [ "$elapsed" -le "$timeout" ]; do
+    kv "sta-ready-check-elapsed-seconds" "$elapsed"
+    if sta_ready_after_ap_stop_check; then
+      return 0
+    fi
+    [ "$elapsed" -ge "$timeout" ] && break
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  return 1
+}
+
 nm_debug_snapshot() {
   label=$1
   nmcli_bin=$(nmcli_path)
@@ -1096,6 +1154,14 @@ cmd_rollback() {
     cmd_stop_ui
     nmcli_bin=$(require_apply_tool nmcli)
     "$nmcli_bin" connection down "$ap_profile" 2>/dev/null || true
+    if wait_sta_ready_after_ap_stop 30; then
+      kv "result" "sta-ready-after-ap-stop"
+    else
+      kv "result" "sta-ready-after-ap-stop-timeout"
+      nm_debug_snapshot "sta_not_ready_after_ap_stop"
+      emit_radio_status "radio_sta_not_ready_after_ap_stop"
+      exit 1
+    fi
     "$nmcli_bin" connection delete "$ap_profile" 2>/dev/null || true
     kv "result" "rollback-cleanup-requested"
   fi
@@ -1118,13 +1184,14 @@ cmd_return_target() {
   kv "resolved_connection" "${resolved_connection:-missing}"
   kv "command_01" "stop-ui"
   kv "command_02" "nmcli connection down $ap_profile"
-  kv "command_03" "nmcli connection delete $ap_profile"
+  kv "command_03" "wait_sta_ready_after_ap_stop"
+  kv "command_04" "nmcli connection delete $ap_profile"
   kv "profile_persistent_target" "true"
   kv "profile_delete_still_legacy" "true"
   if [ -n "$resolved_connection" ]; then
-    kv "command_04_return" "nmcli connection up $resolved_connection ifname $iface"
+    kv "command_05_return" "nmcli connection up $resolved_connection ifname $iface"
   else
-    kv "command_04_return" "refused: target connection unknown"
+    kv "command_05_return" "refused: target connection unknown"
   fi
 
   if [ "$apply" = "1" ]; then
@@ -1136,6 +1203,14 @@ cmd_return_target() {
     cmd_stop_ui
     nmcli_bin=$(require_apply_tool nmcli)
     "$nmcli_bin" connection down "$ap_profile" 2>/dev/null || true
+    if wait_sta_ready_after_ap_stop 30; then
+      kv "result" "sta-ready-after-ap-stop"
+    else
+      kv "result" "sta-ready-after-ap-stop-timeout"
+      nm_debug_snapshot "sta_not_ready_after_ap_stop"
+      emit_radio_status "radio_sta_not_ready_after_ap_stop"
+      exit 1
+    fi
     "$nmcli_bin" connection delete "$ap_profile" 2>/dev/null || true
     "$nmcli_bin" connection up "$resolved_connection" ifname "$iface"
     kv "result" "return-requested"
