@@ -47,6 +47,7 @@ RUNTIME_UI_LEGACY_MARKERS = (
 NORMAL_UI_PORT = 18089  # Prototype/dev local UI default; production/service target is 54321 in contract.
 RECOVERY_UI_PORT = 80
 RECOVERY_AP_TEST_PASSWORD = "12345678"
+RECOVERY_HTTP_REQUEST_TIMEOUT_SECONDS = float(os.environ.get("WIFI_KIT_RECOVERY_HTTP_REQUEST_TIMEOUT_SECONDS", "3"))
 AP_ONLY_NM_STATE = Path("/tmp/wifi-kit-ap-only-nm-state")
 RECOVERY_UI_PID = Path("/tmp/wifi-kit-ui-recovery.pid")
 RECOVERY_HOSTAPD_PID = Path("/tmp/wifi-kit-hostapd-test.pid")
@@ -4308,13 +4309,24 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args: object) -> None:
         return
 
+    def send_headers_only(self, status: int, content_type: str, content_length: int = 0) -> bool:
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(content_length))
+            self.end_headers()
+            return True
+        except (BrokenPipeError, ConnectionResetError) as exc:
+            log_recovery_trace("client-disconnected-during-headers", error=exc.__class__.__name__)
+            return False
+
     def send_bytes(self, status: int, content_type: str, body: bytes) -> None:
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            if self.send_headers_only(status, content_type, len(body)):
+                self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError) as exc:
+            log_recovery_trace("client-disconnected-during-send", error=exc.__class__.__name__)
 
     def send_json(self, payload: dict, status: int = 200) -> None:
         payload = redact_public_payload(payload)
@@ -4326,12 +4338,25 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
 
     def send_redirect(self, location: str = "/recovery") -> None:
         body = b"Wifi-Kit recovery\n"
-        self.send_response(302)
-        self.send_header("Location", location)
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(302)
+            self.send_header("Location", location)
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError) as exc:
+            log_recovery_trace("client-disconnected-during-redirect", error=exc.__class__.__name__)
+
+    def send_redirect_head(self, location: str = "/recovery") -> None:
+        try:
+            self.send_response(302)
+            self.send_header("Location", location)
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        except (BrokenPipeError, ConnectionResetError) as exc:
+            log_recovery_trace("client-disconnected-during-head-redirect", error=exc.__class__.__name__)
 
     def send_captive_redirect(self, raw_path: str, path: str) -> None:
         target = "/portal"
@@ -4476,6 +4501,32 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
     def do_DELETE(self) -> None:
         self.do_POST()
 
+    def do_HEAD(self) -> None:
+        if self.recovery.get("active"):
+            log_recovery_trace("recovery-head-enter", raw_path=self.path)
+        record_ui_client(self.client_address[0] if self.client_address else "")
+        parsed = urlparse(self.path)
+        raw_path = parsed.path
+        path = normalize_request_path(raw_path)
+        log_route("head", raw_path, path)
+
+        if self.recovery.get("active") and path in CAPTIVE_PATHS:
+            if path in WINDOWS_CAPTIVE_PATHS:
+                target = f"http://{self.recovery.get('ip') or '192.168.50.1'}/"
+                log_route("captive-windows-head-redirect", raw_path, f"{path}->{target}")
+                self.send_redirect_head(target)
+                return
+            body_length = len(render_recovery_lite(self.recovery).encode("utf-8"))
+            self.send_headers_only(200, "text/html; charset=utf-8", body_length)
+            return
+
+        if self.recovery.get("active") and path in ("/", "/index.html", "/recovery", "/portal"):
+            body_length = len(render_recovery_lite(self.recovery).encode("utf-8"))
+            self.send_headers_only(200, "text/html; charset=utf-8", body_length)
+            return
+
+        self.send_headers_only(404, "application/json; charset=utf-8", 0)
+
     def do_GET(self) -> None:
         if self.recovery.get("active"):
             log_recovery_trace("recovery-enter", raw_path=self.path)
@@ -4607,6 +4658,15 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         self.send_json({"error": "not-found"}, status=404)
 
 
+class RecoveryHTTPServer(HTTPServer):
+    request_timeout = RECOVERY_HTTP_REQUEST_TIMEOUT_SECONDS
+
+    def get_request(self) -> tuple[socket.socket, tuple[str, int]]:
+        request, client_address = super().get_request()
+        request.settimeout(self.request_timeout)
+        return request, client_address
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="wifi-kit read-only local HTTP prototype")
     parser.add_argument("--host", default="127.0.0.1")
@@ -4627,7 +4687,7 @@ def main() -> None:
         raise SystemExit(0)
     hostname = socket.gethostname() or "node"
     config = read_runtime_config()
-    server_class = HTTPServer if args.recovery_mode else ThreadingHTTPServer
+    server_class = RecoveryHTTPServer if args.recovery_mode else ThreadingHTTPServer
     server = server_class((args.host, args.port), WifiKitReadOnlyHandler)
     server.wifi_kit_recovery = {
         "active": bool(args.recovery_mode),
