@@ -153,6 +153,10 @@ RUNTIME_CONFIG_KEYS = {
     "return_connection",
     "last_good_ssid",
     "last_good_connection",
+    "preferred_ssid",
+    "preferred_connection",
+    "preferred_set_at",
+    "preferred_source",
     "default_ssid",
     "default_connection",
     "ap_ssid",
@@ -910,6 +914,10 @@ def default_runtime_config() -> dict[str, str]:
         "return_connection": DEFAULT_NETWORK_CONNECTION,
         "last_good_ssid": "",
         "last_good_connection": "",
+        "preferred_ssid": "",
+        "preferred_connection": "",
+        "preferred_set_at": "",
+        "preferred_source": "",
         "ap_ssid": f"Wifi-Kit-{hostname}",
         "ap_password": os.environ.get("WIFI_KIT_AP_PSK", RECOVERY_AP_TEST_PASSWORD),
         "return_check_enabled": "false",
@@ -982,6 +990,10 @@ def redact_runtime_config(config: dict[str, str]) -> dict[str, object]:
         "return_connection": config["return_connection"],
         "last_good_ssid": config.get("last_good_ssid", ""),
         "last_good_connection": config.get("last_good_connection", ""),
+        "preferred_ssid": config.get("preferred_ssid", ""),
+        "preferred_connection": config.get("preferred_connection", ""),
+        "preferred_set_at": config.get("preferred_set_at", ""),
+        "preferred_source": config.get("preferred_source", ""),
         "ap_ssid": config["ap_ssid"],
         "ap_password_set": bool(config["ap_password"]),
         "return_check_enabled": config.get("return_check_enabled", "false"),
@@ -1101,6 +1113,10 @@ def write_runtime_config(config: dict[str, str]) -> None:
         f"return_connection={config['return_connection']}",
         f"last_good_ssid={config.get('last_good_ssid', '')}",
         f"last_good_connection={config.get('last_good_connection', '')}",
+        f"preferred_ssid={config.get('preferred_ssid', '')}",
+        f"preferred_connection={config.get('preferred_connection', '')}",
+        f"preferred_set_at={config.get('preferred_set_at', '')}",
+        f"preferred_source={config.get('preferred_source', '')}",
         f"ap_ssid={config['ap_ssid']}",
         f"ap_password={config['ap_password']}",
         f"return_check_enabled={config.get('return_check_enabled', 'false')}",
@@ -1353,6 +1369,47 @@ def update_runtime_config(payload: dict) -> tuple[dict, int]:
         "status": "saved",
         "config": public_runtime_config(),
         "secret_policy": "AP password stored in runtime config with 0600 permissions; client Wi-Fi passwords are not stored",
+    }, 200
+
+
+def update_preferred_network(payload: dict) -> tuple[dict, int]:
+    if payload.get("_error"):
+        return {"status": "failure", "error": payload["_error"]}, 400
+
+    raw_requested_ssid = str(payload.get("ssid", ""))
+    if has_line_break(raw_requested_ssid):
+        return {"status": "failure", "error": "preferred-ssid-invalid"}, 400
+    requested_ssid = safe_label(raw_requested_ssid)
+    if not requested_ssid:
+        return {"status": "failure", "error": "preferred-ssid-required"}, 400
+
+    current_ssid = safe_label(wlan_ssid())
+    current_connection = safe_label(wlan_connection())
+    if current_ssid in {"", "unknown"} or current_connection in {"", "unknown", "--"}:
+        return {"status": "failure", "error": "current-wifi-not-detected"}, 409
+    if current_ssid.lower().startswith("wifi-kit-"):
+        return {"status": "failure", "error": "recovery-ap-cannot-be-preferred"}, 409
+    if requested_ssid and requested_ssid != current_ssid:
+        return {
+            "status": "failure",
+            "error": "preferred-network-must-be-current",
+            "current_ssid": current_ssid,
+        }, 409
+
+    config = read_runtime_config()
+    config["preferred_ssid"] = current_ssid
+    config["preferred_connection"] = current_connection
+    config["preferred_set_at"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    config["preferred_source"] = "user-current-wifi"
+    write_runtime_config(config)
+    return {
+        "status": "saved",
+        "preferred_ssid": current_ssid,
+        "preferred_connection": current_connection,
+        "preferred_set_at": config["preferred_set_at"],
+        "preferred_source": config["preferred_source"],
+        "config": public_runtime_config(),
+        "message": f"Réseau principal souhaité défini : {current_ssid}.",
     }, 200
 
 
@@ -4011,6 +4068,10 @@ def system_info(diagnose: dict, recovery: dict | None = None) -> dict:
         "original_connection": config["original_connection"],
         "return_ssid": config["return_ssid"],
         "return_connection": config["return_connection"],
+        "preferred_ssid": config.get("preferred_ssid", ""),
+        "preferred_connection": config.get("preferred_connection", ""),
+        "preferred_set_at": config.get("preferred_set_at", ""),
+        "preferred_source": config.get("preferred_source", ""),
         "runtime_recovery_enabled": config.get("runtime_recovery_enabled", "true"),
         "runtime_recovery_debug_passive": config.get("runtime_recovery_debug_passive", "true"),
         "runtime_recovery_grace_seconds": config.get("runtime_recovery_grace_seconds", "30"),
@@ -4454,6 +4515,11 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         if path == "/api/runtime-config":
             payload, status = update_runtime_config(parse_post_payload(self))
             self.send_action_json("runtime-config", payload, status=status)
+            return
+
+        if path == "/api/preferred-network":
+            payload, status = update_preferred_network(parse_post_payload(self))
+            self.send_json(payload, status=status)
             return
 
         if path == "/reconnect-previous":

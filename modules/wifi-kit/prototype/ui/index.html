@@ -540,6 +540,40 @@
 
     .network.selected { box-shadow: inset 0 0 0 1px rgba(68, 212, 230, 0.2); }
 
+    .network-preferred-panel {
+      display: grid;
+      gap: 8px;
+      border-top: 1px solid rgba(213, 229, 255, 0.08);
+      padding-top: 9px;
+    }
+
+    .network-preferred-summary {
+      display: grid;
+      gap: 3px;
+      color: var(--muted);
+      font-size: 0.76rem;
+      line-height: 1.35;
+    }
+
+    .network-preferred-summary strong {
+      color: var(--soft);
+      font-size: 0.82rem;
+    }
+
+    .network-preferred-panel .button {
+      width: fit-content;
+      min-height: 38px;
+      padding-inline: 12px;
+      box-shadow: none;
+      font-size: 0.82rem;
+    }
+
+    @media (max-width: 560px) {
+      .network-preferred-panel .button {
+        width: 100%;
+      }
+    }
+
     .network.selected .network-main {
       border-radius: 14px;
       background: rgba(68, 212, 230, 0.06);
@@ -2419,6 +2453,12 @@
           <span class="chip">Futur</span>
         </div>
         <div class="config-recovery-stack">
+          <section class="recovery-setting" aria-labelledby="config-preferred-network-heading">
+            <h3 class="recovery-setting-title" id="config-preferred-network-heading">Réseau principal</h3>
+            <strong class="recovery-setting-current" id="config-preferred-network">Réseau principal souhaité : non défini</strong>
+            <strong class="recovery-setting-current" id="config-last-good-network">Dernier réseau validé : non défini</strong>
+            <small class="setting-help">Le réseau principal souhaité est choisi par l'utilisateur. Le dernier réseau validé reste mis à jour automatiquement par Wifi-Kit.</small>
+          </section>
           <section class="recovery-setting" aria-labelledby="config-ip-mode-heading">
             <h3 class="recovery-setting-title" id="config-ip-mode-heading">Mode IP</h3>
             <div class="network-mode-options">
@@ -2751,6 +2791,24 @@
       return data.runtime_config || {};
     }
 
+    function networkPairLabel(ssid, connection) {
+      const cleanSsid = String(ssid || '').trim();
+      const cleanConnection = String(connection || '').trim();
+      if (!cleanSsid && !cleanConnection) return 'non défini';
+      if (cleanSsid && cleanConnection && cleanSsid !== cleanConnection) return `${cleanSsid} · ${cleanConnection}`;
+      return cleanSsid || cleanConnection;
+    }
+
+    function preferredNetworkLabel() {
+      const config = runtimeConfig();
+      return networkPairLabel(config.preferred_ssid, config.preferred_connection);
+    }
+
+    function lastGoodNetworkLabel() {
+      const config = runtimeConfig();
+      return networkPairLabel(config.last_good_ssid, config.last_good_connection);
+    }
+
     function apRecoveryHealthState() {
       return recoveryState().ap_recovery_health || data.ap_recovery_health || systemState().ap_recovery_health || {};
     }
@@ -2989,6 +3047,10 @@
       const system = systemState();
       const recovery = recoveryState();
       return runtimeConfig().ap_ssid || recovery.ssid || system.recovery_ssid || 'Wifi-Kit-pocket-node';
+    }
+
+    function isRecoverySsid(ssid) {
+      return String(ssid || '').trim().toLowerCase().startsWith('wifi-kit-');
     }
 
     function apClientLabel() {
@@ -3365,6 +3427,8 @@
       setText('config-normal-port', system.normal_ui_port || recovery.normal_ui_port || 18089);
       setText('config-recovery-port', system.recovery_ui_port || recovery.recovery_ui_port || 80);
       setText('config-recovery-ssid', config.ap_ssid || recovery.ssid || system.recovery_ssid || 'Wifi-Kit-node');
+      setText('config-preferred-network', `Réseau principal souhaité : ${preferredNetworkLabel()}`);
+      setText('config-last-good-network', `Dernier réseau validé : ${lastGoodNetworkLabel()}`);
       setText('config-current-ip', currentIp);
       setText('config-current-gateway', currentGateway || 'inconnu');
       setText('config-current-dns', currentDns || 'inconnu');
@@ -3699,6 +3763,57 @@
       const message = `Configuration enregistree dans ${payload.config.path}.`;
       showRuntimeConfigResult(message, resultTarget);
       return payload;
+    }
+
+    function applyRuntimeConfigSnapshot(config) {
+      if (!config) return;
+      data.runtime_config = config;
+      if (data.recovery) {
+        data.recovery.preferred_ssid = config.preferred_ssid;
+        data.recovery.preferred_connection = config.preferred_connection;
+      }
+      if (data.system) {
+        data.system.preferred_ssid = config.preferred_ssid;
+        data.system.preferred_connection = config.preferred_connection;
+        data.system.preferred_set_at = config.preferred_set_at;
+        data.system.preferred_source = config.preferred_source;
+      }
+    }
+
+    async function setPreferredNetwork(network, button, result) {
+      const ssid = displaySsid(network);
+      if (!window.confirm('Ce réseau deviendra le réseau principal souhaité pour le démarrage et les retours depuis AP Recovery.')) {
+        return;
+      }
+      if (window.location.protocol === 'file:') {
+        result.textContent = 'Prévisualisation locale : aucun réseau principal n’est enregistré.';
+        result.hidden = false;
+        return;
+      }
+
+      button.disabled = true;
+      result.textContent = 'Enregistrement du réseau principal souhaité...';
+      result.hidden = false;
+      try {
+        const response = await fetch('/api/preferred-network', {
+          cache: 'no-store',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ssid })
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || payload.status || `HTTP ${response.status}`);
+        applyRuntimeConfigSnapshot(payload.config);
+        renderConfiguration();
+        renderRecovery();
+        renderDiagnostics();
+        result.textContent = payload.message || `Réseau principal souhaité défini : ${payload.preferred_ssid || ssid}.`;
+        button.textContent = 'Réseau principal défini';
+        button.disabled = true;
+      } catch (error) {
+        result.textContent = `Réseau principal refusé : ${error.message}`;
+        button.disabled = false;
+      }
     }
 
     async function saveRecoveryConfig(resultTarget = 'recovery') {
@@ -4782,6 +4897,42 @@
       target.append(buildHiddenNetworkPanel());
     }
 
+    function buildPreferredNetworkPanel(network) {
+        const panel = document.createElement('div');
+        const summary = document.createElement('div');
+        const preferred = document.createElement('strong');
+        const lastGood = document.createElement('span');
+        const button = document.createElement('button');
+        const result = document.createElement('div');
+        const ssid = displaySsid(network);
+        const connection = connectionBySsid(ssid);
+        const config = runtimeConfig();
+        const currentProfile = connection?.profile || '';
+        const alreadyPreferred = config.preferred_ssid === ssid
+          && (!config.preferred_connection || (currentProfile && config.preferred_connection === currentProfile));
+
+        panel.className = 'network-preferred-panel';
+        summary.className = 'network-preferred-summary';
+        preferred.textContent = `Réseau principal souhaité : ${preferredNetworkLabel()}`;
+        lastGood.textContent = `Dernier réseau validé : ${lastGoodNetworkLabel()}`;
+        button.className = 'button secondary';
+        button.type = 'button';
+        button.textContent = alreadyPreferred ? 'Réseau principal défini' : 'Définir comme réseau principal';
+        button.disabled = alreadyPreferred;
+        result.className = 'callout recovery-result';
+        result.hidden = true;
+
+        button.addEventListener('click', (event) => {
+          event.stopPropagation();
+          setPreferredNetwork(network, button, result);
+        });
+        panel.addEventListener('click', (event) => event.stopPropagation());
+
+        summary.append(preferred, lastGood);
+        panel.append(summary, button, result);
+        return panel;
+    }
+
     function buildNetworkRow(network) {
         const row = document.createElement('div');
         const isCurrent = network.current === 'yes';
@@ -4859,6 +5010,9 @@
         }
         main.append(left, center, right);
         row.append(main);
+        if (isCurrent && !isRecoverySsid(ssid)) {
+          row.appendChild(buildPreferredNetworkPanel(network));
+        }
 
         if (!isCurrent && isSelected) {
           row.classList.add('selected');
