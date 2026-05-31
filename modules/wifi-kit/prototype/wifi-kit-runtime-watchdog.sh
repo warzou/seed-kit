@@ -576,6 +576,7 @@ config_values() {
   internet_probe=$(runtime_value runtime_recovery_internet_probe "${WIFI_KIT_RUNTIME_WATCHDOG_INTERNET_PROBE:-1.1.1.1}")
   internet_ping_status=$(ping_internet_probe)
   minimal_ap_safety_seconds="${WIFI_KIT_RUNTIME_WATCHDOG_MINIMAL_AP_SAFETY_SECONDS:-300}"
+  critical_link_loss_seconds=$(runtime_value runtime_recovery_critical_link_loss_seconds "${WIFI_KIT_RUNTIME_WATCHDOG_CRITICAL_LINK_LOSS_SECONDS:-300}")
   min_unavailable_seconds="${WIFI_KIT_RUNTIME_WATCHDOG_MIN_UNAVAILABLE_SECONDS:-0}"
   window_minutes=$(runtime_value runtime_recovery_instability_window_minutes 10)
   threshold=$(runtime_value runtime_recovery_instability_threshold 3)
@@ -645,6 +646,12 @@ config_values() {
   case "$minimal_ap_safety_seconds" in
     ''|*[!0-9]*) minimal_ap_safety_seconds=300 ;;
   esac
+  case "$critical_link_loss_seconds" in
+    ''|*[!0-9]*) critical_link_loss_seconds=300 ;;
+  esac
+  if [ "$critical_link_loss_seconds" -lt 1 ]; then
+    critical_link_loss_seconds=300
+  fi
   if [ -z "$internet_probe" ]; then
     status="refused"
     reason="${reason:-runtime-recovery-internet-probe-invalid}"
@@ -687,6 +694,13 @@ config_values() {
   if minimal_ap_safety_active && [ "$effective_grace_seconds" -lt "$minimal_ap_safety_seconds" ]; then
     effective_grace_seconds=$minimal_ap_safety_seconds
   fi
+  critical_link_loss_active=no
+  if critical_link_loss_active; then
+    critical_link_loss_active=yes
+    if [ "$effective_grace_seconds" -lt "$critical_link_loss_seconds" ]; then
+      effective_grace_seconds=$critical_link_loss_seconds
+    fi
+  fi
   classify_recovery_decision
 }
 
@@ -726,6 +740,28 @@ minimal_ap_safety_active() {
   [ "$gateway_ping_status" = "failed" ] || return 1
   [ "$internet_ping_status" = "failed" ] || return 1
   return 0
+}
+
+critical_link_loss_active() {
+  [ "$last_good_configured" = "yes" ] || return 1
+  [ "$health_status" = "healthy" ] && return 1
+  [ "$health_reason" = "ap-recovery-active" ] && return 1
+  case "$health_reason" in
+    disconnected|no-ip|no-default-route)
+      return 0
+      ;;
+  esac
+  if [ -z "$current_connection" ] || [ -z "$current_ssid" ]; then
+    return 0
+  fi
+  case "$runtime_reason" in
+    mismatch-last-good|mismatch-return-connection)
+      if [ "$gateway_ping_status" = "failed" ] || [ "$default_route_present" != "yes" ] || [ -z "$iface_ipv4" ]; then
+        return 0
+      fi
+      ;;
+  esac
+  return 1
 }
 
 classify_health() {
@@ -792,7 +828,10 @@ classify_recovery_decision() {
   elif [ "$health_status" != "healthy" ]; then
     recovery_decision="start-ap-recovery-after-unavailable-grace"
   fi
-  if [ "$debug_passive" = "true" ] && [ "$health_reason" != "gateway-and-internet-unreachable" ] && [ "$recovery_decision" != "none" ] && [ "$recovery_decision" != "ap-recovery-active" ]; then
+  if [ "$critical_link_loss_active" = "yes" ] && [ "$recovery_decision" = "start-ap-recovery-after-unavailable-grace" ]; then
+    recovery_decision="start-ap-recovery-after-critical-link-loss"
+  fi
+  if [ "$debug_passive" = "true" ] && [ "$health_reason" != "gateway-and-internet-unreachable" ] && [ "$critical_link_loss_active" != "yes" ] && [ "$recovery_decision" != "none" ] && [ "$recovery_decision" != "ap-recovery-active" ]; then
     recovery_decision="debug-passive-suppressed-$recovery_decision"
   fi
 }
@@ -846,11 +885,15 @@ start_ap_recovery() {
     return 0
   fi
   if [ "$debug_passive" = "true" ] && [ "$trigger" != "gateway-and-internet-unreachable" ]; then
+    if [ "$trigger" = "critical-link-loss" ]; then
+      log_event "debug-passive-bypass-critical-link-loss" "trigger=$trigger health_reason=$health_reason runtime_reason=$runtime_reason elapsed_grace=$effective_grace_seconds critical_link_loss_seconds=$critical_link_loss_seconds"
+    else
     log_event "debug-passive-suppressed-action" "would_start_ap_recovery=yes trigger=$trigger health_reason=$health_reason runtime_reason=$runtime_reason current_connection=${current_connection:-unknown} current_ssid=${current_ssid:-unknown} last_good_connection=${last_good_connection:-unknown} last_good_ssid=${last_good_ssid:-unknown} unstable_count=${unstable_count:-0} threshold=$threshold"
     write_state "debug-passive-suppressed-action" "$trigger" "$last_good_ssid"
     return 0
+    fi
   fi
-  if [ "$debug_passive" = "true" ]; then
+  if [ "$debug_passive" = "true" ] && [ "$trigger" = "gateway-and-internet-unreachable" ]; then
     log_event "minimal-ap-safety-bypass-debug-passive" "trigger=$trigger gateway=$gateway gateway_ping=$gateway_ping_status internet_ping=$internet_ping_status elapsed_grace=$effective_grace_seconds"
   fi
   log_event "recovery-enter" "trigger=$trigger last_good_ssid=${last_good_ssid:-unknown} health_reason=$health_reason runtime_reason=$runtime_reason grace_seconds=$effective_grace_seconds"
@@ -883,6 +926,8 @@ cmd_audit() {
   kv "runtime_recovery_grace_seconds" "$grace_seconds"
   kv "runtime_recovery_effective_grace_seconds" "$effective_grace_seconds"
   kv "runtime_recovery_minimal_ap_safety_seconds" "$minimal_ap_safety_seconds"
+  kv "runtime_recovery_critical_link_loss_seconds" "$critical_link_loss_seconds"
+  kv "runtime_recovery_critical_link_loss_active" "$critical_link_loss_active"
   if minimal_ap_safety_active; then
     kv "runtime_recovery_minimal_ap_safety_active" "yes"
   else
@@ -948,6 +993,7 @@ cmd_plan() {
   kv "02c.instability" "short repeated failures are logged as diagnostic-only; they do not force AP by themselves"
   kv "02c.internet" "if runtime_recovery_internet_required=true, internet probe failure can trigger AP after grace"
   kv "02d.bootstrap" "if last_good is absent and current Wi-Fi is healthy, write the initial baseline to runtime.conf only"
+  kv "02e.critical" "critical link loss bypasses debug_passive after runtime_recovery_critical_link_loss_seconds"
   kv "03.cancel" "if last_good returns during grace, log recovery-cancelled link-restored"
   kv "04.recover" "if still disconnected from last_good, or gateway+internet stay unreachable past safety grace, call wrapper start-ap-mode"
   kv "05.ap" "AP return-check loop handles periodic last_good retry from AP recovery"
@@ -1054,6 +1100,10 @@ cmd_run() {
       grace_start=$(epoch_seconds)
       log_event "runtime-unavailable detected" "health_reason=$health_reason runtime_reason=$runtime_reason last_good_ssid=${last_good_ssid:-unknown} current_ssid=${current_ssid:-unknown} current_connection=${current_connection:-unknown}"
       log_event "grace-period started" "seconds=$effective_grace_seconds configured_seconds=$grace_seconds"
+      if [ "$critical_link_loss_active" = "yes" ]; then
+        log_event "critical-link-loss-detected" "health_reason=$health_reason runtime_reason=$runtime_reason current_connection=${current_connection:-unknown} current_ssid=${current_ssid:-unknown} ip=${iface_ipv4:-none} default_route=$default_route_present gateway=${gateway:-none} gateway_ping=$gateway_ping_status"
+        log_event "critical-link-loss-grace-started" "seconds=$effective_grace_seconds configured_seconds=$critical_link_loss_seconds"
+      fi
       write_state "grace-period" "$health_reason" "$last_good_ssid"
       if [ -n "$last_good_ssid" ]; then
         record_instability_event "$last_good_ssid"
@@ -1061,6 +1111,9 @@ cmd_run() {
     fi
     now=$(epoch_seconds)
     elapsed=$((now - grace_start))
+    if [ "$critical_link_loss_active" = "yes" ]; then
+      log_event "critical-link-loss-elapsed" "critical-link-loss-elapsed-seconds=$elapsed threshold=$critical_link_loss_seconds health_reason=$health_reason runtime_reason=$runtime_reason recovery_decision=$recovery_decision"
+    fi
     if [ "$effective_grace_seconds" = "0" ] && [ "$health_reason" = "internet-unreachable" ]; then
       log_event "internet-check-timeout-zero" "health_reason=$health_reason recovery_decision=$recovery_decision"
       grace_active=0
@@ -1078,12 +1131,20 @@ cmd_run() {
       continue
     fi
     if [ "$debug_passive" = "true" ]; then
-      start_ap_recovery "$health_reason"
+      trigger=$health_reason
+      if [ "$critical_link_loss_active" = "yes" ]; then
+        trigger="critical-link-loss"
+      fi
+      start_ap_recovery "$trigger"
       grace_active=0
       sleep "$poll_seconds"
       continue
     fi
-    start_ap_recovery "$health_reason" || true
+    trigger=$health_reason
+    if [ "$critical_link_loss_active" = "yes" ]; then
+      trigger="critical-link-loss"
+    fi
+    start_ap_recovery "$trigger" || true
     grace_active=0
     sleep "$poll_seconds"
   done
