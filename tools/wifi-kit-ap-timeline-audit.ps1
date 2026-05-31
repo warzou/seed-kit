@@ -74,6 +74,9 @@ $script:RecoveryUi54321Reachable = $null
 $script:SshServiceAnswered = $null
 $script:SshAuthOk = $null
 $script:ReturnDefaultNetworkSkippedSafely = $false
+$script:AssociationAttempts = 0
+$script:AssociationRetryCount = 0
+$script:AssociationRetryReason = ""
 
 function Get-ElapsedSeconds {
     return [Math]::Round($script:Stopwatch.Elapsed.TotalSeconds, 3)
@@ -218,6 +221,56 @@ function Test-AssociatedSsid {
     param([string]$Ssid)
     $text = Get-NetshInterfacesText
     return ($text -match [Regex]::Escape($Ssid))
+}
+
+function Connect-WindowsApWithRetry {
+    param([string]$Ssid)
+
+    $maxAttempts = 3
+    $associationCheckSeconds = 15
+    $retryPauseSeconds = 3
+    Add-TimelineEvent -Name "association-retry-policy" -Status "enabled" -Detail "max_attempts=$maxAttempts check_seconds=$associationCheckSeconds retry_pause_seconds=$retryPauseSeconds no_profile_delete=true"
+
+    if ($IsDryRun) {
+        $script:AssociationAttempts = 1
+        Invoke-LoggedCommand -Name "windows-connect-ap" -FilePath "netsh.exe" -Arguments @(
+            "wlan", "connect", "name=$Ssid"
+        ) | Out-Null
+        return (Wait-Until -Name "association_seconds" -Condition { Test-AssociatedSsid -Ssid $Ssid })
+    }
+
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        $script:AssociationAttempts = $attempt
+        Add-TimelineEvent -Name "association-attempt" -Status "started" -Detail "attempt=$attempt ssid=$Ssid"
+        Invoke-LoggedCommand -Name "windows-connect-ap" -FilePath "netsh.exe" -Arguments @(
+            "wlan", "connect", "name=$Ssid"
+        ) | Out-Null
+
+        $deadline = (Get-Date).AddSeconds($associationCheckSeconds)
+        while ((Get-Date) -lt $deadline) {
+            if (Test-AssociatedSsid -Ssid $Ssid) {
+                $elapsed = Get-ElapsedSeconds
+                Add-Metric -Name "association_seconds" -Value $elapsed
+                Add-TimelineEvent -Name "association_seconds" -Status "ok" -Detail "$elapsed seconds attempt=$attempt"
+                return $true
+            }
+            Start-Sleep -Seconds $PollSeconds
+        }
+
+        if ($attempt -lt $maxAttempts) {
+            $script:AssociationRetryCount++
+            $script:AssociationRetryReason = "netsh-connect-returned-but-interface-not-associated"
+            Add-TimelineEvent -Name "association-retry-needed" -Status "retry" -Detail "attempt=$attempt reason=$($script:AssociationRetryReason)"
+            Invoke-LoggedCommand -Name "windows-disconnect-wifi-before-association-retry" -FilePath "netsh.exe" -Arguments @(
+                "wlan", "disconnect"
+            ) | Out-Null
+            Start-Sleep -Seconds $retryPauseSeconds
+        }
+    }
+
+    Add-Metric -Name "association_seconds" -Value $null
+    Add-AuditError "association_seconds timed out after $maxAttempts attempts; last reason: $($script:AssociationRetryReason)"
+    return $false
 }
 
 function Test-DhcpApAddress {
@@ -418,6 +471,9 @@ function Write-Report {
         ap_ssh_initial_ok = $script:ApSshInitialOk
         skipped_start_ap_mode = $script:SkippedStartApMode
         reason = $script:StartReason
+        association_attempts = $script:AssociationAttempts
+        association_retry_count = $script:AssociationRetryCount
+        association_retry_reason = $script:AssociationRetryReason
         health = [ordered]@{
             ap_reachable = $script:ApReachable
             http80_available = $script:Http80Available
@@ -574,17 +630,13 @@ if (-not $IsDryRun) {
     Start-Sleep -Seconds 2
 }
 
-Invoke-LoggedCommand -Name "windows-connect-ap" -FilePath "netsh.exe" -Arguments @(
-    "wlan", "connect", "name=$ApSsid"
-) | Out-Null
-
 $associatedOk = $false
 $dhcpOk = $false
 $pingApOk = $false
 $sshApOk = $false
 
 if ($ssidVisibleOk) {
-    $associatedOk = Wait-Until -Name "association_seconds" -Condition { Test-AssociatedSsid -Ssid $ApSsid }
+    $associatedOk = Connect-WindowsApWithRetry -Ssid $ApSsid
 }
 else {
     Add-AuditError "AP SSID was not visible; association skipped."
