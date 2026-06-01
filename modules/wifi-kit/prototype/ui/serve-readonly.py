@@ -2897,7 +2897,7 @@ def networkmanager_scan(refresh: bool = True) -> dict:
                 text=True,
                 timeout=8,
             )
-        time.sleep(2.0)
+            time.sleep(2.0)
         networks, error = nmcli_wifi_list(nmcli_bin)
         if refresh and len(networks) <= 1:
             ok, refresh_note = wpa_cli_refresh_scan("wlan0")
@@ -3871,8 +3871,8 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
         202,
     )
 
-def snapshot_preview() -> dict:
-    diagnose = safe_diagnose()
+def snapshot_preview(diagnose: dict | None = None) -> dict:
+    diagnose = diagnose or safe_diagnose()
     return {
         "mode": "state-snapshot",
         "simulated": True,
@@ -4138,7 +4138,7 @@ def system_info(diagnose: dict, recovery: dict | None = None) -> dict:
 
 def ui_data(recovery: dict | None = None) -> dict:
     diagnose = safe_diagnose()
-    snapshot = snapshot_preview()
+    snapshot = snapshot_preview(diagnose)
     hostname = socket.gethostname() or "node"
     config = read_runtime_config()
     runtime_version = runtime_version_status(find_git_repo_dir())
@@ -4172,7 +4172,8 @@ def ui_data(recovery: dict | None = None) -> dict:
         "runtime_recovery_instability_window_minutes": config.get("runtime_recovery_instability_window_minutes", "10"),
         "runtime_recovery_instability_threshold": config.get("runtime_recovery_instability_threshold", "3"),
         "runtime_watchdog": runtime_watchdog_status(),
-        "ap_recovery_health": ap_recovery_health_status(),
+        "ap_recovery_health": {},
+        "ap_recovery_health_endpoint": "/api/ap-recovery-health",
         "runtime_config_path": str(RUNTIME_CONFIG_PATH),
         "ui_access_password": "future-not-configured",
     }
@@ -4193,7 +4194,8 @@ def ui_data(recovery: dict | None = None) -> dict:
         recovery_payload["runtime_recovery_instability_window_minutes"] = config.get("runtime_recovery_instability_window_minutes", "10")
         recovery_payload["runtime_recovery_instability_threshold"] = config.get("runtime_recovery_instability_threshold", "3")
         recovery_payload["runtime_watchdog"] = runtime_watchdog_status()
-        recovery_payload["ap_recovery_health"] = ap_recovery_health_status()
+        recovery_payload.setdefault("ap_recovery_health", {})
+        recovery_payload["ap_recovery_health_endpoint"] = "/api/ap-recovery-health"
         recovery_payload["runtime_config_path"] = str(RUNTIME_CONFIG_PATH)
     recovery_payload["ap_client_count"] = ap_client_count() if recovery_active else None
     current_ui_client_count = ui_client_count()
