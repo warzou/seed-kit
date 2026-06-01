@@ -4223,9 +4223,112 @@ def ui_data(recovery: dict | None = None) -> dict:
     }
 
 
+def bootstrap_ui_data(recovery: dict | None = None) -> dict:
+    hostname = socket.gethostname() or "node"
+    recovery_active = bool(recovery and recovery.get("active"))
+    runtime_version = runtime_version_status()
+    return {
+        "diagnose": {
+            "mode": "bootstrap",
+            "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "dry_run_only": True,
+            "real_apply_allowed": False,
+            "backend": "loading",
+            "interface": "unknown",
+            "current_ssid_state": "chargement",
+            "current_ip": "chargement",
+            "default_route": "unknown",
+            "power_save": "unknown",
+            "ssh_client": "unknown",
+            "ssh_route_interface": "unknown",
+            "scan_status": "loading",
+            "connect_safe": "runtime-loading",
+            "secret_policy": "no-secrets",
+            "network_writes": False,
+            "services_started": False,
+        },
+        "snapshot": {
+            "mode": "bootstrap",
+            "source": "serve-readonly.py",
+            "backend": "loading",
+            "interface": "unknown",
+            "current_ssid_state": "chargement",
+            "current_ip": "chargement",
+            "ssh_route_interface": "unknown",
+            "network_writes": False,
+            "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        },
+        "runtime_config": public_runtime_config(),
+        "runtime_version": runtime_version,
+        "known_wifi_connections": [],
+        "mode": "recovery" if recovery_active else "normal",
+        "recovery_active": recovery_active,
+        "ui_client_count": 0,
+        "ui_client_window_seconds": UI_CLIENT_TTL_SECONDS,
+        "ap_client_count": None,
+        "runtime_state": {
+            "source": "bootstrap",
+            "data": {
+                "mode": "bootstrap",
+                "current_ip": "chargement",
+                "current_ssid_state": "chargement",
+                "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            },
+        },
+        "connect_options": {
+            "apply_endpoint": "/wifi/connect",
+            "actions": "runtime-gated",
+            "ap_services_started": recovery_active,
+        },
+        "recovery": {
+            "active": recovery_active,
+            "ssid": (recovery or {}).get("ssid") or f"Wifi-Kit-{hostname}",
+            "ip": "192.168.50.1",
+            "ui_port": 80,
+            "normal_ui_port": NORMAL_UI_PORT,
+            "recovery_ui_port": RECOVERY_UI_PORT,
+            "actions": "runtime-gated",
+            "ap_password_policy": "min-8-chars",
+        },
+        "system": {
+            "hostname": hostname,
+            "mode": "recovery" if recovery_active else "normal",
+            "ip": "chargement",
+            "wifi": "chargement",
+            "interface": "unknown",
+            "networkmanager": "chargement",
+            "backend": "chargement",
+            "scan_backend": "chargement",
+            "uptime": "chargement",
+            "temperature": "chargement",
+            "recovery_active": recovery_active,
+            "ap_state": "chargement",
+            "dhcp_state": "chargement",
+            "dns_state": "chargement",
+            "ui_state": "chargement",
+            "recovery_ssid": (recovery or {}).get("ssid") or f"Wifi-Kit-{hostname}",
+            "recovery_ip": "192.168.50.1",
+            "normal_ui_port": NORMAL_UI_PORT,
+            "recovery_ui_port": RECOVERY_UI_PORT,
+            "runtime_watchdog": {"status": "chargement", "health_status": "chargement"},
+            "runtime_config_path": str(RUNTIME_CONFIG_PATH),
+            "ui_access_password": "future-not-configured",
+            "last_recovery_event": "chargement",
+        },
+        "scan": {
+            "backend": "bootstrap",
+            "interface": "unknown",
+            "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "status": "loading",
+            "reason": "loading",
+            "networks": [],
+        },
+    }
+
+
 def render_index(recovery: dict | None = None) -> str:
     html = INDEX_HTML.read_text(encoding="utf-8")
-    data = json.dumps(ui_data(recovery), indent=2).replace("<", "\\u003c")
+    data = json.dumps(bootstrap_ui_data(recovery), indent=2).replace("<", "\\u003c")
     start = '<script id="wifi-kit-data" type="application/json">'
     end = "</script>"
     before, rest = html.split(start, 1)
@@ -4745,7 +4848,7 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/runtime-state":
-            self.send_json(ui_data(self.recovery)["runtime_state"])
+            self.send_json(runtime_watchdog_status())
             return
 
         if path == "/api/ui-data":

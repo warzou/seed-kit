@@ -5098,20 +5098,24 @@
     }
 
     async function bootstrapUiDataFromServer() {
+      renderAll();
+      showPage('networks');
+
       if (window.location.protocol === 'file:') {
-        renderAll();
-        showPage('networks');
         return;
       }
 
       const status = document.getElementById('scan-status');
       const previousStatus = status.textContent;
       try {
+        status.textContent = 'Chargement de l’état du node...';
         const responseUiData = await fetch('/api/ui-data', { cache: 'no-store' });
         if (!responseUiData.ok) throw new Error(`HTTP ${responseUiData.status} sur /api/ui-data`);
         data = await responseUiData.json();
+        renderAll();
 
-        const responseScan = await fetch('/wifi/scan', { cache: 'no-store' });
+        status.textContent = 'Chargement de la liste Wi-Fi...';
+        const responseScan = await fetch('/wifi/scan?refresh=0', { cache: 'no-store' });
         if (!responseScan.ok) {
           throw new Error(`HTTP ${responseScan.status} sur /wifi/scan`);
         }
@@ -5124,7 +5128,6 @@
         }
       }
       renderAll();
-      showPage('networks');
     }
 
     document.getElementById('refresh').addEventListener('click', refreshScanFromServer);
