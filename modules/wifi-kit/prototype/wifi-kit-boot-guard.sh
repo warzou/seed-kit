@@ -22,8 +22,8 @@ Usage:
 Modes:
   audit  Read tools, runtime config, active Wi-Fi, and candidate profiles only.
   plan   Print the bounded startup decision tree. No network writes.
-  run    Try last_good_connection with Internet validation, then return_connection
-         for LAN reachability, then start AP mode through the existing wrapper.
+  run    Try the preferred/return/last_good primary target for LAN reachability,
+         then start AP mode through the existing wrapper.
 EOF
 }
 
@@ -126,6 +126,61 @@ connection_exists() {
   [ -n "$nmcli_bin" ] || return 1
   [ -n "$connection" ] || return 1
   "$nmcli_bin" connection show "$connection" >/dev/null 2>&1
+}
+
+connection_for_ssid() {
+  target_ssid=$1
+  nmcli_bin=$(find_tool nmcli)
+  [ -n "$nmcli_bin" ] || return 0
+  [ -n "$target_ssid" ] || return 0
+  "$nmcli_bin" -t --escape no -f NAME,TYPE connection show 2>/dev/null |
+    while IFS=: read -r profile typ; do
+      [ "$typ" = "802-11-wireless" ] || [ "$typ" = "wifi" ] || continue
+      ssid=$("$nmcli_bin" -g 802-11-wireless.ssid connection show "$profile" 2>/dev/null | sed -n '1p')
+      if [ "$ssid" = "$target_ssid" ]; then
+        printf '%s\n' "$profile"
+        return 0
+      fi
+    done |
+    sed -n '1p'
+}
+
+resolve_primary_return_target() {
+  preferred_connection=$(runtime_value preferred_connection "")
+  preferred_ssid=$(runtime_value preferred_ssid "")
+  return_connection=$(runtime_value return_connection "$(runtime_value default_connection "")")
+  return_ssid=$(runtime_value return_ssid "$(runtime_value default_ssid "")")
+  last_good_connection=$(runtime_value last_good_connection "")
+  last_good_ssid=$(runtime_value last_good_ssid "")
+
+  if connection_exists "$preferred_connection"; then
+    printf 'preferred_connection|%s\n' "$preferred_connection"
+    return 0
+  fi
+  resolved=$(connection_for_ssid "$preferred_ssid")
+  if [ -n "$resolved" ]; then
+    printf 'preferred_ssid|%s\n' "$resolved"
+    return 0
+  fi
+  if connection_exists "$return_connection"; then
+    printf 'return_connection|%s\n' "$return_connection"
+    return 0
+  fi
+  resolved=$(connection_for_ssid "$return_ssid")
+  if [ -n "$resolved" ]; then
+    printf 'return_ssid|%s\n' "$resolved"
+    return 0
+  fi
+  if connection_exists "$last_good_connection"; then
+    printf 'last_good_connection|%s\n' "$last_good_connection"
+    return 0
+  fi
+  resolved=$(connection_for_ssid "$last_good_ssid")
+  if [ -n "$resolved" ]; then
+    printf 'last_good_ssid|%s\n' "$resolved"
+    return 0
+  fi
+  printf 'missing|\n'
 }
 
 has_default_route() {
@@ -239,10 +294,15 @@ cmd_audit() {
   kv "runtime_config_readable" "$([ -r "$runtime_config" ] && printf yes || printf no)"
   kv "iface" "$iface"
   kv "active_connection" "$(active_connection)"
+  kv "preferred_connection" "$(runtime_value preferred_connection "")"
+  kv "preferred_ssid" "$(runtime_value preferred_ssid "")"
   kv "last_good_connection" "$(runtime_value last_good_connection "")"
   kv "last_good_ssid" "$(runtime_value last_good_ssid "")"
   kv "return_connection" "$(runtime_value return_connection "$(runtime_value default_connection "")")"
   kv "return_ssid" "$(runtime_value return_ssid "$(runtime_value default_ssid "")")"
+  primary_target=$(resolve_primary_return_target)
+  kv "primary_target_source" "${primary_target%%|*}"
+  kv "primary_target_connection" "${primary_target#*|}"
   kv "internet_probe" "$internet_probe"
   kv "connect_wait_seconds" "$connect_wait_seconds"
   kv "ping_wait_seconds" "$ping_wait_seconds"
@@ -257,10 +317,10 @@ cmd_audit() {
 cmd_plan() {
   cmd_audit
   section "boot-guard-plan"
-  kv "01.try_last_good" "nmcli --wait $connect_wait_seconds connection up <last_good_connection> if present; validate default route plus ping $internet_probe"
-  kv "02.persist_last_good" "after Internet success only: write last_good_connection and last_good_ssid"
-  kv "03.try_return_connection" "if last_good missing/failed, nmcli --wait $connect_wait_seconds connection up <return_connection>; LAN-only success is accepted, and saved as last_good only when route plus ping $internet_probe succeed"
-  kv "04.start_ap_mode" "if both Wi-Fi attempts fail, run existing wrapper start-ap-mode"
+  kv "01.resolve_primary_target" "preferred_connection, preferred_ssid, return_connection, return_ssid, last_good_connection, then last_good_ssid"
+  kv "02.try_primary_target" "nmcli --wait $connect_wait_seconds connection up <resolved_primary_target>; LAN-only success is accepted"
+  kv "03.persist_last_good" "after Internet success only: write last_good_connection and last_good_ssid"
+  kv "04.start_ap_mode" "if the primary target is missing or cannot connect, run existing wrapper start-ap-mode"
   kv "05.ap_policy" "AP remains active until explicit return-default-network"
   kv "criteria_not_checked" "DNS resolution, sshd health"
   kv "forbidden" "delete profiles, store client Wi-Fi passwords, reboot, loop forever"
@@ -273,16 +333,15 @@ cmd_run() {
   kv "iface" "$iface"
   kv "log_file" "$log_file"
 
-  last_good_connection=$(runtime_value last_good_connection "")
-  return_connection=$(runtime_value return_connection "$(runtime_value default_connection "")")
+  primary_target=$(resolve_primary_return_target)
+  primary_target_source=${primary_target%%|*}
+  primary_connection=${primary_target#*|}
+  kv "primary_target_source" "$primary_target_source"
+  kv "primary_connection" "${primary_connection:-missing}"
 
-  if try_connection "last_good" "$last_good_connection" "yes"; then
-    kv "decision" "normal-last-good"
-    exit 0
-  fi
-
-  if try_connection "return" "$return_connection" "no"; then
-    kv "decision" "normal-return-connection"
+  if try_connection "primary" "$primary_connection" "no"; then
+    kv "decision" "normal-primary"
+    kv "target_source" "$primary_target_source"
     exit 0
   fi
 

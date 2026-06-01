@@ -116,6 +116,71 @@ runtime_config_value() {
   printf '%s\n' "$fallback"
 }
 
+nmcli_path() {
+  command -v nmcli 2>/dev/null || printf '%s\n' "nmcli"
+}
+
+connection_exists() {
+  connection=$1
+  [ -n "$connection" ] || return 1
+  nmcli_bin=$(nmcli_path)
+  "$nmcli_bin" connection show "$connection" >/dev/null 2>&1
+}
+
+connection_for_ssid() {
+  target_ssid=$1
+  [ -n "$target_ssid" ] || return 0
+  nmcli_bin=$(nmcli_path)
+  "$nmcli_bin" -t --escape no -f NAME,TYPE connection show 2>/dev/null |
+    while IFS=: read -r profile typ; do
+      [ "$typ" = "802-11-wireless" ] || [ "$typ" = "wifi" ] || continue
+      ssid=$("$nmcli_bin" -g 802-11-wireless.ssid connection show "$profile" 2>/dev/null | sed -n '1p')
+      if [ "$ssid" = "$target_ssid" ]; then
+        printf '%s\n' "$profile"
+        return 0
+      fi
+    done |
+    sed -n '1p'
+}
+
+resolve_primary_return_target() {
+  preferred_connection=$(runtime_config_value preferred_connection "")
+  preferred_ssid=$(runtime_config_value preferred_ssid "")
+  legacy_return_connection=$(runtime_config_value return_connection "$(runtime_config_value default_connection "${WIFI_KIT_RETURN_CONNECTION:-}")")
+  legacy_return_ssid=$(runtime_config_value return_ssid "$(runtime_config_value default_ssid "")")
+  last_good_connection=$(runtime_config_value last_good_connection "")
+  last_good_ssid=$(runtime_config_value last_good_ssid "")
+
+  if connection_exists "$preferred_connection"; then
+    printf 'preferred_connection|%s\n' "$preferred_connection"
+    return 0
+  fi
+  resolved=$(connection_for_ssid "$preferred_ssid")
+  if [ -n "$resolved" ]; then
+    printf 'preferred_ssid|%s\n' "$resolved"
+    return 0
+  fi
+  if connection_exists "$legacy_return_connection"; then
+    printf 'return_connection|%s\n' "$legacy_return_connection"
+    return 0
+  fi
+  resolved=$(connection_for_ssid "$legacy_return_ssid")
+  if [ -n "$resolved" ]; then
+    printf 'return_ssid|%s\n' "$resolved"
+    return 0
+  fi
+  if connection_exists "$last_good_connection"; then
+    printf 'last_good_connection|%s\n' "$last_good_connection"
+    return 0
+  fi
+  resolved=$(connection_for_ssid "$last_good_ssid")
+  if [ -n "$resolved" ]; then
+    printf 'last_good_ssid|%s\n' "$resolved"
+    return 0
+  fi
+  printf 'missing|\n'
+}
+
 default_runtime_config_path() {
   if [ -n "$runtime_config" ]; then
     printf '%s\n' "$runtime_config"
@@ -287,7 +352,6 @@ if [ "$#" -ne 1 ]; then
 fi
 
 action=$1
-return_connection="${WIFI_KIT_RETURN_CONNECTION:-$(runtime_config_value return_connection "$(runtime_config_value default_connection "$return_connection")")}"
 ap_test_psk="${WIFI_KIT_AP_PSK:-$(runtime_config_value ap_password "$ap_test_psk")}"
 ap_ssid="${WIFI_KIT_AP_SSID:-$(runtime_config_value ap_ssid "")}"
 ap_backend="${WIFI_KIT_AP_BACKEND:-nm-hotspot}"
@@ -332,10 +396,18 @@ case "$action" in
     ;;
   return-default-network)
     require_root "$action"
+    return_target=$(resolve_primary_return_target)
+    return_target_source=${return_target%%|*}
+    return_connection=${return_target#*|}
+    if [ -z "$return_connection" ]; then
+      log_event "$action" "failure" "target_source=$return_target_source target_connection=missing"
+      reply "failure" "$action" "return-target-missing"
+      exit 1
+    fi
     if [ -f "$ap_return_check_script" ]; then
       WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$ap_return_check_script" stop-loop >/dev/null 2>&1 || true
     fi
-    log_event "$action" "started" "connection=$return_connection"
+    log_event "$action" "started" "connection=$return_connection target_source=$return_target_source"
     if [ -f "$nm_ap_lab_script" ]; then
       log_event "$action" "cleanup" "backend=nm-hotspot nm_helper_path=$nm_ap_lab_script rollback=technical-only"
       WIFI_KIT_RUNTIME_CONFIG="$runtime_config" WIFI_KIT_NM_AP_LAB_APPLY=1 sh "$nm_ap_lab_script" rollback >> "$log_file" 2>&1 || true

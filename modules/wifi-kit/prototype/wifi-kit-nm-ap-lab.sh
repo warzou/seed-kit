@@ -154,6 +154,14 @@ return_ssid() {
   runtime_value return_ssid ""
 }
 
+preferred_connection() {
+  runtime_value preferred_connection ""
+}
+
+preferred_ssid() {
+  runtime_value preferred_ssid ""
+}
+
 last_good_connection() {
   runtime_value last_good_connection ""
 }
@@ -572,23 +580,64 @@ resolve_return_target() {
     last-good)
       configured_connection=$(last_good_connection)
       configured_ssid=$(last_good_ssid)
+      target_source="missing"
+      resolved_connection=""
+      if [ -n "$configured_connection" ] && connection_exists "$configured_connection"; then
+        resolved_connection=$configured_connection
+        target_source="last_good_connection"
+      elif [ -n "$configured_ssid" ]; then
+        resolved_connection=$(connection_for_ssid "$configured_ssid")
+        [ -n "$resolved_connection" ] && target_source="last_good_ssid"
+      fi
       ;;
     primary)
-      configured_connection=$(return_connection)
-      configured_ssid=$(return_ssid)
+      preferred_configured_connection=$(preferred_connection)
+      preferred_configured_ssid=$(preferred_ssid)
+      return_configured_connection=$(return_connection)
+      return_configured_ssid=$(return_ssid)
+      last_good_configured_connection=$(last_good_connection)
+      last_good_configured_ssid=$(last_good_ssid)
+      configured_connection=""
+      configured_ssid=""
+      resolved_connection=""
+      target_source="missing"
+      if [ -n "$preferred_configured_connection" ] && connection_exists "$preferred_configured_connection"; then
+        configured_connection=$preferred_configured_connection
+        configured_ssid=$preferred_configured_ssid
+        resolved_connection=$preferred_configured_connection
+        target_source="preferred_connection"
+      elif [ -n "$preferred_configured_ssid" ] && resolved_connection=$(connection_for_ssid "$preferred_configured_ssid") && [ -n "$resolved_connection" ]; then
+        configured_connection=$preferred_configured_connection
+        configured_ssid=$preferred_configured_ssid
+        target_source="preferred_ssid"
+      elif [ -n "$return_configured_connection" ] && connection_exists "$return_configured_connection"; then
+        configured_connection=$return_configured_connection
+        configured_ssid=$return_configured_ssid
+        resolved_connection=$return_configured_connection
+        target_source="return_connection"
+      elif [ -n "$return_configured_ssid" ] && resolved_connection=$(connection_for_ssid "$return_configured_ssid") && [ -n "$resolved_connection" ]; then
+        configured_connection=$return_configured_connection
+        configured_ssid=$return_configured_ssid
+        target_source="return_ssid"
+      elif [ -n "$last_good_configured_connection" ] && connection_exists "$last_good_configured_connection"; then
+        configured_connection=$last_good_configured_connection
+        configured_ssid=$last_good_configured_ssid
+        resolved_connection=$last_good_configured_connection
+        target_source="last_good_connection"
+      elif [ -n "$last_good_configured_ssid" ] && resolved_connection=$(connection_for_ssid "$last_good_configured_ssid") && [ -n "$resolved_connection" ]; then
+        configured_connection=$last_good_configured_connection
+        configured_ssid=$last_good_configured_ssid
+        target_source="last_good_ssid"
+      fi
       ;;
     *)
       configured_connection=""
       configured_ssid=""
+      resolved_connection=""
+      target_source="missing"
       ;;
   esac
-  resolved_connection=""
-  if [ -n "$configured_connection" ] && connection_exists "$configured_connection"; then
-    resolved_connection=$configured_connection
-  elif [ -n "$configured_ssid" ]; then
-    resolved_connection=$(connection_for_ssid "$configured_ssid")
-  fi
-  printf '%s|%s|%s\n' "$configured_connection" "$configured_ssid" "$resolved_connection"
+  printf '%s|%s|%s|%s\n' "$configured_connection" "$configured_ssid" "$resolved_connection" "$target_source"
 }
 
 iw_valid_combinations() {
@@ -1103,11 +1152,15 @@ cmd_status() {
   last_good_configured_connection=${last_good_target%%|*}
   last_good_tail=${last_good_target#*|}
   last_good_configured_ssid=${last_good_tail%%|*}
-  last_good_resolved_connection=${last_good_tail#*|}
+  last_good_tail=${last_good_tail#*|}
+  last_good_resolved_connection=${last_good_tail%%|*}
+  last_good_target_source=${last_good_tail#*|}
   primary_configured_connection=${primary_target%%|*}
   primary_tail=${primary_target#*|}
   primary_configured_ssid=${primary_tail%%|*}
-  primary_resolved_connection=${primary_tail#*|}
+  primary_tail=${primary_tail#*|}
+  primary_resolved_connection=${primary_tail%%|*}
+  primary_target_source=${primary_tail#*|}
 
   section "nm-ap-lab-status"
   kv "status" "ok"
@@ -1135,9 +1188,11 @@ cmd_status() {
   kv "last_good_ssid" "${last_good_configured_ssid:-missing}"
   kv "last_good_connection" "${last_good_configured_connection:-missing}"
   kv "last_good_nm_connection" "${last_good_resolved_connection:-missing}"
+  kv "last_good_target_source" "${last_good_target_source:-missing}"
   kv "primary_ssid" "${primary_configured_ssid:-missing}"
   kv "primary_connection" "${primary_configured_connection:-missing}"
   kv "primary_nm_connection" "${primary_resolved_connection:-missing}"
+  kv "primary_target_source" "${primary_target_source:-missing}"
 }
 
 cmd_rollback() {
@@ -1173,7 +1228,9 @@ cmd_return_target() {
   configured_connection=${target%%|*}
   tail=${target#*|}
   configured_ssid=${tail%%|*}
-  resolved_connection=${tail#*|}
+  tail=${tail#*|}
+  resolved_connection=${tail%%|*}
+  target_source=${tail#*|}
 
   section "nm-ap-lab-return-$kind"
   kv "status" "$([ "$apply" = "1" ] && printf applying || printf dry-run)"
@@ -1182,6 +1239,7 @@ cmd_return_target() {
   kv "configured_ssid" "${configured_ssid:-missing}"
   kv "configured_connection" "${configured_connection:-missing}"
   kv "resolved_connection" "${resolved_connection:-missing}"
+  kv "target_source" "${target_source:-missing}"
   kv "command_01" "stop-ui"
   kv "command_02" "nmcli connection down $ap_profile"
   kv "command_03" "wait_sta_ready_after_ap_stop"

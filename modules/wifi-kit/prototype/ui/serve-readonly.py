@@ -2179,16 +2179,45 @@ def start_ap_mode(payload: dict) -> tuple[dict, int]:
     }, 202
 
 
+def nm_connection_exists(connection: str) -> bool:
+    connection = safe_label(connection)
+    if not connection:
+        return False
+    return bool(run_text_command(["nmcli", "connection", "show", connection], timeout=2.0))
+
+
+def resolve_primary_return_target(config: dict[str, str]) -> dict[str, str]:
+    candidates = (
+        ("preferred_connection", config.get("preferred_connection", ""), config.get("preferred_ssid", "")),
+        ("preferred_ssid", "", config.get("preferred_ssid", "")),
+        ("return_connection", config.get("return_connection", ""), config.get("return_ssid", "")),
+        ("return_ssid", "", config.get("return_ssid", "")),
+        ("last_good_connection", config.get("last_good_connection", ""), config.get("last_good_ssid", "")),
+        ("last_good_ssid", "", config.get("last_good_ssid", "")),
+    )
+    for source, connection, ssid in candidates:
+        if connection and nm_connection_exists(connection):
+            return {"source": source, "connection": connection, "ssid": ssid}
+        if not connection and ssid:
+            known = known_connection_for_ssid(ssid)
+            if known and known.get("profile"):
+                return {"source": source, "connection": str(known["profile"]), "ssid": ssid}
+    return {"source": "missing", "connection": "", "ssid": ""}
+
+
 def return_default_network(payload: dict) -> tuple[dict, int]:
     dry_run = bool_payload(payload.get("dry_run"))
     action = "return-default-network"
     config = read_runtime_config()
-    connection = config["return_connection"] or config["return_ssid"]
+    target = resolve_primary_return_target(config)
+    connection = target["connection"]
+    target_source = target["source"]
     if not connection:
         return {
             "status": "failure",
             "action": action,
-            "error": "return-connection-not-configured",
+            "error": "return-target-not-configured",
+            "target_source": target_source,
             "return_started": False,
         }, 400
     if dry_run or not privileged_actions_enabled():
@@ -2197,6 +2226,7 @@ def return_default_network(payload: dict) -> tuple[dict, int]:
             action=action,
             status="planned",
             connection=connection,
+            target_source=target_source,
             privileged_actions_enabled=privileged_actions_enabled(),
         )
         return {
@@ -2204,6 +2234,7 @@ def return_default_network(payload: dict) -> tuple[dict, int]:
             "action": action,
             "return_connection": connection,
             "default_connection": connection,
+            "target_source": target_source,
             "return_started": False,
             "dry_run": dry_run,
             "privileged_actions_enabled": privileged_actions_enabled(),
@@ -2214,13 +2245,14 @@ def return_default_network(payload: dict) -> tuple[dict, int]:
 
     command, error = privileged_action_command(action)
     if error:
-        append_action_log(RETURN_DEFAULT_NETWORK_LOG, action=action, status="failure", connection=connection, error=error)
+        append_action_log(RETURN_DEFAULT_NETWORK_LOG, action=action, status="failure", connection=connection, target_source=target_source, error=error)
         payload = privileged_error_response(action, error)
         payload.update(
             {
                 "return_started": False,
                 "return_connection": connection,
                 "default_connection": connection,
+                "target_source": target_source,
             }
         )
         return payload, 403 if error == "wifi-kit-network-rights-not-installed" else 500
@@ -2241,12 +2273,13 @@ def return_default_network(payload: dict) -> tuple[dict, int]:
         append_action_log(RETURN_DEFAULT_NETWORK_LOG, action=action, status="failure", connection=connection, error=f"start-failed: {exc}")
         return {"status": "failure", "action": action, "error": f"start-failed: {exc}", "return_started": False}, 500
 
-    append_action_log(RETURN_DEFAULT_NETWORK_LOG, action=action, status="started", connection=connection)
+    append_action_log(RETURN_DEFAULT_NETWORK_LOG, action=action, status="started", connection=connection, target_source=target_source)
     return {
         "status": "started",
         "action": action,
         "return_connection": connection,
         "default_connection": connection,
+        "target_source": target_source,
         "return_started": True,
         "expected_behavior": "NetworkManager reconnects the configured return connection.",
         "log": str(RETURN_DEFAULT_NETWORK_LOG),
@@ -2257,6 +2290,7 @@ def ap_return_check_once(payload: dict) -> tuple[dict, int]:
     dry_run = bool_payload(payload.get("dry_run"))
     action = "ap-return-check-once"
     config = read_runtime_config()
+    target = resolve_primary_return_target(config)
     if dry_run or not privileged_actions_enabled():
         append_action_log(
             AP_RETURN_CHECK_ONCE_LOG,
@@ -2264,7 +2298,8 @@ def ap_return_check_once(payload: dict) -> tuple[dict, int]:
             status="planned",
             privileged_actions_enabled=privileged_actions_enabled(),
             return_check_enabled=config.get("return_check_enabled", "false"),
-            target_connection=config.get("last_good_connection") or config.get("return_connection") or "",
+            target_source=target["source"],
+            target_connection=target["connection"],
         )
         return {
             "status": "planned",
@@ -2273,8 +2308,9 @@ def ap_return_check_once(payload: dict) -> tuple[dict, int]:
             "dry_run": dry_run,
             "privileged_actions_enabled": privileged_actions_enabled(),
             "return_check_enabled": config.get("return_check_enabled", "false"),
-            "target_ssid": config.get("last_good_ssid") or config.get("return_ssid") or "",
-            "target_connection": config.get("last_good_connection") or config.get("return_connection") or "",
+            "target_source": target["source"],
+            "target_ssid": target["ssid"],
+            "target_connection": target["connection"],
             "log": str(AP_RETURN_CHECK_ONCE_LOG),
             "warning": "Real AP return check stops AP recovery briefly, tries the known Wi-Fi, and restarts AP recovery if the return fails.",
         }, 200
@@ -2308,13 +2344,14 @@ def ap_return_check_once(payload: dict) -> tuple[dict, int]:
             "log": str(AP_RETURN_CHECK_ONCE_LOG),
         }, 500
 
-    append_action_log(AP_RETURN_CHECK_ONCE_LOG, action=action, status="started")
+    append_action_log(AP_RETURN_CHECK_ONCE_LOG, action=action, status="started", target_source=target["source"], target_connection=target["connection"])
     return {
         "status": "started",
         "action": action,
         "return_check_started": True,
-        "target_ssid": config.get("last_good_ssid") or config.get("return_ssid") or "",
-        "target_connection": config.get("last_good_connection") or config.get("return_connection") or "",
+        "target_source": target["source"],
+        "target_ssid": target["ssid"],
+        "target_connection": target["connection"],
         "expected_behavior": "AP recovery stops briefly; known Wi-Fi is tried once; success stays normal; failure restarts AP recovery.",
         "log": str(AP_RETURN_CHECK_ONCE_LOG),
     }, 202

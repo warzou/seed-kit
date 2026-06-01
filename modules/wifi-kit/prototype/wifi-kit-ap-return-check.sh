@@ -211,6 +211,52 @@ connection_for_ssid() {
     sed -n '1p'
 }
 
+connection_exists() {
+  connection=$1
+  nmcli_bin=$(find_tool nmcli 2>/dev/null || true)
+  [ -n "$nmcli_bin" ] || return 1
+  [ -n "$connection" ] || return 1
+  "$nmcli_bin" connection show "$connection" >/dev/null 2>&1
+}
+
+resolve_primary_return_target() {
+  preferred_connection=$(runtime_value preferred_connection "")
+  preferred_ssid=$(runtime_value preferred_ssid "")
+  return_connection=$(runtime_value return_connection "")
+  return_ssid=$(runtime_value return_ssid "")
+  last_good_connection=$(runtime_value last_good_connection "")
+  last_good_ssid=$(runtime_value last_good_ssid "")
+
+  if connection_exists "$preferred_connection"; then
+    printf 'preferred_connection|%s|%s\n' "$preferred_connection" "$preferred_ssid"
+    return 0
+  fi
+  resolved=$(connection_for_ssid "$preferred_ssid")
+  if [ -n "$resolved" ]; then
+    printf 'preferred_ssid|%s|%s\n' "$resolved" "$preferred_ssid"
+    return 0
+  fi
+  if connection_exists "$return_connection"; then
+    printf 'return_connection|%s|%s\n' "$return_connection" "$return_ssid"
+    return 0
+  fi
+  resolved=$(connection_for_ssid "$return_ssid")
+  if [ -n "$resolved" ]; then
+    printf 'return_ssid|%s|%s\n' "$resolved" "$return_ssid"
+    return 0
+  fi
+  if connection_exists "$last_good_connection"; then
+    printf 'last_good_connection|%s|%s\n' "$last_good_connection" "$last_good_ssid"
+    return 0
+  fi
+  resolved=$(connection_for_ssid "$last_good_ssid")
+  if [ -n "$resolved" ]; then
+    printf 'last_good_ssid|%s|%s\n' "$resolved" "$last_good_ssid"
+    return 0
+  fi
+  printf 'missing||\n'
+}
+
 ap_recovery_active() {
   [ -f "$ap_setup_script" ] || return 1
   sh "$ap_setup_script" status 2>/dev/null | grep -q '^test_hostapd_running=yes$'
@@ -311,13 +357,18 @@ audit_values() {
   internet_probe_value=$(internet_probe)
   target=$(return_check_target)
   mode=$(return_check_mode)
+  preferred_ssid=$(runtime_value preferred_ssid "")
+  preferred_connection=$(runtime_value preferred_connection "")
   last_good_ssid=$(runtime_value last_good_ssid "")
   last_good_connection=$(runtime_value last_good_connection "")
   return_ssid=$(runtime_value return_ssid "")
   return_connection=$(runtime_value return_connection "")
   ap_ssid=$(runtime_value ap_ssid "")
-  target_ssid=$(target_ssid_for "$target")
-  target_connection=$(target_connection_for "$target")
+  primary_target=$(resolve_primary_return_target)
+  target_source=${primary_target%%|*}
+  primary_tail=${primary_target#*|}
+  target_connection=${primary_tail%%|*}
+  target_ssid=${primary_tail#*|}
   status="ok"
   reason=""
 
@@ -346,7 +397,7 @@ audit_values() {
     reason="${reason:-return-check-mode-unsupported}"
   fi
   case "$target" in
-    last_good_ssid|last_good_connection) ;;
+    last_good_ssid|last_good_connection|primary|primary_network) ;;
     *) status="refused"; reason="${reason:-return-check-target-unsupported}" ;;
   esac
   if [ "$enabled" = "true" ] && [ -z "$target_ssid" ] && [ -z "$target_connection" ]; then
@@ -373,8 +424,11 @@ cmd_audit() {
   kv "runtime_recovery_internet_probe" "$internet_probe_value"
   kv "return_check_target" "$target"
   kv "return_check_mode" "$mode"
+  kv "target_source" "${target_source:-}"
   kv "target_ssid" "${target_ssid:-}"
   kv "target_connection" "${target_connection:-}"
+  kv "preferred_ssid" "${preferred_ssid:-}"
+  kv "preferred_connection" "${preferred_connection:-}"
   kv "last_good_ssid" "${last_good_ssid:-}"
   kv "last_good_connection" "${last_good_connection:-}"
   kv "return_ssid" "${return_ssid:-}"
@@ -407,7 +461,7 @@ cmd_plan() {
   kv "future_01_scope" "only from AP recovery"
   kv "future_02_wait" "sleep at least 120 seconds, or return_check_interval_seconds if longer, before attempts; 0 disables automatic return"
   kv "future_03_leave_ap" "temporarily leave AP recovery; do not use permanent AP+STA"
-  kv "future_04_try_target" "try only last_good NetworkManager connection with bounded timeout"
+  kv "future_04_try_target" "try preferred_connection, preferred_ssid, return_connection, return_ssid, last_good_connection, then last_good_ssid with bounded timeout"
   kv "future_05_success" "stay normal and leave AP recovery stopped"
   kv "future_06_failure" "relaunch or remain in AP recovery"
   kv "future_07_secrets" "no Wi-Fi client password read, logged, or returned"
@@ -432,6 +486,7 @@ cmd_run_loop() {
   kv "return_check_enabled" "$enabled"
   kv "return_check_interval_seconds" "$interval_seconds"
   kv "return_check_target" "$target"
+  kv "target_source" "${target_source:-}"
   kv "return_check_mode" "$mode"
   kv "target_connection" "${target_connection:-}"
   kv "target_ssid" "${target_ssid:-}"
@@ -532,6 +587,7 @@ cmd_run_once() {
   kv "return_check_enabled" "$enabled"
   kv "return_check_enabled_raw" "$enabled_raw"
   kv "return_check_target" "$target"
+  kv "target_source" "${target_source:-}"
   kv "target_connection" "${target_connection:-}"
   kv "target_ssid" "${target_ssid:-}"
   kv "iface" "$iface"
@@ -574,7 +630,7 @@ cmd_run_once() {
   log_event "ap-stop-starting" "target_connection=$target_connection"
   WIFI_KIT_AP_SKIP_NM_RESTORE=1 sh "$ap_setup_script" stop >/dev/null 2>&1 || true
   "$nmcli_bin" device set "$iface" managed yes >/dev/null 2>&1 || true
-  log_event "return-check-attempt-last-good" "target_connection=$target_connection target_ssid=${target_ssid:-$resolved_ssid}"
+  log_event "return-check-attempt-primary" "target_source=$target_source target_connection=$target_connection target_ssid=${target_ssid:-$resolved_ssid}"
   kv "connect" "starting"
   log_event "connect-starting" "target_connection=$target_connection"
   if "$nmcli_bin" --wait "$connect_wait_seconds" connection up "$target_connection" ifname "$iface" >/dev/null 2>&1 &&
