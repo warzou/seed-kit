@@ -603,6 +603,28 @@ emit_ap_start_failure_forensics() {
   fi
 }
 
+run_nmcli_hotspot_up() {
+  nmcli_bin=$1
+  attempt=$2
+  nmcli_log=$3
+
+  : > "$nmcli_log"
+  kv "nmcli_connection_up_attempt" "$attempt"
+  set +e
+  "$nmcli_bin" connection up "$ap_profile" ifname "$iface" > "$nmcli_log" 2>&1
+  nmcli_up_rc=$?
+  set -e
+  kv "nmcli_connection_up_exit_code" "$nmcli_up_rc"
+  if [ -s "$nmcli_log" ]; then
+    while IFS= read -r line; do
+      kv "nmcli_connection_up_output" "$line"
+    done < "$nmcli_log"
+  else
+    kv "nmcli_connection_up_output" "empty"
+  fi
+  return "$nmcli_up_rc"
+}
+
 port_is_listening() {
   ss_bin=$(ss_path)
   [ -n "$ss_bin" ] || return 1
@@ -1117,18 +1139,27 @@ cmd_start_hotspot() {
     fi
     nm_debug_snapshot "before_start"
     nmcli_up_log="${TMPDIR:-/tmp}/wifi-kit-nmcli-up-$$.log"
-    set +e
-    "$nmcli_bin" connection up "$ap_profile" ifname "$iface" > "$nmcli_up_log" 2>&1
-    nmcli_up_rc=$?
-    set -e
-    kv "nmcli_connection_up_exit_code" "$nmcli_up_rc"
-    if [ -s "$nmcli_up_log" ]; then
-      while IFS= read -r line; do
-        kv "nmcli_connection_up_output" "$line"
-      done < "$nmcli_up_log"
+    if run_nmcli_hotspot_up "$nmcli_bin" "1" "$nmcli_up_log"; then
+      nmcli_up_rc=0
+    else
+      nmcli_up_rc=$?
     fi
     nm_debug_snapshot "after_start"
     emit_radio_status "radio_after_start"
+    if [ "$nmcli_up_rc" -eq 4 ]; then
+      kv "result" "hotspot-start-failed-will-retry-once"
+      emit_ap_start_failure_forensics "$nmcli_up_rc" "$nmcli_up_log"
+      sleep 5
+      nm_debug_snapshot "before_retry_after_exit_4"
+      emit_radio_status "radio_before_retry_after_exit_4"
+      if run_nmcli_hotspot_up "$nmcli_bin" "2" "$nmcli_up_log"; then
+        nmcli_up_rc=0
+      else
+        nmcli_up_rc=$?
+      fi
+      nm_debug_snapshot "after_retry_after_exit_4"
+      emit_radio_status "radio_after_retry_after_exit_4"
+    fi
     if [ "$nmcli_up_rc" -ne 0 ]; then
       kv "result" "hotspot-start-failed"
       emit_ap_start_failure_forensics "$nmcli_up_rc" "$nmcli_up_log"
