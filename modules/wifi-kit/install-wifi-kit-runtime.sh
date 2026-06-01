@@ -314,6 +314,9 @@ ensure_runtime_config() {
     {
       printf '# Wifi-Kit runtime config\n'
       printf '# Stores AP recovery password only; never stores client Wi-Fi passwords.\n'
+      printf 'last_recovery_time=\n'
+      printf 'last_recovery_trigger=\n'
+      printf 'last_recovery_result=\n'
       printf 'ap_ssid=Wifi-Kit-%s\n' "$(hostname 2>/dev/null || printf node)"
       printf 'ap_password=12345678\n'
       printf 'runtime_recovery_enabled=true\n'

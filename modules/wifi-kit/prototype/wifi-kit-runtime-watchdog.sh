@@ -15,6 +15,7 @@ instability_file="${WIFI_KIT_RUNTIME_WATCHDOG_INSTABILITY:-/tmp/wifi-kit-actions
 persistent_log_dir="${WIFI_KIT_RUNTIME_WATCHDOG_PERSISTENT_LOG_DIR:-/var/log/seed-kit/wifi-kit}"
 persistent_log_file="${WIFI_KIT_RUNTIME_WATCHDOG_PERSISTENT_LOG:-$persistent_log_dir/runtime-watchdog.log}"
 persistent_state_file="${WIFI_KIT_RUNTIME_WATCHDOG_PERSISTENT_STATE:-$persistent_log_dir/runtime-watchdog-state}"
+forensics_last_file="${WIFI_KIT_RUNTIME_WATCHDOG_FORENSICS_LAST:-$persistent_log_dir/forensics-last.log}"
 persistent_max_bytes="${WIFI_KIT_RUNTIME_WATCHDOG_PERSISTENT_MAX_BYTES:-262144}"
 gateway_ping_enabled="${WIFI_KIT_RUNTIME_WATCHDOG_GATEWAY_PING:-1}"
 internet_probe="${WIFI_KIT_RUNTIME_WATCHDOG_INTERNET_PROBE:-1.1.1.1}"
@@ -195,6 +196,40 @@ log_event() {
     event_line "$status" "$detail" >> "$persistent_log_file" 2>/dev/null || true
     chmod 0640 "$persistent_log_file" 2>/dev/null || true
   fi
+}
+
+capture_forensics_last_snapshot() {
+  trigger=${1:-unknown}
+  snapshot_tmp="$forensics_last_file.$$"
+  if ! ensure_persistent_log_dir; then
+    log_event "forensics-last-snapshot-skipped" "trigger=$trigger reason=persistent-log-dir-unavailable"
+    return 1
+  fi
+  if [ ! -x "$action_wrapper" ] && [ ! -f "$action_wrapper" ]; then
+    log_event "forensics-last-snapshot-skipped" "trigger=$trigger reason=action-wrapper-missing path=$action_wrapper"
+    return 1
+  fi
+  {
+    printf '# Wifi-Kit last recovery forensic snapshot\n'
+    printf 'snapshot_time=%s\n' "$(timestamp)"
+    printf 'snapshot_trigger=%s\n' "$trigger"
+    printf '\n'
+    WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$action_wrapper" forensics-snapshot
+  } > "$snapshot_tmp" 2>&1
+  snapshot_rc=$?
+  if [ "$snapshot_rc" -eq 0 ]; then
+    mv "$snapshot_tmp" "$forensics_last_file" 2>/dev/null || {
+      rm -f "$snapshot_tmp" 2>/dev/null || true
+      log_event "forensics-last-snapshot-failed" "trigger=$trigger reason=move-failed exit_code=$snapshot_rc path=$forensics_last_file"
+      return 1
+    }
+    chmod 0640 "$forensics_last_file" 2>/dev/null || true
+    log_event "forensics-last-snapshot-written" "trigger=$trigger path=$forensics_last_file"
+    return 0
+  fi
+  rm -f "$snapshot_tmp" 2>/dev/null || true
+  log_event "forensics-last-snapshot-failed" "trigger=$trigger exit_code=$snapshot_rc path=$forensics_last_file"
+  return "$snapshot_rc"
 }
 
 write_state() {
@@ -897,6 +932,11 @@ start_ap_recovery() {
     log_event "minimal-ap-safety-bypass-debug-passive" "trigger=$trigger gateway=$gateway gateway_ping=$gateway_ping_status internet_ping=$internet_ping_status elapsed_grace=$effective_grace_seconds"
   fi
   log_event "recovery-enter" "trigger=$trigger last_good_ssid=${last_good_ssid:-unknown} health_reason=$health_reason runtime_reason=$runtime_reason grace_seconds=$effective_grace_seconds"
+  recovery_time=$(timestamp)
+  write_runtime_value last_recovery_time "$recovery_time" || log_event "last-recovery-update-failed" "field=last_recovery_time trigger=$trigger"
+  write_runtime_value last_recovery_trigger "$trigger" || log_event "last-recovery-update-failed" "field=last_recovery_trigger trigger=$trigger"
+  write_runtime_value last_recovery_result "starting" || log_event "last-recovery-update-failed" "field=last_recovery_result trigger=$trigger result=starting"
+  capture_forensics_last_snapshot "$trigger" || true
   log_event "starting-ap-recovery" "trigger=$trigger action=start-ap-recovery last_good_ssid=${last_good_ssid:-unknown} health_reason=$health_reason unstable_count=${unstable_count:-0} threshold=$threshold"
   write_state "starting-ap-recovery" "$trigger" "$last_good_ssid"
   set +e
@@ -904,9 +944,11 @@ start_ap_recovery() {
   ap_start_rc=$?
   set -e
   if [ "$ap_start_rc" -eq 0 ]; then
+    write_runtime_value last_recovery_result "success" || log_event "last-recovery-update-failed" "field=last_recovery_result trigger=$trigger result=success"
     log_event "ap-start-result" "trigger=$trigger result=success exit_code=$ap_start_rc"
     return 0
   fi
+  write_runtime_value last_recovery_result "failure" || log_event "last-recovery-update-failed" "field=last_recovery_result trigger=$trigger result=failure"
   log_event "ap-start-failed" "trigger=$trigger result=failure exit_code=$ap_start_rc"
   write_state "ap-start-failed" "$trigger" "$last_good_ssid"
   return "$ap_start_rc"

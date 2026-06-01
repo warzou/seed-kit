@@ -2145,6 +2145,14 @@
             <div class="status-summary-card"><span>AP recovery</span><strong id="recovery-ap-status">...</strong></div>
             <div class="status-summary-card"><span>Dernier incident</span><strong id="recovery-watchdog-summary">...</strong></div>
           </div>
+          <div class="recovery-reassurance">
+            <strong>Dernier recovery</strong>
+            <div class="status-summary-grid">
+              <div class="status-summary-card"><span>Date</span><strong id="recovery-last-time">...</strong></div>
+              <div class="status-summary-card"><span>Trigger</span><strong id="recovery-last-trigger">...</strong></div>
+              <div class="status-summary-card"><span>Resultat</span><strong id="recovery-last-result">...</strong></div>
+            </div>
+          </div>
         </article>
         <article class="appliance-card" aria-label="Verification secours AP">
           <div class="appliance-card-header">
@@ -3182,6 +3190,15 @@
       return 'Aucun incident récent';
     }
 
+    function recoveryResultLabel(result) {
+      const value = String(result || '').trim();
+      if (!value) return 'aucun';
+      if (value === 'starting') return 'demarrage';
+      if (value === 'success') return 'succes';
+      if (value === 'failure') return 'echec';
+      return value.replace(/[-_]/g, ' ');
+    }
+
     function watchdogSummary() {
       const config = runtimeConfig();
       const system = systemState();
@@ -3314,6 +3331,9 @@
       setText('recovery-watchdog-state', summary.state);
       setText('recovery-watchdog-mode', summary.mode);
       setText('recovery-watchdog-summary', summary.event);
+      setText('recovery-last-time', config.last_recovery_time ? formatLocalDateTime(config.last_recovery_time) : 'aucun');
+      setText('recovery-last-trigger', config.last_recovery_trigger ? config.last_recovery_trigger.replace(/[-_]/g, ' ') : 'aucun');
+      setText('recovery-last-result', recoveryResultLabel(config.last_recovery_result));
       setText('recovery-watchdog-decision', summary.decision);
       setText('recovery-watchdog-delay', summary.delay);
       setText('recovery-watchdog-network', summary.network);
