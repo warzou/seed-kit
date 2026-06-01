@@ -950,6 +950,7 @@ start_ap_recovery() {
   fi
   write_runtime_value last_recovery_result "failure" || log_event "last-recovery-update-failed" "field=last_recovery_result trigger=$trigger result=failure"
   log_event "ap-start-failed" "trigger=$trigger result=failure exit_code=$ap_start_rc"
+  capture_forensics_last_snapshot "${trigger}-ap-start-failed" || true
   write_state "ap-start-failed" "$trigger" "$last_good_ssid"
   return "$ap_start_rc"
 }

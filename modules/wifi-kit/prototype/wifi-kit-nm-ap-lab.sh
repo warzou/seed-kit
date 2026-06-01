@@ -130,6 +130,10 @@ curl_path() {
   find_tool curl 2>/dev/null || true
 }
 
+rfkill_path() {
+  find_tool rfkill 2>/dev/null || true
+}
+
 effective_ap_ssid() {
   if [ -n "$ap_ssid" ]; then
     printf '%s\n' "$ap_ssid"
@@ -531,6 +535,71 @@ emit_radio_status() {
     kv "${prefix}_iw_channel" "iw-missing"
     kv "${prefix}_iw_frequency_mhz" "iw-missing"
     kv "${prefix}_iw_width" "iw-missing"
+  fi
+}
+
+emit_command_snapshot() {
+  label=$1
+  shift
+  section "$label"
+  output=$("$@" 2>&1 || true)
+  if [ -n "$output" ]; then
+    printf '%s\n' "$output" | while IFS= read -r line; do
+      kv "line" "$line"
+    done
+  else
+    kv "line" "empty"
+  fi
+}
+
+emit_ap_start_failure_forensics() {
+  nmcli_rc=$1
+  nmcli_log=$2
+  section "nm-ap-lab-hotspot-start-failure-forensics"
+  kv "result" "hotspot-start-failed"
+  kv "nmcli_connection_up_exit_code" "$nmcli_rc"
+  if [ -s "$nmcli_log" ]; then
+    while IFS= read -r line; do
+      kv "nmcli_connection_up_output" "$line"
+    done < "$nmcli_log"
+  else
+    kv "nmcli_connection_up_output" "empty"
+  fi
+
+  nm_debug_snapshot "hotspot_start_failed"
+  emit_radio_status "radio_hotspot_start_failed"
+
+  nmcli_bin=$(nmcli_path)
+  if [ -n "$nmcli_bin" ]; then
+    emit_command_snapshot "nmcli-device-status-after-hotspot-failure" "$nmcli_bin" device status
+    emit_command_snapshot "nmcli-device-show-wlan0-after-hotspot-failure" "$nmcli_bin" device show "$iface"
+  else
+    section "nmcli-after-hotspot-failure"
+    kv "nmcli" "missing"
+  fi
+
+  ip_bin=$(ip_path)
+  if [ -n "$ip_bin" ]; then
+    emit_command_snapshot "ip-addr-wlan0-after-hotspot-failure" "$ip_bin" addr show "$iface"
+  else
+    section "ip-after-hotspot-failure"
+    kv "ip" "missing"
+  fi
+
+  iw_bin=$(iw_path)
+  if [ -n "$iw_bin" ]; then
+    emit_command_snapshot "iw-dev-wlan0-info-after-hotspot-failure" "$iw_bin" dev "$iface" info
+  else
+    section "iw-after-hotspot-failure"
+    kv "iw" "missing"
+  fi
+
+  rfkill_bin=$(rfkill_path)
+  if [ -n "$rfkill_bin" ]; then
+    emit_command_snapshot "rfkill-list-after-hotspot-failure" "$rfkill_bin" list
+  else
+    section "rfkill-after-hotspot-failure"
+    kv "rfkill" "missing"
   fi
 }
 
@@ -1047,17 +1116,26 @@ cmd_start_hotspot() {
       kv "captive_policy" "manual-fallback-still-available"
     fi
     nm_debug_snapshot "before_start"
+    nmcli_up_log="${TMPDIR:-/tmp}/wifi-kit-nmcli-up-$$.log"
     set +e
-    "$nmcli_bin" connection up "$ap_profile" ifname "$iface"
+    "$nmcli_bin" connection up "$ap_profile" ifname "$iface" > "$nmcli_up_log" 2>&1
     nmcli_up_rc=$?
     set -e
     kv "nmcli_connection_up_exit_code" "$nmcli_up_rc"
+    if [ -s "$nmcli_up_log" ]; then
+      while IFS= read -r line; do
+        kv "nmcli_connection_up_output" "$line"
+      done < "$nmcli_up_log"
+    fi
     nm_debug_snapshot "after_start"
     emit_radio_status "radio_after_start"
     if [ "$nmcli_up_rc" -ne 0 ]; then
       kv "result" "hotspot-start-failed"
+      emit_ap_start_failure_forensics "$nmcli_up_rc" "$nmcli_up_log"
+      rm -f "$nmcli_up_log" 2>/dev/null || true
       exit "$nmcli_up_rc"
     fi
+    rm -f "$nmcli_up_log" 2>/dev/null || true
     if hotspot_is_active; then
       kv "hotspot_active_after_start" "true"
     else
