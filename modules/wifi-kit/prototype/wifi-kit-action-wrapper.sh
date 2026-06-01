@@ -218,6 +218,160 @@ reply() {
   fi
 }
 
+forensics_section() {
+  printf '\n[%s]\n' "$1"
+}
+
+forensics_kv() {
+  printf '%s=%s\n' "$1" "$2"
+}
+
+find_readonly_tool() {
+  primary=$1
+  shift
+  for candidate in "$primary" "$@"; do
+    case "$candidate" in
+      */*)
+        if [ -x "$candidate" ]; then
+          printf '%s\n' "$candidate"
+          return 0
+        fi
+        ;;
+      *)
+        resolved=$(command -v "$candidate" 2>/dev/null || true)
+        if [ -n "$resolved" ]; then
+          printf '%s\n' "$resolved"
+          return 0
+        fi
+        ;;
+    esac
+  done
+  return 1
+}
+
+redact_forensics() {
+  sed -E \
+    -e 's/(ap_password|password|psk|wifi-sec\.psk|802-11-wireless-security\.psk)=("[^"]*"|[^[:space:]]*)/\1=<redacted>/Ig' \
+    -e 's/((password|psk)[[:space:]]*:[[:space:]]*)[^[:space:]]+/\1<redacted>/Ig'
+}
+
+forensics_run() {
+  label=$1
+  tool=$2
+  shift 2
+  forensics_section "$label"
+  if [ -z "$tool" ]; then
+    forensics_kv "status" "tool-missing"
+    return 0
+  fi
+  "$tool" "$@" 2>&1 | redact_forensics || true
+}
+
+forensics_file_tail() {
+  label=$1
+  path=$2
+  lines=$3
+  tail_bin=$4
+  forensics_section "$label"
+  forensics_kv "path" "$path"
+  if [ ! -r "$path" ]; then
+    forensics_kv "status" "unreadable-or-missing"
+    return 0
+  fi
+  if [ -z "$tail_bin" ]; then
+    forensics_kv "status" "tail-missing"
+    return 0
+  fi
+  "$tail_bin" -n "$lines" "$path" 2>&1 | redact_forensics || true
+}
+
+forensics_journal_filtered() {
+  label=$1
+  shift
+  journalctl_bin=$1
+  shift
+  forensics_section "$label"
+  if [ -z "$journalctl_bin" ]; then
+    forensics_kv "status" "journalctl-missing"
+    return 0
+  fi
+  "$journalctl_bin" "$@" 2>&1 |
+    grep -Ei 'wifi-kit|wlan0|brcmfmac|firmware|auth|assoc|deauth|disassoc|invalid|ap|sta|NetworkManager|no-ip|no-default-route|critical-link-loss|recovery' |
+    redact_forensics || true
+}
+
+cmd_forensics_snapshot() {
+  date_bin=$(find_readonly_tool date /bin/date /usr/bin/date || true)
+  hostname_bin=$(find_readonly_tool hostname /bin/hostname /usr/bin/hostname || true)
+  uptime_bin=$(find_readonly_tool uptime /usr/bin/uptime || true)
+  cat_bin=$(find_readonly_tool cat /bin/cat /usr/bin/cat || true)
+  tail_bin=$(find_readonly_tool tail /usr/bin/tail /bin/tail || true)
+  id_bin=$(find_readonly_tool id /usr/bin/id /bin/id || true)
+  ip_bin=$(find_readonly_tool ip /usr/sbin/ip /sbin/ip /usr/bin/ip /bin/ip || true)
+  iw_bin=$(find_readonly_tool iw /usr/sbin/iw /sbin/iw /usr/bin/iw /bin/iw || true)
+  nmcli_bin=$(find_readonly_tool nmcli /usr/bin/nmcli /bin/nmcli || true)
+  ss_bin=$(find_readonly_tool ss /usr/sbin/ss /sbin/ss /usr/bin/ss /bin/ss || true)
+  systemctl_bin=$(find_readonly_tool systemctl /usr/bin/systemctl /bin/systemctl || true)
+  journalctl_bin=$(find_readonly_tool journalctl /usr/bin/journalctl /bin/journalctl || true)
+
+  forensics_section "forensics-summary"
+  if [ -n "$date_bin" ]; then
+    forensics_kv "timestamp_utc" "$("$date_bin" -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || true)"
+    forensics_kv "timestamp_local" "$("$date_bin" +"%Y-%m-%dT%H:%M:%S%z" 2>/dev/null || true)"
+  fi
+  if [ -n "$hostname_bin" ]; then
+    forensics_kv "hostname" "$("$hostname_bin" 2>/dev/null || true)"
+  fi
+  if [ -n "$uptime_bin" ]; then
+    forensics_kv "uptime" "$("$uptime_bin" 2>/dev/null || true)"
+  fi
+  if [ -n "$id_bin" ]; then
+    forensics_kv "identity" "$("$id_bin" 2>/dev/null || true)"
+  fi
+  forensics_kv "runtime_config_path" "$runtime_config"
+  forensics_kv "runtime_version_path" "$script_dir/runtime-version"
+  forensics_kv "tool_iw" "${iw_bin:-missing}"
+  if [ -n "$cat_bin" ] && [ -r "$script_dir/runtime-version" ]; then
+    forensics_kv "runtime_version" "$("$cat_bin" "$script_dir/runtime-version" 2>/dev/null | sed -n '1p' || true)"
+  fi
+
+  if [ -n "$systemctl_bin" ]; then
+    forensics_section "services"
+    for service in NetworkManager wifi-kit-ui.service wifi-kit-runtime-watchdog.service wifi-kit-boot-guard.service wifi-kit-ap-return-check.service; do
+      printf '%s.active=' "$service"
+      "$systemctl_bin" is-active "$service" 2>/dev/null || true
+      printf '%s.enabled=' "$service"
+      "$systemctl_bin" is-enabled "$service" 2>/dev/null || true
+    done | redact_forensics
+  else
+    forensics_section "services"
+    forensics_kv "status" "systemctl-missing"
+  fi
+
+  forensics_run "network-nmcli-device-status" "$nmcli_bin" -t -f DEVICE,TYPE,STATE,CONNECTION device status
+  forensics_run "network-nmcli-active-connections" "$nmcli_bin" -t -f NAME,TYPE,DEVICE connection show --active
+  forensics_run "network-nmcli-wlan0" "$nmcli_bin" -t -f GENERAL.DEVICE,GENERAL.TYPE,GENERAL.STATE,GENERAL.CONNECTION,IP4.ADDRESS,IP4.GATEWAY,IP4.DNS device show wlan0
+  forensics_run "network-ip-addr-wlan0" "$ip_bin" addr show wlan0
+  forensics_run "network-ip-route" "$ip_bin" route
+  forensics_run "network-iw-dev" "$iw_bin" dev
+  forensics_run "network-iw-wlan0-info" "$iw_bin" dev wlan0 info
+  forensics_run "network-listening-tcp" "$ss_bin" -ltn
+
+  forensics_file_tail "watchdog-state-persistent" "/var/log/seed-kit/wifi-kit/runtime-watchdog-state" "80" "$tail_bin"
+  forensics_file_tail "watchdog-log-persistent-tail" "/var/log/seed-kit/wifi-kit/runtime-watchdog.log" "500" "$tail_bin"
+  forensics_file_tail "watchdog-state-tmp" "/tmp/wifi-kit-actions/runtime-watchdog-state" "80" "$tail_bin"
+  forensics_file_tail "watchdog-log-tmp-tail" "/tmp/wifi-kit-actions/runtime-watchdog-0.log" "300" "$tail_bin"
+  forensics_file_tail "ap-recovery-log-tail" "/tmp/wifi-kit-nm-ap-lab-ui.log" "300" "$tail_bin"
+  forensics_file_tail "action-wrapper-log-tail" "/tmp/wifi-kit-action-wrapper.log" "200" "$tail_bin"
+  forensics_file_tail "start-ap-mode-log-tail" "/tmp/wifi-kit-actions/start-ap-mode-0.log" "200" "$tail_bin"
+  forensics_file_tail "return-default-network-log-tail" "/tmp/wifi-kit-actions/return-default-network-0.log" "200" "$tail_bin"
+  forensics_file_tail "ap-return-check-log-tail" "/tmp/wifi-kit-actions/ap-return-check-0.log" "200" "$tail_bin"
+
+  forensics_journal_filtered "journal-watchdog-recent-filtered" "$journalctl_bin" -u wifi-kit-runtime-watchdog.service --since "12 hours ago" -n 400 --no-pager
+  forensics_journal_filtered "journal-networkmanager-recent-filtered" "$journalctl_bin" -u NetworkManager --since "12 hours ago" -n 400 --no-pager
+  forensics_journal_filtered "journal-kernel-recent-filtered" "$journalctl_bin" -k --since "12 hours ago" -n 400 --no-pager
+}
+
 safe_line_value() {
   key=$1
   value=$2
@@ -347,7 +501,7 @@ require_root() {
 
 if [ "$#" -ne 1 ]; then
   log_event "unknown" "refused" "usage"
-  reply "refused" "unknown" "usage: wifi-kit-action-wrapper.sh start-ap-mode|return-default-network|connect-wifi|ap-return-check-once|node-ip-test|node-ip-confirm|node-ip-rollback|reboot-system|shutdown-system|reinstall-runtime|restart-ui"
+  reply "refused" "unknown" "usage: wifi-kit-action-wrapper.sh start-ap-mode|return-default-network|connect-wifi|ap-return-check-once|node-ip-test|node-ip-confirm|node-ip-rollback|reboot-system|shutdown-system|reinstall-runtime|restart-ui|forensics-snapshot"
   exit 2
 fi
 
@@ -558,6 +712,10 @@ case "$action" in
     log_event "$action" "failure" "service=$ui_service_name exit_code=$rc"
     reply "failure" "$action" "ui-restart-failed service=$ui_service_name exit_code=$rc"
     exit "$rc"
+    ;;
+  forensics-snapshot)
+    require_root "$action"
+    cmd_forensics_snapshot
     ;;
   reboot-system)
     read_system_power_request
