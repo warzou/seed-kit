@@ -40,6 +40,7 @@ ap_restart_wait_seconds="${WIFI_KIT_RETURN_CHECK_AP_RESTART_WAIT:-30}"
 ap_min_stable_seconds="${WIFI_KIT_RETURN_CHECK_AP_MIN_STABLE_SECONDS:-120}"
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ap_setup_script="$script_dir/ap-setup-test.sh"
+nm_ap_script="$script_dir/wifi-kit-nm-ap-lab.sh"
 action_wrapper="$script_dir/wifi-kit-action-wrapper.sh"
 log_file="${WIFI_KIT_RETURN_CHECK_LOG:-/tmp/wifi-kit-actions/ap-return-check-$(id -u).log}"
 loop_pid_file="${WIFI_KIT_RETURN_CHECK_LOOP_PID:-/tmp/wifi-kit-ap-return-check-loop.pid}"
@@ -118,7 +119,7 @@ find_tool() {
 }
 
 return_check_enabled() {
-  runtime_value return_check_enabled false
+  runtime_value return_check_enabled true
 }
 
 normalize_bool() {
@@ -130,7 +131,7 @@ normalize_bool() {
 }
 
 return_check_interval_minutes() {
-  runtime_value return_check_interval_minutes 1
+  runtime_value return_check_interval_minutes 5
 }
 
 return_check_interval_seconds() {
@@ -156,11 +157,15 @@ internet_probe() {
 }
 
 return_check_target() {
-  runtime_value return_check_target last_good_ssid
+  runtime_value return_check_target primary
 }
 
 return_check_mode() {
   runtime_value return_check_mode periodic-from-ap
+}
+
+return_check_hold_seconds() {
+  runtime_value return_check_hold_seconds 120
 }
 
 target_ssid_for() {
@@ -258,6 +263,10 @@ resolve_primary_return_target() {
 }
 
 ap_recovery_active() {
+  if [ -f "$nm_ap_script" ] &&
+    sh "$nm_ap_script" status 2>/dev/null | grep -q '^hotspot_active=true$'; then
+    return 0
+  fi
   [ -f "$ap_setup_script" ] || return 1
   sh "$ap_setup_script" status 2>/dev/null | grep -q '^test_hostapd_running=yes$'
 }
@@ -329,6 +338,26 @@ internet_ok() {
   "$ping_bin" -c 1 -W "$ping_wait_seconds" "$internet_probe_value" >/dev/null 2>&1
 }
 
+primary_network_holds() {
+  hold_seconds=$1
+  elapsed=0
+  if [ "$hold_seconds" = "0" ]; then
+    return 0
+  fi
+  while [ "$elapsed" -lt "$hold_seconds" ]; do
+    sleep_step=10
+    remaining=$((hold_seconds - elapsed))
+    if [ "$remaining" -lt "$sleep_step" ]; then
+      sleep_step=$remaining
+    fi
+    sleep "$sleep_step"
+    elapsed=$((elapsed + sleep_step))
+    log_event "return-check-hold-progress" "elapsed_seconds=$elapsed hold_seconds=$hold_seconds"
+    local_network_ok && internet_ok || return 1
+  done
+  return 0
+}
+
 require_number() {
   name=$1
   value=$2
@@ -353,6 +382,7 @@ audit_values() {
   enabled=$(normalize_bool "$enabled_raw")
   interval=$(return_check_interval_minutes)
   interval_seconds=$(return_check_interval_seconds)
+  hold_seconds=$(return_check_hold_seconds)
   internet_required_value=$(internet_required)
   internet_probe_value=$(internet_probe)
   target=$(return_check_target)
@@ -379,6 +409,10 @@ audit_values() {
   if ! is_non_negative_integer "$interval_seconds"; then
     status="refused"
     reason="${reason:-return-check-interval-seconds-invalid}"
+  fi
+  if ! is_non_negative_integer "$hold_seconds"; then
+    status="refused"
+    reason="${reason:-return-check-hold-seconds-invalid}"
   fi
   if [ "$interval_seconds" = "0" ] && [ "$enabled" = "true" ]; then
     enabled="false"
@@ -420,6 +454,7 @@ cmd_audit() {
   kv "return_check_enabled_raw" "$enabled_raw"
   kv "return_check_interval_minutes" "$interval"
   kv "return_check_interval_seconds" "$interval_seconds"
+  kv "return_check_hold_seconds" "$hold_seconds"
   kv "runtime_recovery_internet_required" "$internet_required_value"
   kv "runtime_recovery_internet_probe" "$internet_probe_value"
   kv "return_check_target" "$target"
@@ -485,6 +520,7 @@ cmd_run_loop() {
   kv "runtime_config" "$runtime_config"
   kv "return_check_enabled" "$enabled"
   kv "return_check_interval_seconds" "$interval_seconds"
+  kv "return_check_hold_seconds" "$hold_seconds"
   kv "return_check_target" "$target"
   kv "target_source" "${target_source:-}"
   kv "return_check_mode" "$mode"
@@ -492,6 +528,7 @@ cmd_run_loop() {
   kv "target_ssid" "${target_ssid:-}"
   kv "ap_restart_wait_seconds" "$ap_restart_wait_seconds"
   kv "ap_min_stable_seconds" "$ap_min_stable_seconds"
+  kv "return_check_hold_seconds" "$hold_seconds"
   kv "secret_policy" "no client Wi-Fi password is read, logged, or stored"
   require_root
   if [ "$status" != "ok" ] || [ "$enabled" != "true" ]; then
@@ -503,6 +540,7 @@ cmd_run_loop() {
   require_number "return-check-interval-seconds" "$interval_seconds" "86400"
   require_number "ap-restart-wait-seconds" "$ap_restart_wait_seconds" "120"
   require_number "ap-min-stable-seconds" "$ap_min_stable_seconds" "3600"
+  require_number "return-check-hold-seconds" "$hold_seconds" "3600"
   if [ -n "${WIFI_KIT_RETURN_CHECK_INTERVAL_SECONDS:-}" ]; then
     require_number "return-check-interval-seconds" "$WIFI_KIT_RETURN_CHECK_INTERVAL_SECONDS" "86400"
     interval_seconds=$WIFI_KIT_RETURN_CHECK_INTERVAL_SECONDS
@@ -592,6 +630,7 @@ cmd_run_once() {
   kv "target_ssid" "${target_ssid:-}"
   kv "iface" "$iface"
   kv "connect_wait_seconds" "$connect_wait_seconds"
+  kv "return_check_hold_seconds" "$hold_seconds"
   kv "runtime_recovery_internet_required" "$internet_required_value"
   kv "runtime_recovery_internet_probe" "$internet_probe_value"
   kv "secret_policy" "no client Wi-Fi password is read, logged, or stored"
@@ -628,14 +667,19 @@ cmd_run_once() {
   kv "target_ssid" "${target_ssid:-$resolved_ssid}"
   kv "ap_stop" "starting"
   log_event "ap-stop-starting" "target_connection=$target_connection"
-  WIFI_KIT_AP_SKIP_NM_RESTORE=1 sh "$ap_setup_script" stop >/dev/null 2>&1 || true
+  if [ -f "$nm_ap_script" ]; then
+    WIFI_KIT_NM_AP_LAB_APPLY=1 sh "$nm_ap_script" rollback >/dev/null 2>&1 || true
+  elif [ -f "$ap_setup_script" ]; then
+    WIFI_KIT_AP_SKIP_NM_RESTORE=1 sh "$ap_setup_script" stop >/dev/null 2>&1 || true
+  fi
   "$nmcli_bin" device set "$iface" managed yes >/dev/null 2>&1 || true
   log_event "return-check-attempt-primary" "target_source=$target_source target_connection=$target_connection target_ssid=${target_ssid:-$resolved_ssid}"
   kv "connect" "starting"
   log_event "connect-starting" "target_connection=$target_connection"
   if "$nmcli_bin" --wait "$connect_wait_seconds" connection up "$target_connection" ifname "$iface" >/dev/null 2>&1 &&
     local_network_ok &&
-    internet_ok; then
+    internet_ok &&
+    primary_network_holds "$hold_seconds"; then
     kv "status" "done"
     kv "decision" "normal"
     kv "network" "ok"

@@ -308,6 +308,57 @@ WantedBy=multi-user.target
 EOF
 }
 
+runtime_config_get() {
+  key=$1
+  fallback=${2:-}
+  if [ -r "$runtime_config" ]; then
+    value=$(sed -n "s/^$key=//p" "$runtime_config" 2>/dev/null | sed -n '1p')
+    if [ -n "$value" ]; then
+      printf '%s\n' "$value"
+      return 0
+    fi
+  fi
+  printf '%s\n' "$fallback"
+}
+
+runtime_config_set() {
+  key=$1
+  value=$2
+  tmp_config=$(mktemp)
+  if grep -q "^$key=" "$runtime_config" 2>/dev/null; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in
+        "$key="*) printf '%s=%s\n' "$key" "$value" ;;
+        *) printf '%s\n' "$line" ;;
+      esac
+    done < "$runtime_config" > "$tmp_config"
+  else
+    cat "$runtime_config" > "$tmp_config"
+    printf '%s=%s\n' "$key" "$value" >> "$tmp_config"
+  fi
+  install -o "$install_user" -g "$install_user" -m 0600 "$tmp_config" "$runtime_config"
+  rm -f "$tmp_config"
+}
+
+ensure_runtime_config_key() {
+  key=$1
+  value=$2
+  if ! grep -q "^$key=" "$runtime_config" 2>/dev/null; then
+    runtime_config_set "$key" "$value"
+  fi
+}
+
+upgrade_return_check_defaults() {
+  enabled=$(runtime_config_get return_check_enabled "")
+  target=$(runtime_config_get return_check_target "")
+  interval=$(runtime_config_get return_check_interval_seconds "300")
+  ensure_runtime_config_key return_check_hold_seconds 120
+  if [ "$enabled" = "false" ] && [ "$target" = "last_good_ssid" ] && [ "$interval" != "0" ]; then
+    runtime_config_set return_check_enabled true
+    runtime_config_set return_check_target primary
+  fi
+}
+
 ensure_runtime_config() {
   install -d -o "$install_user" -g "$install_user" -m 0700 "$runtime_config_dir"
   if [ ! -f "$runtime_config" ]; then
@@ -326,12 +377,18 @@ ensure_runtime_config() {
       printf 'runtime_recovery_internet_probe=1.1.1.1\n'
       printf 'runtime_recovery_instability_window_minutes=10\n'
       printf 'runtime_recovery_instability_threshold=3\n'
-      printf 'return_check_enabled=false\n'
+      printf 'return_check_enabled=true\n'
       printf 'return_check_interval_seconds=300\n'
-      printf 'return_check_target=last_good_ssid\n'
+      printf 'return_check_target=primary\n'
       printf 'return_check_mode=periodic-from-ap\n'
+      printf 'return_check_hold_seconds=120\n'
     } > "$runtime_config"
   fi
+  ensure_runtime_config_key return_check_enabled true
+  ensure_runtime_config_key return_check_interval_seconds 300
+  ensure_runtime_config_key return_check_target primary
+  ensure_runtime_config_key return_check_mode periodic-from-ap
+  upgrade_return_check_defaults
   chown "$install_user:$install_user" "$runtime_config"
   chmod 0600 "$runtime_config"
 }

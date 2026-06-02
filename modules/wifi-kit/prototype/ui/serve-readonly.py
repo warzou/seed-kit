@@ -169,6 +169,7 @@ RUNTIME_CONFIG_KEYS = {
     "return_check_interval_seconds",
     "return_check_target",
     "return_check_mode",
+    "return_check_hold_seconds",
     "runtime_recovery_enabled",
     "runtime_recovery_debug_passive",
     "runtime_recovery_grace_seconds",
@@ -926,11 +927,12 @@ def default_runtime_config() -> dict[str, str]:
         "last_recovery_result": "",
         "ap_ssid": f"Wifi-Kit-{hostname}",
         "ap_password": os.environ.get("WIFI_KIT_AP_PSK", RECOVERY_AP_TEST_PASSWORD),
-        "return_check_enabled": "false",
-        "return_check_interval_minutes": "1",
+        "return_check_enabled": "true",
+        "return_check_interval_minutes": "5",
         "return_check_interval_seconds": "300",
-        "return_check_target": "last_good_ssid",
+        "return_check_target": "primary",
         "return_check_mode": "periodic-from-ap",
+        "return_check_hold_seconds": "120",
         "runtime_recovery_enabled": "true",
         "runtime_recovery_debug_passive": "true",
         "runtime_recovery_grace_seconds": "30",
@@ -1005,11 +1007,12 @@ def redact_runtime_config(config: dict[str, str]) -> dict[str, object]:
         "last_recovery_result": config.get("last_recovery_result", ""),
         "ap_ssid": config["ap_ssid"],
         "ap_password_set": bool(config["ap_password"]),
-        "return_check_enabled": config.get("return_check_enabled", "false"),
-        "return_check_interval_minutes": config.get("return_check_interval_minutes", "1"),
+        "return_check_enabled": config.get("return_check_enabled", "true"),
+        "return_check_interval_minutes": config.get("return_check_interval_minutes", "5"),
         "return_check_interval_seconds": config.get("return_check_interval_seconds", "300"),
-        "return_check_target": config.get("return_check_target", "last_good_ssid"),
+        "return_check_target": config.get("return_check_target", "primary"),
         "return_check_mode": config.get("return_check_mode", "periodic-from-ap"),
+        "return_check_hold_seconds": config.get("return_check_hold_seconds", "120"),
         "runtime_recovery_enabled": config.get("runtime_recovery_enabled", "true"),
         "runtime_recovery_debug_passive": config.get("runtime_recovery_debug_passive", "true"),
         "runtime_recovery_grace_seconds": config.get("runtime_recovery_grace_seconds", "30"),
@@ -1131,11 +1134,12 @@ def write_runtime_config(config: dict[str, str]) -> None:
         f"last_recovery_result={config.get('last_recovery_result', '')}",
         f"ap_ssid={config['ap_ssid']}",
         f"ap_password={config['ap_password']}",
-        f"return_check_enabled={config.get('return_check_enabled', 'false')}",
-        f"return_check_interval_minutes={config.get('return_check_interval_minutes', '1')}",
+        f"return_check_enabled={config.get('return_check_enabled', 'true')}",
+        f"return_check_interval_minutes={config.get('return_check_interval_minutes', '5')}",
         f"return_check_interval_seconds={config.get('return_check_interval_seconds', '300')}",
-        f"return_check_target={config.get('return_check_target', 'last_good_ssid')}",
+        f"return_check_target={config.get('return_check_target', 'primary')}",
         f"return_check_mode={config.get('return_check_mode', 'periodic-from-ap')}",
+        f"return_check_hold_seconds={config.get('return_check_hold_seconds', '120')}",
         f"runtime_recovery_enabled={config.get('runtime_recovery_enabled', 'true')}",
         f"runtime_recovery_debug_passive={config.get('runtime_recovery_debug_passive', 'true')}",
         f"runtime_recovery_grace_seconds={config.get('runtime_recovery_grace_seconds', '30')}",
@@ -1278,7 +1282,7 @@ def update_runtime_config(payload: dict) -> tuple[dict, int]:
         config["return_check_interval_seconds"] = str(int(interval_seconds))
     if "return_check_target" in payload:
         target = str(payload.get("return_check_target", "")).strip()
-        if target != "last_good_ssid":
+        if target not in {"primary", "primary_network", "last_good_ssid", "last_good_connection"}:
             return {"status": "failure", "error": "return-check-target-unsupported"}, 400
         config["return_check_target"] = target
     if "return_check_mode" in payload:
@@ -1286,6 +1290,11 @@ def update_runtime_config(payload: dict) -> tuple[dict, int]:
         if mode != "periodic-from-ap":
             return {"status": "failure", "error": "return-check-mode-unsupported"}, 400
         config["return_check_mode"] = mode
+    if "return_check_hold_seconds" in payload:
+        hold_seconds = str(payload.get("return_check_hold_seconds", "")).strip()
+        if not hold_seconds.isdigit() or int(hold_seconds) > 3600:
+            return {"status": "failure", "error": "return-check-hold-seconds-invalid"}, 400
+        config["return_check_hold_seconds"] = str(int(hold_seconds))
     if "runtime_recovery_enabled" in payload:
         enabled = str(payload.get("runtime_recovery_enabled", "")).strip().lower()
         if enabled in {"true", "1", "yes", "on"}:
@@ -2309,7 +2318,7 @@ def ap_return_check_once(payload: dict) -> tuple[dict, int]:
             action=action,
             status="planned",
             privileged_actions_enabled=privileged_actions_enabled(),
-            return_check_enabled=config.get("return_check_enabled", "false"),
+            return_check_enabled=config.get("return_check_enabled", "true"),
             target_source=target["source"],
             target_connection=target["connection"],
         )
@@ -2319,7 +2328,7 @@ def ap_return_check_once(payload: dict) -> tuple[dict, int]:
             "return_check_started": False,
             "dry_run": dry_run,
             "privileged_actions_enabled": privileged_actions_enabled(),
-            "return_check_enabled": config.get("return_check_enabled", "false"),
+            "return_check_enabled": config.get("return_check_enabled", "true"),
             "target_source": target["source"],
             "target_ssid": target["ssid"],
             "target_connection": target["connection"],

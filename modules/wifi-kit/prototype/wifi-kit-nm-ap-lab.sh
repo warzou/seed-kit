@@ -14,6 +14,7 @@ ui_port="${WIFI_KIT_NM_AP_UI_PORT:-80}"
 ui_script="${WIFI_KIT_NM_AP_UI_SCRIPT:-/opt/seed-kit/wifi-kit/ui/serve-readonly.py}"
 ui_log="${WIFI_KIT_NM_AP_UI_LOG:-/tmp/wifi-kit-nm-ap-lab-ui.log}"
 ui_pidfile="${WIFI_KIT_NM_AP_UI_PIDFILE:-/tmp/wifi-kit-nm-ap-lab-ui.pid}"
+ap_return_check_script="${WIFI_KIT_NM_AP_RETURN_CHECK_SCRIPT:-/opt/seed-kit/wifi-kit/wifi-kit-ap-return-check.sh}"
 test_ssid="${WIFI_KIT_NM_AP_TEST_SSID:-}"
 test_profile="${WIFI_KIT_NM_AP_TEST_PROFILE:-}"
 test_timeout="${WIFI_KIT_NM_AP_TEST_TIMEOUT:-30}"
@@ -421,6 +422,66 @@ wait_ap_local_ready() {
     elapsed=$((elapsed + 2))
   done
   return 1
+}
+
+return_check_enabled() {
+  enabled=$(runtime_value return_check_enabled true)
+  case "$enabled" in
+    true|1|yes|on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+return_check_loop_pid() {
+  pidfile="${WIFI_KIT_RETURN_CHECK_LOOP_PID:-/tmp/wifi-kit-ap-return-check-loop.pid}"
+  [ -r "$pidfile" ] || return 0
+  sed -n '1p' "$pidfile" 2>/dev/null || true
+}
+
+return_check_loop_running() {
+  pid=$(return_check_loop_pid)
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  ps -p "$pid" -o args= 2>/dev/null | grep -q 'wifi-kit-ap-return-check.sh run-loop'
+}
+
+start_return_check_loop_best_effort() {
+  [ "${WIFI_KIT_AP_RETURN_CHECK_INTERNAL:-0}" != "1" ] || {
+    kv "return_check_loop" "not-started"
+    kv "return_check_loop_reason" "internal-return-check-restart"
+    return 0
+  }
+  [ -f "$ap_return_check_script" ] || {
+    kv "return_check_loop" "not-started"
+    kv "return_check_loop_reason" "script-missing"
+    return 0
+  }
+  return_check_enabled || {
+    kv "return_check_loop" "not-started"
+    kv "return_check_loop_reason" "disabled"
+    return 0
+  }
+  hotspot_is_active || {
+    kv "return_check_loop" "not-started"
+    kv "return_check_loop_reason" "ap-not-active"
+    return 0
+  }
+  if return_check_loop_running; then
+    kv "return_check_loop" "already-running"
+    kv "return_check_loop_pid" "$(return_check_loop_pid)"
+    return 0
+  fi
+  mkdir -p /tmp/wifi-kit-actions 2>/dev/null || true
+  chmod 1777 /tmp/wifi-kit-actions 2>/dev/null || true
+  WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$ap_return_check_script" run-loop >> /tmp/wifi-kit-actions/ap-return-check-loop.log 2>&1 &
+  kv "return_check_loop" "started"
+  kv "return_check_loop_pid" "$!"
+}
+
+stop_return_check_loop_best_effort() {
+  [ "${WIFI_KIT_AP_RETURN_CHECK_INTERNAL:-0}" != "1" ] || return 0
+  [ -f "$ap_return_check_script" ] || return 0
+  WIFI_KIT_RUNTIME_CONFIG="$runtime_config" sh "$ap_return_check_script" stop-loop >/dev/null 2>&1 || true
 }
 
 nm_device_status_line() {
@@ -1176,6 +1237,7 @@ cmd_start_hotspot() {
     cmd_start_ui
     if wait_ap_local_ready 60; then
       kv "result" "ap-local-ready"
+      start_return_check_loop_best_effort
     else
       kv "result" "ap-local-not-ready-timeout"
       exit 1
@@ -1192,6 +1254,7 @@ cmd_stop_hotspot() {
   kv "profile_persistent_target" "true"
   kv "profile_delete_still_legacy" "true"
   if [ "$apply" = "1" ]; then
+    stop_return_check_loop_best_effort
     nmcli_bin=$(require_apply_tool nmcli)
     "$nmcli_bin" connection down "$ap_profile" 2>/dev/null || true
     "$nmcli_bin" connection delete "$ap_profile" 2>/dev/null || true
@@ -1315,6 +1378,7 @@ cmd_rollback() {
   kv "profile_persistent_target" "true"
   kv "profile_delete_still_legacy" "true"
   if [ "$apply" = "1" ]; then
+    stop_return_check_loop_best_effort
     cmd_stop_ui
     nmcli_bin=$(require_apply_tool nmcli)
     "$nmcli_bin" connection down "$ap_profile" 2>/dev/null || true
@@ -1367,6 +1431,7 @@ cmd_return_target() {
       kv "reason" "target-connection-unknown"
       exit 1
     fi
+    stop_return_check_loop_best_effort
     cmd_stop_ui
     nmcli_bin=$(require_apply_tool nmcli)
     "$nmcli_bin" connection down "$ap_profile" 2>/dev/null || true
