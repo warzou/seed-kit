@@ -4461,7 +4461,7 @@
       passwordHint.className = `field-hint${knownProfileHasSecret ? ' saved-secret' : ''}`;
       passwordHint.textContent = knownProfileHasSecret
         ? 'Mot de passe d\u00e9j\u00e0 enregistr\u00e9.'
-        : 'Runtime-only: non journalis\u00e9, non persist\u00e9.';
+        : 'Le mot de passe est utilisé uniquement pour cette tentative de connexion. Il n’est pas enregistré par Wifi-Kit.';
       passwordLabel.appendChild(passwordHint);
       const password = document.createElement('input');
       password.className = 'password-local';
@@ -4482,7 +4482,7 @@
         button.textContent = 'Connecté';
         button.disabled = true;
       } else {
-        button.textContent = 'Connecter';
+        button.textContent = 'Se connecter à ce Wi-Fi';
       }
 
       const summary = document.createElement('p');
@@ -4720,9 +4720,9 @@
       const note = document.createElement('p');
       note.className = 'field-hint';
       note.textContent = payload.status === 'done' || payload.ok === true
-        ? (payload.message || 'Connexion reussie. Le portail recovery peut disparaitre.')
+        ? (payload.message || 'Réseau connecté et validé. Voulez-vous le définir comme réseau principal ?')
         : payload.connect_started
-        ? "Tentative de connexion en cours... si la connexion réussit, le portail disparaîtra. En cas d'echec, le mode recovery revient pour une nouvelle tentative."
+        ? "Tentative de connexion en cours... si la connexion réussit, le portail disparaîtra. En cas d'echec, Wifi-Kit tentera de revenir en AP Recovery."
         : payload.message || payload.secret_policy || payload.warning_if_recovery_active || 'Connexion non validée, le mode recovery reste actif.';
       plan.append(title, list, note);
       plan.hidden = false;
@@ -4777,6 +4777,18 @@
         renderInlinePlan(network, plan);
         return;
       }
+      if (!window.confirm(`Wifi-Kit va tenter de connecter le node au réseau ${ssid}. En cas d'échec, il tentera de revenir en AP Recovery.`)) {
+        renderConnectResponse({
+          status: 'planned',
+          requested_ssid: ssid,
+          message: 'Connexion annulée par l’utilisateur.',
+          connect_plan: [
+            'Aucune modification réseau lancée.',
+            'Le réseau principal souhaité reste inchangé.',
+          ],
+        }, plan);
+        return;
+      }
       const originalText = button.textContent;
       button.disabled = true;
       button.textContent = 'Connexion en cours...';
@@ -4811,7 +4823,7 @@
           error: payload.error || null,
         };
         if (!response.ok) {
-          button.textContent = 'Connecter';
+          button.textContent = 'Se connecter à ce Wi-Fi';
           return;
         }
       } catch (error) {

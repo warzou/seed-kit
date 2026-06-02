@@ -2796,6 +2796,25 @@ def safe_diagnose() -> dict:
     }
 
 
+def normal_mode_wifi_rollback_ready(diagnose: dict | None = None) -> tuple[bool, str, dict]:
+    data = diagnose or safe_diagnose()
+    current_ssid = str(data.get("current_ssid_state", "")).strip()
+    current_ip = str(data.get("current_ip", "")).strip()
+    default_route = str(data.get("default_route", "")).strip()
+    gateway = str(data.get("gateway", "")).strip()
+    if not current_ssid or current_ssid == "unknown":
+        return False, "current-ssid-missing", data
+    if current_ssid.lower().startswith("wifi-kit-"):
+        return False, "current-ssid-is-recovery-ap", data
+    if not current_ip or current_ip == "unknown":
+        return False, "current-ip-missing", data
+    if not default_route or default_route == "unknown":
+        return False, "default-route-missing", data
+    if not gateway or gateway == "unknown":
+        return False, "gateway-missing", data
+    return True, "current-network-rollback-ready", data
+
+
 def scan(refresh: bool = False) -> dict:
     if not WIFI_KIT_SH.exists() or not find_tool("sh"):
         reason = "legacy-wifi-kit-sh-not-installed" if not WIFI_KIT_SH.exists() else "shell-not-available"
@@ -3690,8 +3709,15 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
         return refused("missing-password", requested_ssid=ssid)
     if password and not use_saved_nm_secret and len(password) < 8:
         return refused("password-too-short", requested_ssid=ssid)
+    if ssid.lower().startswith("wifi-kit-"):
+        return refused("target-ssid-is-recovery-ap", requested_ssid=ssid)
 
     backend = "raspberrypi-networkmanager" if networkmanager_owns_wlan0() else "unknown"
+    normal_mode_new_ssid_allowed = False
+    normal_mode_gate_reason = "not-evaluated"
+    normal_mode_diagnose: dict = {}
+    if not recovery_active and not known_profile_reconnect:
+        normal_mode_new_ssid_allowed, normal_mode_gate_reason, normal_mode_diagnose = normal_mode_wifi_rollback_ready()
     secret_policy = (
         "saved NetworkManager profile requested by sentinel; no secret was read, returned, or logged"
         if existing_connection
@@ -3701,7 +3727,9 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
         (
             "allow normal mode because a known NetworkManager profile was selected"
             if known_profile_reconnect
-            else "require AP recovery context"
+            else "allow normal mode with a healthy current Wi-Fi rollback target"
+            if normal_mode_new_ssid_allowed
+            else "require AP recovery context or a healthy current Wi-Fi rollback target"
         ),
         "require WIFI_KIT_ENABLE_PRIVILEGED_ACTIONS=1",
         "require browser confirmation from the operator",
@@ -3714,6 +3742,7 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
         "rollback previous profile on failure",
         "start AP recovery only if rollback fails",
     ]
+    recovery_gate_ok = recovery_gate_ok or normal_mode_new_ssid_allowed
     if (
         not recovery_gate_ok
         or not privileged_actions_enabled()
@@ -3729,6 +3758,8 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
             existing_connection=existing_connection or "none",
             recovery_active=recovery_active,
             normal_mode_known_profile_allowed=known_profile_reconnect,
+            normal_mode_new_ssid_allowed=normal_mode_new_ssid_allowed,
+            normal_mode_gate_reason=normal_mode_gate_reason,
             privileged_actions_enabled=privileged_actions_enabled(),
             dangerous_real_apply=dangerous_real_apply,
             user_confirmed=user_confirmed,
@@ -3743,6 +3774,8 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
                 "connect_started": False,
                 "recovery_active": recovery_active,
                 "normal_mode_known_profile_allowed": known_profile_reconnect,
+                "normal_mode_new_ssid_allowed": normal_mode_new_ssid_allowed,
+                "normal_mode_gate_reason": normal_mode_gate_reason,
                 "privileged_actions_enabled": privileged_actions_enabled(),
                 "dangerous_real_apply": dangerous_real_apply,
                 "confirm_ok": user_confirmed,
@@ -3752,8 +3785,14 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
                 "warning_if_recovery_active": (
                     "Known NetworkManager profile reconnect can run from normal mode with rollback, privileged actions, and browser confirmation."
                     if known_profile_reconnect
-                    else "Real Wi-Fi connect requires AP recovery context, privileged actions, and browser confirmation."
+                    else "New Wi-Fi connect from normal mode requires a healthy current Wi-Fi rollback target, privileged actions, and browser confirmation."
                 ),
+                "normal_mode_current_network": {
+                    "ssid": normal_mode_diagnose.get("current_ssid_state", ""),
+                    "ip": normal_mode_diagnose.get("current_ip", ""),
+                    "default_route": normal_mode_diagnose.get("default_route", ""),
+                    "gateway": normal_mode_diagnose.get("gateway", ""),
+                },
                 "connect_plan": connect_plan,
             },
             409,
@@ -3777,6 +3816,8 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
                 "connect_started": False,
                 "existing_connection": existing_connection,
                 "normal_mode_known_profile_allowed": known_profile_reconnect,
+                "normal_mode_new_ssid_allowed": normal_mode_new_ssid_allowed,
+                "normal_mode_gate_reason": normal_mode_gate_reason,
                 "secret_policy": secret_policy,
                 "log": str(connect_transaction_log),
             }
@@ -3850,6 +3891,8 @@ def start_recovery_wifi_connect(payload: dict, recovery_active: bool) -> tuple[d
             "connect_started": True,
             "existing_connection": existing_connection,
             "normal_mode_known_profile_allowed": known_profile_reconnect,
+            "normal_mode_new_ssid_allowed": normal_mode_new_ssid_allowed,
+            "normal_mode_gate_reason": normal_mode_gate_reason,
             "timeout_seconds": CONNECT_TRANSACTION_TIMEOUT_SECONDS,
             "expected_behavior": "success-keeps-target-failure-rolls-back-rollback-failure-starts-ap-recovery",
             "secret_policy": (
@@ -4612,10 +4655,6 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
         log_route("post", raw_path, path)
         if path == "/wifi/connect":
             post_payload = parse_post_payload(self)
-            if bool(self.recovery.get("active")) and nm_hotspot_recovery_active():
-                payload, status = nm_hotspot_wifi_connect(post_payload)
-                self.send_action_json("nm-hotspot-connect", payload, status=status)
-                return
             payload, status = start_recovery_wifi_connect(post_payload, bool(self.recovery.get("active")))
             self.send_action_json("wifi-connect-transaction", payload, status=status)
             return
