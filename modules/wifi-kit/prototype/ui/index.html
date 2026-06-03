@@ -2151,7 +2151,7 @@
           </div>
         </div>
       </div>
-      <p class="lead">Connecte le node au bon Wi-Fi et garde un mode AP de secours si le reseau normal tombe.</p>
+      <p class="lead">Connecte le node au bon Wi-Fi et garde un Wi-Fi de secours si le réseau normal tombe.</p>
     </header>
 
     <section class="overview" aria-label="Etat Wi-Fi courant">
@@ -2159,7 +2159,7 @@
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span>Hostname</span><strong id="status-hostname">...</strong></div></div>
         <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-location"></use></svg></span><div><span>Adresse IP</span><strong id="status-ip">...</strong></div></div>
         <div id="status-wifi-card" class="status-mini wifi-status-normal"><span class="status-icon"><svg class="icon-svg"><use href="#icon-wifi"></use></svg></span><div><span id="status-wifi-label">Wi-Fi (normal)</span><strong id="status-ssid">...</strong></div></div>
-        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span id="status-clients-label">Clients AP</span><strong id="status-clients">...</strong></div></div>
+        <div class="status-mini"><span class="status-icon"><svg class="icon-svg"><use href="#icon-network"></use></svg></span><div><span id="status-clients-label">Clients secours</span><strong id="status-clients">...</strong></div></div>
       </div>
     </section>
 
@@ -2175,7 +2175,7 @@
         <div class="section-head">
           <div>
             <h2 id="network-title">Wi-Fi</h2>
-            <p id="scan-status" class="scan-status">Les reseaux disponibles s'affichent automatiquement.</p>
+            <p id="scan-status" class="scan-status">Les réseaux disponibles s'affichent automatiquement.</p>
           </div>
           <button id="refresh" type="button" class="button"><svg class="icon-svg" aria-hidden="true"><use href="#icon-refresh"></use></svg>Scanner</button>
         </div>
@@ -2194,24 +2194,24 @@
             <h2 id="recovery-title">Secours</h2>
             <p class="section-copy" id="recovery-copy">Les actions utiles quand le node doit rester joignable.</p>
           </div>
-          <span class="chip" id="recovery-chip">Plan-only</span>
+          <span class="chip" id="recovery-chip">Lecture seule</span>
         </div>
-        <article class="appliance-card primary" aria-label="Securite reseau">
+        <article class="appliance-card primary" aria-label="Sécurité réseau">
           <div class="appliance-card-header">
             <div>
-              <h3 id="recovery-safety-title">Securite reseau</h3>
+              <h3 id="recovery-safety-title">Sécurité réseau</h3>
               <p class="appliance-copy" id="recovery-safety-copy">Lecture en cours...</p>
             </div>
             <span id="recovery-safety-badge" class="chip">Observation</span>
           </div>
           <div class="status-summary-grid">
-            <div class="status-summary-card"><span>Reseau principal</span><strong id="recovery-primary-status">...</strong></div>
+            <div class="status-summary-card"><span>Réseau principal</span><strong id="recovery-primary-status">...</strong></div>
             <div class="status-summary-card"><span>Mode</span><strong id="recovery-watchdog-mode">...</strong></div>
-            <div class="status-summary-card"><span>Wi-Fi secours</span><strong id="recovery-ap-status">...</strong></div>
+            <div class="status-summary-card"><span>Wi-Fi de secours</span><strong id="recovery-ap-status">...</strong></div>
             <div class="status-summary-card"><span>Dernier incident</span><strong id="recovery-watchdog-summary">...</strong></div>
           </div>
           <div class="recovery-reassurance">
-            <strong>Dernier recovery</strong>
+            <strong>Dernier passage en Wi-Fi de secours</strong>
             <div class="status-summary-grid">
               <div class="status-summary-card"><span>Date</span><strong id="recovery-last-time">...</strong></div>
               <div class="status-summary-card"><span>Déclencheur</span><strong id="recovery-last-trigger">...</strong></div>
@@ -2219,28 +2219,28 @@
             </div>
           </div>
         </article>
-        <article class="appliance-card" aria-label="Verification secours AP">
+        <article class="appliance-card" aria-label="Vérification du Wi-Fi de secours">
           <div class="appliance-card-header">
             <div>
-              <h3>Vérification secours AP</h3>
+              <h3>Vérification du Wi-Fi de secours</h3>
               <p class="appliance-copy" id="ap-health-summary">Lecture en cours...</p>
             </div>
             <span id="ap-health-badge" class="chip">Lecture seule</span>
           </div>
           <div class="status-summary-grid">
             <div class="status-summary-card"><span>Configuration</span><strong id="ap-health-configured">...</strong></div>
-            <div class="status-summary-card"><span>Profil AP</span><strong id="ap-health-profile">...</strong></div>
-            <div class="status-summary-card"><span>IP AP</span><strong id="ap-health-ip">...</strong></div>
-            <div class="status-summary-card"><span>UI recovery</span><strong id="ap-health-ui">...</strong></div>
+            <div class="status-summary-card"><span>Profil de secours</span><strong id="ap-health-profile">...</strong></div>
+            <div class="status-summary-card"><span>IP de secours</span><strong id="ap-health-ip">...</strong></div>
+            <div class="status-summary-card"><span>Portail de secours</span><strong id="ap-health-ui">...</strong></div>
             <div class="status-summary-card"><span>Port 80</span><strong id="ap-health-port">...</strong></div>
             <div class="status-summary-card"><span>DNS captive</span><strong id="ap-health-captive">...</strong></div>
           </div>
           <div class="recovery-actions">
-            <button id="ap-health-refresh" class="button secondary" type="button">Vérifier le secours AP</button>
-            <span class="muted">Lecture seule : ne démarre pas l’AP.</span>
+            <button id="ap-health-refresh" class="button secondary" type="button">Vérifier le Wi-Fi de secours</button>
+            <span class="muted">Lecture seule : ne démarre pas le Wi-Fi de secours.</span>
           </div>
           <details class="return-profile-details-panel">
-            <summary>Détails Wi-Fi secours</summary>
+            <summary>Détails Wi-Fi de secours</summary>
             <dl class="detail-grid">
               <dt>SSID attendu</dt><dd><span id="ap-health-ssid">...</span></dd>
               <dt>URL manuelle</dt><dd><span id="ap-health-url">http://192.168.50.1</span></dd>
@@ -2250,43 +2250,43 @@
           </details>
         </article>
         <details class="advanced-details" id="recovery-advanced">
-          <summary>Parametres avances</summary>
-          <div class="advanced-details-body recovery-settings" aria-label="Configuration recovery">
+            <summary>Paramètres avancés</summary>
+          <div class="advanced-details-body recovery-settings" aria-label="Configuration Wi-Fi de secours">
           <div class="recovery-settings-section">
-            <h3 class="settings-title">Details techniques recovery</h3>
+            <h3 class="settings-title">Détails techniques du Wi-Fi de secours</h3>
             <div class="recovery-settings-grid">
-              <div class="metric"><span>Wi-Fi AP</span><strong id="recovery-ssid">...</strong></div>
+              <div class="metric"><span>Wi-Fi de secours</span><strong id="recovery-ssid">...</strong></div>
               <div class="metric"><span>Wi-Fi principal</span><strong id="recovery-return-ssid">...</strong></div>
-              <div class="metric"><span>Adresse AP</span><strong id="recovery-ip">192.168.50.1</strong></div>
+              <div class="metric"><span>Adresse de secours</span><strong id="recovery-ip">192.168.50.1</strong></div>
               <div class="metric"><span>Port portail</span><strong id="recovery-captive-port">80</strong></div>
               <div class="metric"><span>DHCP</span><strong id="recovery-dhcp">...</strong></div>
               <div class="metric"><span>DNS captive</span><strong id="recovery-dns">...</strong></div>
               <div class="metric"><span>Interface</span><strong id="recovery-ui">...</strong></div>
-              <div class="metric"><span>Clients AP</span><strong id="recovery-clients">...</strong></div>
-              <div class="metric"><span>Reseau principal</span><strong id="recovery-main-health">...</strong></div>
-              <div class="metric"><span>Wi-Fi secours</span><strong id="recovery-ap-health">...</strong></div>
-              <div class="metric"><span>Runtime /opt</span><strong id="recovery-runtime-sync">...</strong></div>
-              <div class="metric"><span>Failsafe</span><strong id="recovery-failsafe-mode">...</strong></div>
-              <div class="metric"><span>Etat surveillance</span><strong id="recovery-watchdog-state">...</strong></div>
-              <div class="metric"><span>Decision surveillance</span><strong id="recovery-watchdog-decision">...</strong></div>
-              <div class="metric"><span>Delai surveillance</span><strong id="recovery-watchdog-delay">...</strong></div>
-              <div class="metric"><span>Reseau surveille</span><strong id="recovery-watchdog-network">...</strong></div>
-              <div class="metric"><span>Dernier signal brut</span><strong id="recovery-watchdog-event">...</strong></div>
+              <div class="metric"><span>Clients secours</span><strong id="recovery-clients">...</strong></div>
+              <div class="metric"><span>Réseau principal</span><strong id="recovery-main-health">...</strong></div>
+              <div class="metric"><span>Wi-Fi de secours</span><strong id="recovery-ap-health">...</strong></div>
+              <div class="metric"><span>Version installée</span><strong id="recovery-runtime-sync">...</strong></div>
+              <div class="metric"><span>Mode de secours</span><strong id="recovery-failsafe-mode">...</strong></div>
+              <div class="metric"><span>État surveillance</span><strong id="recovery-watchdog-state">...</strong></div>
+              <div class="metric"><span>Décision surveillance</span><strong id="recovery-watchdog-decision">...</strong></div>
+              <div class="metric"><span>Délai surveillance</span><strong id="recovery-watchdog-delay">...</strong></div>
+              <div class="metric"><span>Réseau surveillé</span><strong id="recovery-watchdog-network">...</strong></div>
+              <div class="metric"><span>Dernier événement détaillé</span><strong id="recovery-watchdog-event">...</strong></div>
             </div>
           </div>
           <div class="recovery-reassurance">
-            <strong>Le mode AP reste un secours manuel.</strong>
-            <p>Il ne demarre pas tout seul depuis cette page. Le retour utilise le Wi-Fi principal choisi ci-dessous.</p>
+            <strong>Le Wi-Fi de secours reste un secours manuel.</strong>
+            <p>Il ne démarre pas tout seul depuis cette page. Le retour utilise le Wi-Fi principal choisi ci-dessous.</p>
           </div>
           <div class="recovery-settings-section">
-            <h3 class="settings-title">Réglages AP</h3>
+            <h3 class="settings-title">Réglages du Wi-Fi de secours</h3>
             <div class="recovery-settings-grid">
               <label class="field-label">
-                Nom du Wi-Fi AP
+                Nom du Wi-Fi de secours
                 <input id="recovery-ap-ssid-input" class="password-local" type="text" autocomplete="off" placeholder="Wifi-Kit-pocket-node">
               </label>
               <label class="field-label">
-                Mot de passe AP
+                Mot de passe du Wi-Fi de secours
                 <input id="recovery-ap-password-input" class="password-local" type="password" autocomplete="new-password" placeholder="Minimum 8 caracteres">
               </label>
             </div>
@@ -2303,10 +2303,10 @@
               </div>
             </div>
             <details class="return-profile-details-panel" id="return-profile-details">
-              <summary>Détails techniques</summary>
+              <summary>Détails du profil</summary>
               <dl class="detail-grid">
                 <dt>SSID</dt><dd><span id="return-detail-ssid">...</span></dd>
-                <dt>Profil NM</dt><dd><span id="return-detail-profile">...</span></dd>
+                <dt>Profil réseau</dt><dd><span id="return-detail-profile">...</span></dd>
                 <dt>UUID</dt><dd><span id="return-detail-uuid">...</span></dd>
                 <dt>Type</dt><dd><span id="return-detail-type">...</span></dd>
                 <dt>Interface</dt><dd><span id="return-detail-device">...</span></dd>
@@ -2317,17 +2317,17 @@
             </details>
           </div>
           <details class="return-profile-details-panel profile-networkmanager-panel">
-            <summary>Profil NetworkManager</summary>
+            <summary>Profil réseau</summary>
             <dl class="detail-grid">
               <dt>Wi-Fi protégé</dt><dd><span id="recovery-original-ssid">...</span></dd>
               <dt>Profil protégé</dt><dd><span id="recovery-original-profile">...</span></dd>
               <dt>Statut</dt><dd><span id="recovery-original-visible">...</span></dd>
               <dt>Profil principal</dt><dd><span id="recovery-return-profile">...</span></dd>
-              <dt>Mot de passe AP</dt><dd><span id="recovery-ap-password">12345678</span></dd>
+              <dt>Mot de passe du Wi-Fi de secours</dt><dd><span id="recovery-ap-password">12345678</span></dd>
             </dl>
           </details>
           <button id="recovery-save-config" class="button secondary" type="button">Enregistrer ce Wi-Fi comme principal</button>
-          <button id="forget-network-button" class="button danger" type="button" disabled>⚠ Oublier ce réseau</button>
+          <button id="forget-network-button" class="button danger" type="button" disabled>⚠ Supprimer ce profil Wi-Fi connu</button>
           <p class="danger-note">Supprimera le profil Wi-Fi connu après confirmation.</p>
           <div id="recovery-config-result" class="callout recovery-result" hidden></div>
           </div>
@@ -2344,43 +2344,43 @@
         </div>
         <div class="recovery-actions secondary-action-grid">
           <div class="action-card">
-            <span class="chip">Mode AP</span>
-            <strong>Activer le Wi-Fi secours</strong>
-            <p>Le node cree son propre Wi-Fi de secours et ouvre l'interface recovery.</p>
+            <span class="chip">Wi-Fi de secours</span>
+            <strong>Activer le Wi-Fi de secours</strong>
+            <p>Le node crée son propre Wi-Fi de secours et ouvre le portail de secours.</p>
             <label class="confirm-line">
               <input id="ap-confirmed" type="checkbox">
-              Je comprends que le mode AP peut couper temporairement l'acces reseau.
+              Je comprends que le Wi-Fi de secours peut couper temporairement l'accès réseau.
             </label>
-            <button id="start-ap-mode-button" class="button primary-action-button" type="button" data-network-action="start-ap-mode" disabled>Activer le Wi-Fi secours</button>
+            <button id="start-ap-mode-button" class="button primary-action-button" type="button" data-network-action="start-ap-mode" disabled>Activer le Wi-Fi de secours</button>
             <div id="start-ap-mode-result" class="callout recovery-result" hidden></div>
             <details class="action-plan">
               <summary>Afficher le plan</summary>
-              <p>Demande au backend SAFE d'ouvrir le Wi-Fi de secours puis confirme l'etat reel avant d'annoncer le succes.</p>
+              <p>Demande au système réseau d'ouvrir le Wi-Fi de secours puis confirme l'état réel avant d'annoncer le succès.</p>
             </details>
           </div>
           <div class="action-card">
-            <strong>Retour reseau principal</strong>
-            <p>Reconnecte le node au Wi-Fi principal configure.</p>
-            <button id="return-default-network-button" class="button secondary primary-action-button" type="button" data-network-action="return-default-network">Retour reseau principal</button>
+            <strong>Retour réseau principal</strong>
+            <p>Reconnecte le node au Wi-Fi principal configuré.</p>
+            <button id="return-default-network-button" class="button secondary primary-action-button" type="button" data-network-action="return-default-network">Retour réseau principal</button>
             <div id="return-default-network-result" class="callout recovery-result" hidden></div>
             <details class="action-plan">
               <summary>Afficher le plan</summary>
-              <p>Demande &agrave; NetworkManager de reconnecter uniquement le profil principal enregistré. L'accès réseau peut couper quelques secondes.</p>
+              <p>Demande au système réseau de reconnecter uniquement le profil principal enregistré. L'accès réseau peut couper quelques secondes.</p>
             </details>
           </div>
           <div class="action-card">
             <strong>Tester le retour au Wi-Fi connu</strong>
-            <p>L'AP peut disparaitre pendant 30 a 40 secondes. Si le Wi-Fi revient, tu seras reconnecte au reseau normal. Sinon l'AP revient.</p>
+            <p>Le Wi-Fi de secours peut disparaître pendant 30 à 40 secondes. Si le Wi-Fi principal revient, tu seras reconnecté au réseau normal. Sinon le Wi-Fi de secours revient.</p>
             <button id="ap-return-check-once-button" class="button secondary" type="button" data-network-action="ap-return-check-once">Tester le retour au Wi-Fi connu</button>
             <div id="ap-return-check-once-result" class="callout recovery-result" hidden></div>
             <details class="action-plan">
               <summary>Afficher le plan</summary>
-              <p>Depuis le Wi-Fi de secours, stoppe l'AP, tente une fois le dernier Wi-Fi connu, puis reste en mode normal si le retour reussit. En cas d'echec, relance le Wi-Fi de secours.</p>
+              <p>Depuis le Wi-Fi de secours, tente une fois le dernier Wi-Fi connu, puis reste en mode normal si le retour réussit. En cas d'échec, relance le Wi-Fi de secours.</p>
             </details>
           </div>
           <div class="action-card">
             <strong>Exporter diagnostic</strong>
-            <p>Prepare un fichier court pour comprendre l'etat du node.</p>
+            <p>Prépare un fichier court pour comprendre l'état du node.</p>
             <button class="button secondary diagnostic-export-trigger" type="button">Exporter diagnostic</button>
             <div id="recovery-diagnostic-export-result" class="callout recovery-result" hidden></div>
           </div>
@@ -2394,7 +2394,7 @@
         <div class="section-head">
           <div>
             <h2 id="diag-title">Diagnostic</h2>
-            <p class="section-copy">Vue sante du node, sans bruit technique au premier regard.</p>
+            <p class="section-copy">Vue santé du node, sans bruit technique au premier regard.</p>
           </div>
           <span class="chip">SAFE</span>
         </div>
@@ -2475,27 +2475,27 @@
           </section>
         </div>
         <div class="node-grid health-section">
-          <h3>Sante reseau</h3>
+          <h3>Santé réseau</h3>
           <div class="metric"><span>Hostname</span><strong id="node-hostname">...</strong></div>
           <div class="metric"><span>IP actuelle</span><strong id="node-ip">...</strong></div>
           <div class="metric"><span>Wi-Fi actuel</span><strong id="node-wifi">...</strong></div>
-          <div class="metric"><span>NetworkManager</span><strong id="node-nm">...</strong></div>
+          <div class="metric"><span>Système réseau</span><strong id="node-nm">...</strong></div>
           <div class="metric"><span>Uptime</span><strong id="node-uptime">...</strong></div>
-          <div class="metric"><span>Temperature</span><strong id="node-temp">...</strong></div>
-          <h3>Recovery</h3>
+          <div class="metric"><span>Température</span><strong id="node-temp">...</strong></div>
+          <h3>Wi-Fi de secours</h3>
           <div class="metric"><span>Mode</span><strong id="node-recovery">...</strong></div>
-          <div class="metric"><span>AP</span><strong id="node-ap">...</strong></div>
+          <div class="metric"><span>Wi-Fi de secours</span><strong id="node-ap">...</strong></div>
           <div class="metric"><span>DHCP</span><strong id="node-dhcp">...</strong></div>
           <div class="metric"><span>Dernier evenement</span><strong id="diag-last-event">...</strong></div>
-          <h3>Runtime</h3>
-          <div class="metric"><span>Surveillance runtime</span><strong id="diag-runtime-watchdog">...</strong></div>
-          <div class="metric"><span>Cause runtime</span><strong id="diag-runtime-reason">...</strong></div>
+          <h3>Version installée</h3>
+          <div class="metric"><span>Surveillance de connexion</span><strong id="diag-runtime-watchdog">...</strong></div>
+          <div class="metric"><span>Cause surveillance</span><strong id="diag-runtime-reason">...</strong></div>
           <div class="metric"><span>Observation seulement</span><strong id="diag-runtime-debug-passive">...</strong></div>
           <div class="metric"><span>Connexion actuelle</span><strong id="diag-current-connection">...</strong></div>
           <div class="metric"><span>Dernier réseau validé</span><strong id="diag-last-good">...</strong></div>
-          <div class="metric"><span>SSID instable</span><strong id="diag-unstable-ssid">...</strong></div>
+          <div class="metric"><span>Réseau instable</span><strong id="diag-unstable-ssid">...</strong></div>
           <h3>Services</h3>
-          <div class="metric"><span>AP</span><strong id="diag-ap">...</strong></div>
+          <div class="metric"><span>Wi-Fi de secours</span><strong id="diag-ap">...</strong></div>
           <div class="metric"><span>DHCP</span><strong id="diag-dhcp">...</strong></div>
           <div class="metric"><span>UI</span><strong id="diag-ui">...</strong></div>
           <div class="metric"><span>Source de scan</span><strong id="scan-source">...</strong></div>
@@ -2504,11 +2504,11 @@
         <button id="diagnostic-export-button" class="button secondary diagnostic-export-trigger" type="button">Exporter diagnostic</button>
         <div id="diagnostic-export-result" class="callout recovery-result" hidden></div>
         <details class="advanced-details">
-          <summary>Voir donnees brutes</summary>
+          <summary>Voir les données techniques</summary>
           <div class="advanced-details-body advanced-grid">
             <h2 id="node-title">Diagnostic SAFE</h2>
             <div id="node-state" class="mini-grid"></div>
-            <h2 id="json-title">JSON brut</h2>
+            <h2 id="json-title">Données techniques</h2>
             <pre id="raw-diagnose"></pre>
             <pre id="raw-scan"></pre>
             <pre id="raw-snapshot"></pre>
@@ -2587,21 +2587,21 @@
       <section class="panel config-panel appliance-card" aria-labelledby="config-password-title">
         <div class="section-head">
           <div>
-            <h2 id="config-password-title">Recovery</h2>
-            <p class="section-copy">Parametres essentiels du Wi-Fi de secours.</p>
+            <h2 id="config-password-title">Wi-Fi de secours</h2>
+            <p class="section-copy">Paramètres essentiels du Wi-Fi de secours.</p>
           </div>
         </div>
         <div class="config-recovery-stack">
           <section class="recovery-setting" aria-labelledby="config-ap-password-heading">
-            <h3 class="recovery-setting-title" id="config-ap-password-heading">Mot de passe AP</h3>
+            <h3 class="recovery-setting-title" id="config-ap-password-heading">Mot de passe du Wi-Fi de secours</h3>
             <strong class="recovery-setting-current" id="config-ap-password-current">...</strong>
             <small class="setting-help">Le mot de passe actuel reste conservé tant qu'aucun nouveau mot de passe n'est appliqué.</small>
             <label class="field-label">
-              Nouveau mot de passe AP
+              Nouveau mot de passe du Wi-Fi de secours
               <input id="config-ap-password" class="password-local" type="password" autocomplete="new-password" placeholder="Minimum 8 caracteres">
               <small class="field-hint">Laisser vide pour conserver le mot de passe actuel.</small>
             </label>
-            <button id="config-save-password" class="button secondary setting-action" type="button">Changer le mot de passe AP</button>
+            <button id="config-save-password" class="button secondary setting-action" type="button">Changer le mot de passe du Wi-Fi de secours</button>
             <div id="config-password-result" class="callout recovery-result" hidden></div>
           </section>
         </div>
@@ -2611,18 +2611,18 @@
         <div class="section-head">
           <div>
             <h2 id="config-title">Informations node</h2>
-            <p class="section-copy">Runtime, ports et options futures comme l'IP fixe.</p>
+            <p class="section-copy">Version installée, ports et réglages préparés.</p>
           </div>
           <span class="chip">SAFE</span>
         </div>
         <details class="advanced-details">
-          <summary>Details techniques</summary>
+          <summary>Détails techniques</summary>
           <div class="advanced-details-body config-grid">
-          <div class="metric"><span>Port normal UI</span><strong id="config-normal-port">...</strong></div>
-          <div class="metric"><span>Port recovery UI</span><strong id="config-recovery-port">...</strong></div>
-          <div class="metric"><span>SSID recovery</span><strong id="config-recovery-ssid">...</strong></div>
+          <div class="metric"><span>Port interface normale</span><strong id="config-normal-port">...</strong></div>
+          <div class="metric"><span>Portail de secours</span><strong id="config-recovery-port">...</strong></div>
+          <div class="metric"><span>SSID du Wi-Fi de secours</span><strong id="config-recovery-ssid">...</strong></div>
           <div class="metric"><span>Mot de passe test</span><strong id="config-ap-password-summary">...</strong></div>
-          <div class="metric"><span>Politique AP</span><strong id="config-ap-password-policy">...</strong></div>
+          <div class="metric"><span>Politique du Wi-Fi de secours</span><strong id="config-ap-password-policy">...</strong></div>
           <div class="metric"><span>Acc&egrave;s interface</span><strong id="config-ui-access-password">...</strong></div>
           <div class="metric"><span>IP fixe</span><strong>future</strong></div>
           <div class="metric"><span>Persistance</span><strong>future</strong></div>
@@ -2634,45 +2634,45 @@
         <div class="section-head">
           <div>
             <h2 id="system-actions-title">Maintenance</h2>
-            <p class="section-copy">Mises a jour et actions systeme. Toujours confirmees, jamais par GET.</p>
+            <p class="section-copy">Mises à jour et actions système. Toujours confirmées, jamais par GET.</p>
           </div>
           <span class="chip">SAFE</span>
         </div>
         <div class="recovery-actions maintenance-grid">
           <div class="action-card maintenance-card maintenance-update-card">
             <span class="chip">Runtime</span>
-            <strong>Verifier les mises a jour</strong>
+            <strong>Vérifier les mises à jour</strong>
             <p>Compare le commit local avec la branche distante.</p>
-            <button id="updates-check-button" class="button secondary" type="button">Verifier les mises a jour</button>
+            <button id="updates-check-button" class="button secondary" type="button">Vérifier les mises à jour</button>
             <label class="confirm-line">
               <input id="updates-install-confirmed" type="checkbox" disabled>
-              Confirmer l'installation de la mise a jour
+              Confirmer l'installation de la mise à jour
             </label>
-            <button id="updates-install-button" class="button secondary" type="button" disabled>Installer la mise a jour</button>
+            <button id="updates-install-button" class="button secondary" type="button" disabled>Installer la mise à jour</button>
             <div id="updates-check-result" class="callout recovery-result update-result" hidden></div>
-            <button id="ui-restart-button" class="button secondary" type="button" hidden>Redemarrer l'interface</button>
+            <button id="ui-restart-button" class="button secondary" type="button" hidden>Redémarrer l'interface</button>
             <div id="ui-restart-result" class="callout recovery-result" hidden></div>
           </div>
           <div class="action-card maintenance-card maintenance-reboot-card">
             <span class="chip">Danger</span>
-            <strong>Redemarrer</strong>
-            <p>Le node va redemarrer proprement. L'interface sera indisponible puis devrait revenir sur le meme Wi-Fi.</p>
+            <strong>Redémarrer le node</strong>
+            <p>Le node va redémarrer proprement. L'interface sera indisponible puis devrait revenir sur le même Wi-Fi.</p>
             <label class="confirm-line">
               <input id="system-reboot-confirmed" type="checkbox">
               Confirmer le red&eacute;marrage
             </label>
-            <button id="system-reboot-button" class="button warn" type="button" data-system-action="system-reboot" disabled>Redemarrer</button>
+            <button id="system-reboot-button" class="button warn" type="button" data-system-action="system-reboot" disabled>Redémarrer le node</button>
             <div id="system-reboot-result" class="callout recovery-result" hidden></div>
           </div>
           <div class="action-card maintenance-card maintenance-shutdown-card">
             <span class="chip">Danger</span>
-            <strong>Eteindre</strong>
-            <p>Le node va s'eteindre proprement. Il faudra le rallumer physiquement.</p>
+            <strong>Éteindre le node</strong>
+            <p>Le node va s'éteindre proprement. Il faudra le rallumer physiquement.</p>
             <label class="confirm-line">
               <input id="system-shutdown-confirmed" type="checkbox">
               Confirmer l'arr&ecirc;t
             </label>
-            <button id="system-shutdown-button" class="button danger" type="button" data-system-action="system-shutdown" disabled>Eteindre</button>
+            <button id="system-shutdown-button" class="button danger" type="button" data-system-action="system-shutdown" disabled>Éteindre le node</button>
             <div id="system-shutdown-result" class="callout recovery-result" hidden></div>
           </div>
         </div>
@@ -2965,9 +2965,9 @@
       document.getElementById('status-hostname').textContent = hostname;
       document.getElementById('status-ip').textContent = formatIpSummary(ip);
       document.getElementById('status-ssid').textContent = ssid;
-      if (clientsLabel) clientsLabel.textContent = activeAp ? 'Clients AP' : 'Acces UI';
+      if (clientsLabel) clientsLabel.textContent = activeAp ? 'Clients secours' : 'Accès UI';
       setText('status-clients', activeAp ? apClientLabel() : uiAccessLabel());
-      if (wifiLabel) wifiLabel.textContent = transitioning ? 'Wi-Fi (transition)' : activeAp ? 'Wi-Fi (AP)' : 'Wi-Fi (normal)';
+      if (wifiLabel) wifiLabel.textContent = transitioning ? 'Wi-Fi (transition)' : activeAp ? 'Wi-Fi de secours' : 'Wi-Fi (normal)';
       if (wifiCard) {
         wifiCard.classList.toggle('wifi-status-normal', !activeAp && !transitioning);
         wifiCard.classList.toggle('wifi-status-ap', activeAp);
@@ -2977,7 +2977,7 @@
 
     function describeScanBackend(scan) {
       const backend = scan.backend || 'unknown';
-      if (backend === 'networkmanager') return 'Scan Wi-Fi via NetworkManager';
+      if (backend === 'networkmanager') return 'Scan Wi-Fi via le système réseau';
       if (backend === 'wpa_cli') return 'Scan Wi-Fi via wpa_cli';
       if (backend === 'iw') return 'Scan Wi-Fi fallback en mode diagnostic';
       return `Source de scan: ${backend}`;
@@ -3042,7 +3042,7 @@
       const label = networks === 1 ? '1 réseau trouvé' : `${networks} réseaux trouvés`;
       if (scan.refresh_attempted) {
         const status = scan.refresh_status || 'unknown';
-        if (scan.scan_mode === 'nm-hotspot-nondisruptive') return `${label}; scan experimental sans coupure AP`;
+        if (scan.scan_mode === 'nm-hotspot-nondisruptive') return `${label}; scan expérimental sans coupure du Wi-Fi de secours`;
         if (status === 'started') return `${label}; Wi-Fi de secours interrompu puis redemarre apres scan`;
         if (status === 'ok') return `${label} après scan`;
         if (status === 'failed-used-existing-results') return `${label}; cache conservé`;
@@ -3103,19 +3103,19 @@
       if (['loading', 'pending', 'started'].includes(reason)) return 'Recherche des réseaux Wi-Fi...';
       if (reason === 'scan-readonly-failed') return 'Le Raspberry Pi ne peut pas lire les resultats Wi-Fi pour le moment. La connexion actuelle reste preservee.';
       if (reason === 'scan-tools-missing') return "Le scan Wi-Fi n'est pas disponible car nmcli et iw sont absents ou introuvables.";
-      if (reason === 'iw-scan-failed') return 'Le fallback iw ne peut pas scanner les reseaux pour le moment tout en gardant la connexion Wi-Fi actuelle.';
+      if (reason === 'iw-scan-failed') return 'Le système ne peut pas scanner les réseaux pour le moment tout en gardant la connexion Wi-Fi actuelle.';
       if (reason === 'iw-missing') return "Le scan Wi-Fi n'est pas disponible car l'outil iw est absent.";
-      if (reason === 'nm-hotspot-scan-ok') return "Scan experimental sans coupure AP. Si l'AP disparait, c'est une limite driver ou NetworkManager, pas une coupure volontaire du backend.";
-      if (reason === 'ap-recovery-scan-started') return "Le scan interrompt temporairement le Wi-Fi de secours et deconnecte les appareils. Reconnecte-toi au Wi-Fi de secours apres son redemarrage.";
-      if (reason === 'scan-cache-missing') return "Aucun scan recent n'est encore disponible en mode Wi-Fi de secours. Scanner interrompt temporairement l'AP et deconnecte les appareils.";
-      if (reason === 'scan-from-ap-recovery-failed') return "Le scan depuis le Wi-Fi de secours a echoue, mais l'AP doit etre relance automatiquement.";
-      if (reason === 'no-wifi-interface') return "Interface Wi-Fi non detectee dans cet environnement. C'est normal en previsualisation locale/WSL. Sur pocket-node, les reseaux apparaitront si wlan0 est disponible.";
-      if (reason === 'demo-data') return 'Aucun reseau reel dans la demo. Lance le serveur local read-only pour afficher les donnees du Raspberry Pi.';
+      if (reason === 'nm-hotspot-scan-ok') return "Scan expérimental sans coupure du Wi-Fi de secours. Si le Wi-Fi de secours disparaît, c'est probablement une limite du pilote ou du système réseau, pas une coupure volontaire.";
+      if (reason === 'ap-recovery-scan-started') return "Le scan interrompt temporairement le Wi-Fi de secours et déconnecte les appareils. Reconnecte-toi au Wi-Fi de secours après son redémarrage.";
+      if (reason === 'scan-cache-missing') return "Aucun scan récent n'est encore disponible en mode Wi-Fi de secours. Scanner interrompt temporairement le Wi-Fi de secours et déconnecte les appareils.";
+      if (reason === 'scan-from-ap-recovery-failed') return "Le scan depuis le Wi-Fi de secours a échoué, mais le Wi-Fi de secours doit être relancé automatiquement.";
+      if (reason === 'no-wifi-interface') return "Interface Wi-Fi non détectée dans cet environnement. C'est normal en prévisualisation locale/WSL. Sur pocket-node, les réseaux apparaîtront si wlan0 est disponible.";
+      if (reason === 'demo-data') return 'Aucun réseau réel dans la démo. Lance le serveur local en lecture seule pour afficher les données du Raspberry Pi.';
       return `Le scan Wi-Fi est indisponible pour le moment (${reason}).`;
     }
 
     function displaySsid(network) {
-      return network?.ssid_hidden ? 'Reseau masque' : (network?.ssid || 'Reseau masque');
+      return network?.ssid_hidden ? 'Réseau masqué' : (network?.ssid || 'Réseau masqué');
     }
 
     function activeApSsid() {
@@ -3173,15 +3173,15 @@
 
     function apRecoveryHealthLabel() {
       const health = apRecoveryHealthState();
-      if (health.summary === 'active-ok') return 'AP actif';
-      if (health.summary === 'ready') return 'AP prêt';
+      if (health.summary === 'active-ok') return 'Wi-Fi de secours actif';
+      if (health.summary === 'ready') return 'Wi-Fi de secours prêt';
       if (systemState().recovery_active || recoveryState().active) {
         const uiState = serviceLabel(recoveryState().ui || systemState().ui_state);
-        if (uiState === 'actif' || uiState === 'lecture seule') return 'AP actif';
-        return 'AP actif, UI a verifier';
+        if (uiState === 'actif' || uiState === 'lecture seule') return 'Wi-Fi de secours actif';
+        return 'Wi-Fi de secours actif, portail à vérifier';
       }
-      if (systemState().actions?.start_ap_mode) return 'AP pret';
-      return 'AP inactif';
+      if (systemState().actions?.start_ap_mode) return 'Wi-Fi de secours prêt';
+      return 'Wi-Fi de secours inactif';
     }
 
     function okKo(value) {
@@ -3199,9 +3199,9 @@
       setText('ap-health-summary', active
         ? 'Wi-Fi de secours actif et UI joignable selon les signaux locaux.'
         : ready
-          ? 'Les briques du secours AP sont prêtes. Ce test ne démarre pas l’AP.'
-          : 'Secours AP incomplet : vérifie les détails avant d’activer une surveillance automatique.');
-      setText('ap-health-badge', active ? 'AP actif' : (ready ? 'Prêt' : 'À vérifier'));
+          ? 'Les briques du Wi-Fi de secours sont prêtes. Ce test ne le démarre pas.'
+          : 'Wi-Fi de secours incomplet : vérifie les détails avant d’activer une surveillance automatique.');
+      setText('ap-health-badge', active ? 'Wi-Fi de secours actif' : (ready ? 'Prêt' : 'À vérifier'));
       setText('ap-health-configured', okKo(checks.ap_configured));
       setText('ap-health-profile', checks.ap_profile_present ? 'présent' : 'absent');
       setText('ap-health-ip', checks.wlan0_ip_ap_present ? '192.168.50.1 OK' : 'inactive');
@@ -3250,7 +3250,7 @@
       if (action === 'grace-period-started') return 'Délai de sécurité démarré';
       if (action === 'recovery-cancelled') return 'Lien revenu, aucune action';
       if (action === 'starting-ap-recovery') return 'Ouverture du Wi-Fi secours';
-      if (action === 'ap-start-failed') return 'Ouverture AP échouée';
+      if (action === 'ap-start-failed') return 'Ouverture du Wi-Fi de secours échouée';
       if (action === 'runtime-healthy' || why === 'matched-last-good') return 'Lien principal stable';
       if (why === 'internet-unreachable') return 'Internet injoignable selon la regle actuelle';
       if (why === 'gateway-unreachable') return 'Passerelle momentanément injoignable';
@@ -3314,15 +3314,15 @@
       const reason = watchdog.runtime_reason || watchdog.reason || watchdog.health_reason || '';
       const eventTime = watchdog.last_event_local || watchdog.timestamp_local || formatLocalDateTime(watchdog.timestamp || '');
       let state = 'OK';
-      if (apActive) state = 'AP actif';
+      if (apActive) state = 'Wi-Fi de secours actif';
       else if (debugPassive) state = 'Observation';
       else if (mainHealth === 'indisponible' || watchdog.health_status === 'unhealthy') state = 'Action requise';
       const decision = apActive
-        ? 'AP actif'
+        ? 'Wi-Fi de secours actif'
         : debugPassive && /start-ap|recovery|unhealthy|gateway|no-ip|disconnected|mismatch/.test(`${event} ${reason}`)
-        ? 'AP aurait été lancé'
+        ? 'Wi-Fi de secours aurait été lancé'
         : !debugPassive && /start-ap|starting-ap-recovery/.test(`${event} ${reason}`)
-        ? 'AP lancé'
+        ? 'Wi-Fi de secours lancé'
         : 'Aucune action';
       const allGood = !apActive && mainHealth === 'OK' && synced && debugPassive;
       return {
@@ -3376,13 +3376,13 @@
       ssidText.textContent = activeApSsid();
       connectedRow.className = 'connected-row';
       connected.className = 'network-connected-badge';
-      connected.textContent = 'AP actif';
+      connected.textContent = 'Wi-Fi de secours actif';
       connectedRow.appendChild(connected);
       title.append(ssidText, connectedRow);
       meta.className = 'network-meta';
       meta.append(`Adresse ${recoveryState().ip || systemState().recovery_ip || '192.168.50.1'}`, document.createElement('span'));
       meta.lastChild.textContent = apClientLabel();
-      state.textContent = 'Recovery';
+      state.textContent = 'Wi-Fi de secours';
 
       center.append(title, meta);
       left.append(orb);
@@ -3409,7 +3409,7 @@
       const returnConnection = config.return_connection || recovery.return_connection || systemState().return_connection || originalConnection;
       const originalProfile = connectionByProfile(originalConnection);
       const summary = watchdogSummary();
-      document.getElementById('recovery-chip').textContent = active ? 'Mode AP actif' : 'Mode AP inactif';
+      document.getElementById('recovery-chip').textContent = active ? 'Wi-Fi de secours actif' : 'Wi-Fi de secours inactif';
       document.getElementById('recovery-copy').textContent = active
         ? 'Wi-Fi de secours actif. Garde cette page ouverte pour revenir au réseau normal.'
         : 'Surveille la connexion et ouvre le Wi-Fi de secours si le node devient inaccessible.';
@@ -3440,11 +3440,11 @@
       }
       document.getElementById('recovery-ssid').textContent = apSsid;
       document.getElementById('recovery-ap-password').textContent = apPassword;
-      document.getElementById('recovery-original-ssid').textContent = originalSsid || 'non configure';
-      document.getElementById('recovery-original-profile').textContent = originalConnection || 'non configure';
+      document.getElementById('recovery-original-ssid').textContent = originalSsid || 'non configuré';
+      document.getElementById('recovery-original-profile').textContent = originalConnection || 'non configuré';
       document.getElementById('recovery-original-visible').textContent = readableVisible(originalProfile, originalSsid);
-      document.getElementById('recovery-return-ssid').textContent = returnSsid || 'non configure';
-      document.getElementById('recovery-return-profile').textContent = returnConnection || 'non configure';
+      document.getElementById('recovery-return-ssid').textContent = returnSsid || 'non configuré';
+      document.getElementById('recovery-return-profile').textContent = returnConnection || 'non configuré';
       document.getElementById('recovery-ip').textContent = recovery.ip || '192.168.50.1';
       document.getElementById('recovery-dhcp').textContent = serviceLabel(recovery.dhcp);
       document.getElementById('recovery-dns').textContent = serviceLabel(recovery.dns);
@@ -3485,13 +3485,13 @@
       const normal = system.mode !== 'recovery';
       const currentIp = resolveCurrentIp();
       const currentSsid = resolveCurrentSsid();
-      setText('mode-chip', normal ? 'Mode normal' : 'Mode AP');
+      setText('mode-chip', normal ? 'Mode normal' : 'Wi-Fi de secours');
       setText('mode-summary', normal
         ? 'Le node reste client du Wi-Fi habituel.'
         : 'Le node sert le Wi-Fi Wifi-Kit local.');
       setText('mode-detail', normal
         ? 'Wi-Fi de secours inactif. Wifi-Kit observe, prépare et affiche les plans sans action réseau directe.'
-        : 'Wi-Fi de secours, DHCP, DNS captive et UI locale sont temporaires et doivent revenir à NetworkManager au nettoyage.');
+        : 'Wi-Fi de secours, DHCP, DNS captive et portail local sont temporaires et doivent revenir au système réseau au nettoyage.');
       setText('node-hostname', system.hostname || 'inconnu');
       setText('node-ip', currentIp);
       setText('node-wifi', currentSsid);
@@ -3757,13 +3757,13 @@
       if (button) {
         button.textContent = lastUpdateCheck?.status === 'up-to-date'
           ? 'Reinstaller le runtime'
-          : 'Installer la mise a jour';
+          : 'Installer la mise à jour';
         button.disabled = !(updateReady && confirmed);
       }
     }
 
     function returnConnectionLabel(connection, fallbackProfile = '') {
-      const profile = connection?.profile || fallbackProfile || 'non configure';
+      const profile = connection?.profile || fallbackProfile || 'non configuré';
       const ssid = connection?.ssid || runtimeConfig().return_ssid || profile;
       return `${ssid} — ${profile}`;
     }
@@ -3858,9 +3858,9 @@
 
     function renderReturnConnectionDetails(profile) {
       const connection = connectionByProfile(profile);
-      const fallbackSsid = runtimeConfig().return_ssid || profile || 'non configure';
+      const fallbackSsid = runtimeConfig().return_ssid || profile || 'non configuré';
       setText('return-detail-ssid', connection?.ssid || fallbackSsid);
-      setText('return-detail-profile', connection?.profile || profile || 'non configure');
+      setText('return-detail-profile', connection?.profile || profile || 'non configuré');
       setText('return-detail-uuid', connection?.uuid || 'inconnu');
       setText('return-detail-type', connection?.type || 'inconnu');
       setText('return-detail-device', connection?.device || 'non lie');
@@ -4001,13 +4001,13 @@
       const returnConnection = returnInput.value.trim();
       const returnSsid = (returnInput.dataset.ssid || returnConnection).trim();
       if (!apSsid) {
-        if (resultTarget === 'config') showConfigResult('SSID AP requis.');
-        else showRecoveryConfigResult('SSID AP requis.');
+        if (resultTarget === 'config') showConfigResult('SSID du Wi-Fi de secours requis.');
+        else showRecoveryConfigResult('SSID du Wi-Fi de secours requis.');
         return;
       }
       if (apPassword.length < 8) {
-        if (resultTarget === 'config') showConfigResult('Mot de passe AP: minimum 8 caracteres.');
-        else showRecoveryConfigResult('Mot de passe AP: minimum 8 caracteres.');
+        if (resultTarget === 'config') showConfigResult('Mot de passe du Wi-Fi de secours : minimum 8 caractères.');
+        else showRecoveryConfigResult('Mot de passe du Wi-Fi de secours : minimum 8 caractères.');
         return;
       }
       if (!returnSsid) {
@@ -4016,8 +4016,8 @@
         return;
       }
       if (!returnConnection) {
-        if (resultTarget === 'config') showConfigResult('Profil NetworkManager requis.');
-        else showRecoveryConfigResult('Profil NetworkManager requis.');
+        if (resultTarget === 'config') showConfigResult('Profil réseau requis.');
+        else showRecoveryConfigResult('Profil réseau requis.');
         return;
       }
       if (!/^[0-9]+$/.test(returnCheckIntervalSeconds)) {
@@ -4031,8 +4031,8 @@
         return;
       }
       if (!/^[0-9]+$/.test(runtimeRecoveryGrace)) {
-        if (resultTarget === 'config') showConfigResult('Delai runtime recovery: nombre de secondes requis.');
-        else showRecoveryConfigResult('Delai runtime recovery: nombre de secondes requis.');
+        if (resultTarget === 'config') showConfigResult('Délai du Wi-Fi de secours : nombre de secondes requis.');
+        else showRecoveryConfigResult('Délai du Wi-Fi de secours : nombre de secondes requis.');
         return;
       }
       if (!internetProbe) {
@@ -4098,7 +4098,7 @@
       const runtimeRecoveryGrace = document.getElementById('runtime-recovery-grace-input')?.value.trim() || '30';
       const criticalLinkLossSeconds = document.getElementById('runtime-critical-link-loss-input')?.value.trim() || '300';
       if (!/^[0-9]+$/.test(runtimeRecoveryGrace)) {
-        showRuntimeConfigResult('Delai avant Wi-Fi secours : nombre de secondes requis.', 'diag-recovery-delay-result');
+        showRuntimeConfigResult('Délai avant Wi-Fi de secours : nombre de secondes requis.', 'diag-recovery-delay-result');
         return;
       }
       if (!/^[0-9]+$/.test(criticalLinkLossSeconds) || Number(criticalLinkLossSeconds) < 1 || Number(criticalLinkLossSeconds) > 3600) {
@@ -4214,7 +4214,7 @@
       const returnCheckIntervalSeconds = document.getElementById('config-return-check-interval-input')?.value.trim() || '300';
       const returnCheckHoldSeconds = document.getElementById('config-return-check-hold-input')?.value.trim() || '120';
       if (!/^[0-9]+$/.test(returnCheckIntervalSeconds)) {
-        showRuntimeConfigResult('Verification retour Wi-Fi : nombre de secondes requis.', 'diag-watchdog-result');
+        showRuntimeConfigResult('Vérification du retour Wi-Fi : nombre de secondes requis.', 'diag-watchdog-result');
         return;
       }
       if (!/^[0-9]+$/.test(returnCheckHoldSeconds) || Number(returnCheckHoldSeconds) > 3600) {
@@ -4233,16 +4233,16 @@
 
     function networkActionPlan(action) {
       const config = runtimeConfig();
-      const returnSsid = config.return_ssid || 'non configure';
+      const returnSsid = config.return_ssid || 'non configuré';
       const returnConnection = config.return_connection || returnSsid;
       const apSsid = config.ap_ssid || 'Wifi-Kit-node';
       const plans = {
-        'reconnect-previous': "Retour au Wi-Fi precedent: le mode AP, DHCP, DNS et cette UI vont s'arreter, puis wlan0 revient a NetworkManager. Le portail peut disparaitre pendant le retour.",
-        'start-ap-mode': `Activer le mode AP: snapshot NetworkManager, passer wlan0 en AP-only, lancer ${apSsid}, dnsmasq DHCP/DNS captive et l'UI locale sur 192.168.50.1:80. Timeout prototype: 300 secondes.`,
-        'return-default-network': `Retour Wi-Fi principal: demander a NetworkManager de reconnecter ${returnSsid} via le profil ${returnConnection}. L'acces reseau peut couper quelques secondes.`,
-        'ap-return-check-once': `Tester le retour au Wi-Fi connu: stoppe temporairement l'AP, tente ${returnSsid} via ${returnConnection}, puis relance l'AP si le retour echoue.`
+        'reconnect-previous': "Retour au Wi-Fi précédent : le Wi-Fi de secours, DHCP, DNS et le portail local vont s'arrêter, puis wlan0 revient au système réseau. Le portail peut disparaître pendant le retour.",
+        'start-ap-mode': `Activer le Wi-Fi de secours : préparer l'état réseau, lancer ${apSsid}, DHCP/DNS captive et le portail local sur 192.168.50.1:80. Timeout : 300 secondes.`,
+        'return-default-network': `Retour Wi-Fi principal : demander au système réseau de reconnecter ${returnSsid} via le profil ${returnConnection}. L'accès réseau peut couper quelques secondes.`,
+        'ap-return-check-once': `Tester le retour au Wi-Fi connu : tente temporairement ${returnSsid} via ${returnConnection}, puis relance le Wi-Fi de secours si le retour échoue.`
       };
-      return plans[action] || `Action ${action}: plan-only.`;
+      return plans[action] || `Action ${action} : lecture seule.`;
     }
 
     function showApReturnCheckConfirmation(button) {
@@ -4252,7 +4252,7 @@
       const actions = document.createElement('div');
       const confirmButton = document.createElement('button');
       const cancelButton = document.createElement('button');
-      message.textContent = "Le Wi-Fi actuel peut etre interrompu pendant quelques secondes. En cas d'echec, le node tentera de revenir automatiquement ou relancera le Wi-Fi de secours.";
+      message.textContent = "Le Wi-Fi actuel peut être interrompu pendant quelques secondes. En cas d'échec, le node tentera de revenir automatiquement ou relancera le Wi-Fi de secours.";
       actions.className = 'recovery-actions';
       confirmButton.type = 'button';
       confirmButton.className = 'button';
@@ -4288,23 +4288,23 @@
         if (button) button.disabled = true;
         if (action === 'reconnect-previous') {
           if (button) button.textContent = 'Retour au Wi-Fi normal...';
-          showNetworkActionResult("Retour au Wi-Fi normal... le portail Mode AP va dispara\u00eetre.", action);
+          showNetworkActionResult("Retour au Wi-Fi normal... le portail de secours va disparaître.", action);
         } else if (action === 'start-ap-mode') {
-          if (button) button.textContent = 'Activation du mode AP...';
-          showStartApModeResult("Activation du mode AP... l'acces reseau normal peut couper pendant le basculement.");
+          if (button) button.textContent = 'Activation du Wi-Fi de secours...';
+          showStartApModeResult("Activation du Wi-Fi de secours... l'accès réseau normal peut couper pendant le basculement.");
         } else if (action === 'return-default-network') {
           if (button) button.textContent = 'Retour Wi-Fi principal...';
-          showNetworkActionResult("Retour Wi-Fi principal... l'acces reseau peut couper quelques secondes.", action);
+          showNetworkActionResult("Retour Wi-Fi principal... l'accès réseau peut couper quelques secondes.", action);
         } else if (action === 'ap-return-check-once') {
           if (button) button.textContent = 'Test du retour Wi-Fi...';
-          showNetworkActionResult("Test du retour Wi-Fi connu... l'AP peut disparaitre pendant 30 a 40 secondes.", action);
+          showNetworkActionResult("Test du retour Wi-Fi connu... le Wi-Fi de secours peut disparaître pendant 30 à 40 secondes.", action);
         } else {
           showNetworkActionResult(networkActionPlan(action), action);
         }
         const requestPayload = {};
         if (action === 'start-ap-mode') {
           if (!document.getElementById('ap-confirmed')?.checked) {
-            showStartApModeResult('Mode AP non lance: coche la confirmation avant de continuer.');
+            showStartApModeResult('Wi-Fi de secours non lancé : coche la confirmation avant de continuer.');
             return;
           }
           requestPayload.dangerous_real_apply = true;
@@ -4326,31 +4326,31 @@
         }
         if (action === 'start-ap-mode') {
           showStartApModeResult(responsePayload.ap_started
-            ? `Mode AP valide: ${responsePayload.ssid || 'Wifi-Kit-node'} actif, UI recovery disponible sur ${responsePayload.recovery_url || 'http://192.168.50.1:80'}.`
-            : `Mode AP non lance: ${responsePayload.message || responsePayload.error || responsePayload.status}.`);
+            ? `Wi-Fi de secours validé : ${responsePayload.ssid || 'Wifi-Kit-node'} actif, portail disponible sur ${responsePayload.recovery_url || 'http://192.168.50.1:80'}.`
+            : `Wi-Fi de secours non lancé : ${responsePayload.message || responsePayload.error || responsePayload.status}.`);
           return;
         }
         if (action === 'return-default-network') {
           showNetworkActionResult(responsePayload.return_started
-            ? `Retour Wi-Fi principal lance: ${responsePayload.return_connection || responsePayload.default_connection || 'connexion autorisee'}.`
-            : `Retour Wi-Fi principal non lance: ${responsePayload.message || responsePayload.error || responsePayload.status}.`, action);
+            ? `Retour Wi-Fi principal lancé : ${responsePayload.return_connection || responsePayload.default_connection || 'connexion autorisée'}.`
+            : `Retour Wi-Fi principal non lancé : ${responsePayload.message || responsePayload.error || responsePayload.status}.`, action);
           return;
         }
         if (action === 'ap-return-check-once') {
           showNetworkActionResult(responsePayload.return_check_started
-            ? `Test de retour Wi-Fi lance: ${responsePayload.target_ssid || responsePayload.target_connection || 'Wi-Fi connu'}. L'AP peut disparaitre puis revenir si le test echoue.`
-            : `Test de retour non lance: ${responsePayload.message || responsePayload.error || responsePayload.status}.`, action);
+            ? `Test de retour Wi-Fi lancé : ${responsePayload.target_ssid || responsePayload.target_connection || 'Wi-Fi connu'}. Le Wi-Fi de secours peut disparaître puis revenir si le test échoue.`
+            : `Test de retour non lancé : ${responsePayload.message || responsePayload.error || responsePayload.status}.`, action);
           return;
         }
         if (!response.ok) return;
         showNetworkActionResult(`${networkActionPlan(action)} Serveur: ${responsePayload.mutation || responsePayload.status}.`, action);
       } catch (error) {
         if (action === 'reconnect-previous') {
-          showNetworkActionResult(`Connexion au portail perdue pendant le retour Wi-Fi. C'est attendu si le node quitte le mode AP. Detail: ${error.message}`, action);
+          showNetworkActionResult(`Connexion au portail perdue pendant le retour Wi-Fi. C'est attendu si le node quitte le Wi-Fi de secours. Détail : ${error.message}`, action);
         } else if (action === 'start-ap-mode') {
-          showStartApModeResult(`Connexion perdue pendant l'activation du mode AP. C'est possible si le node bascule son Wi-Fi. Detail: ${error.message}`);
+          showStartApModeResult(`Connexion perdue pendant l'activation du Wi-Fi de secours. C'est possible si le node bascule son Wi-Fi. Détail : ${error.message}`);
         } else if (action === 'ap-return-check-once') {
-          showNetworkActionResult(`Connexion perdue pendant le test de retour Wi-Fi. C'est attendu si le node quitte le mode AP. Detail: ${error.message}`, action);
+          showNetworkActionResult(`Connexion perdue pendant le test de retour Wi-Fi. C'est attendu si le node quitte le Wi-Fi de secours. Détail : ${error.message}`, action);
         } else {
           showNetworkActionResult(`Action ${action} indisponible: ${error.message}`, action);
         }
@@ -4367,19 +4367,19 @@
       const button = document.querySelector(`[data-system-action="${action}"]`);
       const originalText = button ? button.textContent : '';
       const confirmedId = action === 'system-reboot' ? 'system-reboot-confirmed' : 'system-shutdown-confirmed';
-      const label = action === 'system-reboot' ? 'Redemarrage' : 'Extinction';
+      const label = action === 'system-reboot' ? 'Redémarrage' : 'Extinction';
       if (!document.getElementById(confirmedId)?.checked) {
         showSystemActionResult(action, `${label} refuse: coche la confirmation.`);
         return;
       }
       if (window.location.protocol === 'file:') {
-        showSystemActionResult(action, `${label}: plan-only dans cette page locale.`);
+        showSystemActionResult(action, `${label} : lecture seule dans cette page locale.`);
         return;
       }
       try {
         if (button) {
           button.disabled = true;
-          button.textContent = action === 'system-reboot' ? 'Demande redemarrage...' : 'Demande extinction...';
+          button.textContent = action === 'system-reboot' ? 'Demande de redémarrage...' : "Demande d'extinction...";
         }
         const response = await fetch(`/${action}`, {
           cache: 'no-store',
@@ -4410,8 +4410,8 @@
     }
 
     function updateStatusLabel(status) {
-      if (status === 'up-to-date') return 'a jour';
-      if (status === 'update-available') return 'mise a jour disponible';
+      if (status === 'up-to-date') return 'à jour';
+      if (status === 'update-available') return 'mise à jour disponible';
       return 'erreur';
     }
 
@@ -4419,13 +4419,13 @@
       const button = document.getElementById('updates-check-button');
       const originalText = button ? button.textContent : '';
       if (window.location.protocol === 'file:') {
-        showUpdateCheckResult('Verification des mises a jour indisponible depuis cette page locale.');
+        showUpdateCheckResult('Vérification des mises à jour indisponible depuis cette page locale.');
         return;
       }
       try {
         if (button) {
           button.disabled = true;
-          button.textContent = 'Verification...';
+          button.textContent = 'Vérification...';
         }
         setUiRestartVisible(false);
         const response = await fetch('/updates/check', {
@@ -4447,18 +4447,18 @@
           lines.push(`Commit distant: ${payload.remote_commit_short || payload.remote_commit}`);
         }
         if (payload.runtime_version_exists) {
-          lines.push(`Runtime /opt: ${payload.runtime_synced ? 'synchronise' : 'en retard'}`);
+          lines.push(`Version installée: ${payload.runtime_synced ? 'synchronisée' : 'en retard'}`);
           lines.push(`Commit runtime: ${payload.runtime_commit_short || payload.runtime_commit || 'inconnu'}`);
           if (payload.runtime_install_time) lines.push(`Installation runtime: ${payload.runtime_install_time}`);
         } else {
-          lines.push('Runtime /opt: version inconnue');
+          lines.push('Version installée: version inconnue');
         }
-        lines.push(payload.message || (response.ok ? 'Verification terminee.' : 'Verification impossible.'));
+        lines.push(payload.message || (response.ok ? 'Vérification terminée.' : 'Vérification impossible.'));
         showUpdateCheckResult(lines.join('\n'));
         updateInstallButton();
       } catch (error) {
         lastUpdateCheck = null;
-        showUpdateCheckResult(`Verification des mises a jour indisponible: ${error.message}`);
+        showUpdateCheckResult(`Vérification des mises à jour indisponible : ${error.message}`);
         updateInstallButton();
       } finally {
         if (button) {
@@ -4476,16 +4476,16 @@
         return;
       }
       if (!['update-available', 'up-to-date'].includes(lastUpdateCheck?.status)) {
-        showUpdateCheckResult('Aucun etat de mise a jour installable. Relance la verification avant installation.');
+        showUpdateCheckResult("Aucun état de mise à jour installable. Relance la vérification avant installation.");
         updateInstallButton();
         return;
       }
       if (!document.getElementById('updates-install-confirmed')?.checked) {
-        showUpdateCheckResult('Installation refusee: coche la confirmation.');
+        showUpdateCheckResult('Installation refusée : coche la confirmation.');
         updateInstallButton();
         return;
       }
-      showUpdateCheckResult("Installation de la mise a jour. L'interface peut redemarrer.");
+      showUpdateCheckResult("Installation de la mise à jour. L'interface peut redémarrer.");
       try {
         if (button) {
           button.disabled = true;
@@ -4505,7 +4505,7 @@
         const payload = await response.json();
         data.runtime_version = payload;
         const lines = [
-          payload.message || (response.ok ? 'Installation terminee.' : 'Installation refusee.'),
+          payload.message || (response.ok ? 'Installation terminée.' : 'Installation refusée.'),
           `Statut: ${payload.update_status || payload.status || 'inconnu'}`,
           `Branche: ${payload.branch || lastUpdateCheck.branch || 'inconnue'}`,
         ];
@@ -4521,7 +4521,7 @@
         if (payload.needs_reinstall) lines.push(payload.reinstall_message || 'Reinstallation runtime requise.');
         const runtimeDeployOk = payload.runtime_deploy_synced === true || (payload.reinstall_status === 'success' && payload.runtime_synced === true);
         if (runtimeDeployOk) {
-          lines.push("Mise a jour installee. Redemarrage de l'interface requis.");
+          lines.push("Mise à jour installée. Redémarrage de l'interface requis.");
         }
         if (payload.reinstall_log && payload.reinstall_log !== payload.log) lines.push(`Log reinstall: ${payload.reinstall_log}`);
         if (payload.log) lines.push(`Log: ${payload.log}`);
@@ -4533,7 +4533,7 @@
           lastUpdateCheck = { ...lastUpdateCheck, status: 'up-to-date', local_commit: payload.local_commit, local_commit_short: payload.local_commit_short };
         }
       } catch (error) {
-        showUpdateCheckResult('Mise a jour lancee. Recharge la page dans quelques secondes.');
+        showUpdateCheckResult('Mise à jour lancée. Recharge la page dans quelques secondes.');
       } finally {
         if (button) {
           button.disabled = false;
@@ -4547,15 +4547,15 @@
       const button = document.getElementById('ui-restart-button');
       const originalText = button ? button.textContent : '';
       if (window.location.protocol === 'file:') {
-        showUiRestartResult("Redemarrage de l'interface indisponible depuis cette page locale.");
+        showUiRestartResult("Redémarrage de l'interface indisponible depuis cette page locale.");
         return;
       }
       try {
         if (button) {
           button.disabled = true;
-          button.textContent = 'Redemarrage...';
+          button.textContent = 'Redémarrage...';
         }
-        showUiRestartResult("Redemarrage de l'interface demande. Recharge la page dans quelques secondes.");
+        showUiRestartResult("Redémarrage de l'interface demandé. Recharge la page dans quelques secondes.");
         const response = await fetch('/ui/restart', {
           cache: 'no-store',
           method: 'POST',
@@ -4563,9 +4563,9 @@
           body: JSON.stringify({})
         });
         const payload = await response.json();
-        showUiRestartResult(payload.message || "Interface en redemarrage, recharge la page dans quelques secondes.");
+        showUiRestartResult(payload.message || "Interface en redémarrage, recharge la page dans quelques secondes.");
       } catch (error) {
-        showUiRestartResult("Interface en redemarrage, recharge la page dans quelques secondes.");
+        showUiRestartResult("Interface en redémarrage, recharge la page dans quelques secondes.");
       } finally {
         if (button) {
           button.disabled = false;
@@ -4612,7 +4612,7 @@
 
     async function triggerRecoveryAction(action) {
       if (window.location.protocol === 'file:') {
-        showRecoveryResult(`Action ${action}: plan-only dans cette page locale.`);
+        showRecoveryResult(`Action ${action} : lecture seule dans cette page locale.`);
         return;
       }
 
@@ -4882,7 +4882,7 @@
         event.stopPropagation();
         const ssid = ssidInput.value.trim() || 'SSID masque';
         passwordInput.value = '';
-        result.textContent = `Prototype : aucune connexion reelle n'est lancee. Plan local pour ${ssid} : demander le SSID masque, utiliser un mot de passe non enregistré par Wifi-Kit, valider la connexion, puis garder le Wi-Fi de secours si l'essai echoue.`;
+        result.textContent = `Prévisualisation : aucune connexion réelle n'est lancée. Plan local pour ${ssid} : demander le SSID masqué, utiliser un mot de passe non enregistré par Wifi-Kit, valider la connexion, puis garder le Wi-Fi de secours si l'essai échoue.`;
         result.hidden = false;
       });
       [ssidInput, passwordInput, securityDropdown, button, panel].forEach((node) => {
@@ -4910,8 +4910,8 @@
       [
         ['shield', 'safe', 'Votre systeme reste intact'],
         ['lock', 'lock', 'Aucun secret transmis'],
-        ['wifi', 'mute', `Reseau cible prepare: ${displaySsid(network)}`],
-        ['server', 'gear', 'Le mode normal redevient la cible après connexion reelle.'],
+        ['wifi', 'mute', `Réseau cible préparé : ${displaySsid(network)}`],
+        ['server', 'gear', 'Le mode normal redevient la cible après connexion réelle.'],
         ['gear', 'gear', 'Rollback et validation SSH avant tout vrai essai']
       ].forEach(([icon, tone, text]) => {
         const li = document.createElement('li');
@@ -4941,7 +4941,7 @@
       const list = document.createElement('ul');
       list.className = 'safe-lines';
       const lines = payload.connect_plan || [
-        payload.warning_if_recovery_active || 'Aucune mutation reseau depuis cette UI dans cette etape.'
+        payload.warning_if_recovery_active || 'Aucune modification réseau depuis cette interface dans cette étape.'
       ];
       lines.forEach((text) => {
         const li = document.createElement('li');
@@ -5006,7 +5006,7 @@
 
     async function triggerWifiConnect(network, passwordField, plan, button) {
       const ssid = displaySsid(network);
-      if (!ssid || ssid === 'Reseau masque') {
+      if (!ssid || ssid === 'Réseau masqué') {
         renderConnectResponse({ status: 'failure', error: 'ssid-hidden-or-missing' }, plan);
         return;
       }
@@ -5058,16 +5058,16 @@
           timestamp: new Date().toISOString(),
           error: error.message,
         };
-        showConnectBanner('Connexion lancee. La page peut etre inaccessible pendant le changement de reseau.');
+        showConnectBanner('Connexion lancée. La page peut être inaccessible pendant le changement de réseau.');
         renderConnectResponse({
           ok: true,
           status: 'started',
           connect_started: true,
           requested_ssid: ssid,
-          message: 'Connexion lancee. La page peut etre inaccessible pendant le changement de reseau.',
+          message: 'Connexion lancée. La page peut être inaccessible pendant le changement de réseau.',
           connect_plan: [
             'La requete a pu etre interrompue par la bascule Wi-Fi.',
-            'Si le node rejoint le Wi-Fi, ouvrez l UI normale sur le reseau local.',
+            "Si le node rejoint le Wi-Fi, ouvre l'interface normale sur le réseau local.",
             'Sinon reconnectez-vous au SSID Wifi-Kit-pocket-node et relisez le statut.'
           ]
         }, plan);
@@ -5106,7 +5106,7 @@
       const availableNetworks = networks.filter((network) => network.current !== 'yes');
       const scanReason = scan.reason || scan.status || '';
       const scanLoading = ['loading', 'pending', 'started'].includes(scanReason);
-      setText('network-title', activeAp ? 'Reseaux disponibles' : 'Wi-Fi');
+      setText('network-title', activeAp ? 'Réseaux disponibles' : 'Wi-Fi');
       document.getElementById('scan-source').textContent = describeScanBackend(scan);
       document.getElementById('scan-status').textContent = describeScanStatus(scan, networks);
       target.innerHTML = '';
@@ -5127,7 +5127,7 @@
         placeholder.className = 'network';
         const title = document.createElement('h3');
         const body = document.createElement('p');
-        title.textContent = 'Aucun reseau affiche';
+        title.textContent = 'Aucun réseau affiché';
         body.className = 'empty';
         body.textContent = activeAp
           ? "Aucun autre Wi-Fi affiche. Le Wi-Fi de secours reste actif; relance le scan si besoin."
@@ -5152,7 +5152,7 @@
         target.append(buildNetworkRow(network));
       });
 
-      target.append(networkSectionTitle('Reseaux disponibles'));
+      target.append(networkSectionTitle('Réseaux disponibles'));
       availableNetworks.forEach((network) => {
         target.append(buildNetworkRow(network));
       });
@@ -5353,7 +5353,7 @@
       const spinner = document.getElementById('scan-spinner');
       button.disabled = true;
       spinner.hidden = false;
-      status.textContent = recoveryState().active ? "Scan recovery en cours..." : 'Scan SAFE en cours...';
+      status.textContent = recoveryState().active ? "Recherche depuis le Wi-Fi de secours..." : 'Recherche des réseaux Wi-Fi...';
       try {
         const response = await fetch('/wifi/scan?refresh=1', { cache: 'no-store' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -5438,11 +5438,11 @@
       const apPassword = field.value;
       field.value = '';
       if (!apPassword) {
-        showRuntimeConfigResult('Aucun changement : le mot de passe AP actuel est conservé.', 'config-password-result');
+        showRuntimeConfigResult('Aucun changement : le mot de passe du Wi-Fi de secours actuel est conservé.', 'config-password-result');
         return;
       }
       if (apPassword.length < 8) {
-        showRuntimeConfigResult('Mot de passe AP: minimum 8 caracteres.', 'config-password-result');
+        showRuntimeConfigResult('Mot de passe du Wi-Fi de secours : minimum 8 caractères.', 'config-password-result');
         return;
       }
       saveRuntimeConfig({ ap_password: apPassword }, 'config-password-result');
