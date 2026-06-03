@@ -3802,9 +3802,6 @@
 
     async function setPreferredNetwork(network, button, result) {
       const ssid = displaySsid(network);
-      if (!window.confirm('Ce réseau deviendra le réseau principal souhaité pour le démarrage et les retours depuis AP Recovery.')) {
-        return;
-      }
       if (window.location.protocol === 'file:') {
         result.textContent = 'Prévisualisation locale : aucun réseau principal n’est enregistré.';
         result.hidden = false;
@@ -4081,8 +4078,35 @@
       return plans[action] || `Action ${action}: plan-only.`;
     }
 
-    function confirmNetworkInterruption(label) {
-      return window.confirm(`${label}\n\nLe Wi-Fi actuel peut etre interrompu pendant quelques secondes. En cas d'echec, le node tentera de revenir automatiquement ou relancera l'AP recovery.`);
+    function showApReturnCheckConfirmation(button) {
+      const target = document.getElementById('ap-return-check-once-result');
+      if (!target) return false;
+      const message = document.createElement('p');
+      const actions = document.createElement('div');
+      const confirmButton = document.createElement('button');
+      const cancelButton = document.createElement('button');
+      message.textContent = "Le Wi-Fi actuel peut etre interrompu pendant quelques secondes. En cas d'echec, le node tentera de revenir automatiquement ou relancera l'AP recovery.";
+      actions.className = 'recovery-actions';
+      confirmButton.type = 'button';
+      confirmButton.className = 'button';
+      confirmButton.textContent = 'Confirmer';
+      cancelButton.type = 'button';
+      cancelButton.className = 'button secondary';
+      cancelButton.textContent = 'Annuler';
+      confirmButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (button) button.dataset.inlineConfirmed = 'true';
+        triggerNetworkAction('ap-return-check-once');
+      });
+      cancelButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (button) delete button.dataset.inlineConfirmed;
+        showNetworkActionResult('Test de retour annule.', 'ap-return-check-once');
+      });
+      actions.append(confirmButton, cancelButton);
+      target.replaceChildren(message, actions);
+      target.hidden = false;
+      return true;
     }
 
     async function triggerNetworkAction(action) {
@@ -4090,6 +4114,10 @@
       const originalText = button ? button.textContent : '';
       if (window.location.protocol === 'file:') return;
       try {
+        if (action === 'ap-return-check-once' && button?.dataset.inlineConfirmed !== 'true') {
+          showApReturnCheckConfirmation(button);
+          return;
+        }
         if (button) button.disabled = true;
         if (action === 'reconnect-previous') {
           if (button) button.textContent = 'Retour au Wi-Fi normal...';
@@ -4101,10 +4129,6 @@
           if (button) button.textContent = 'Retour Wi-Fi principal...';
           showNetworkActionResult("Retour Wi-Fi principal... l'acces reseau peut couper quelques secondes.", action);
         } else if (action === 'ap-return-check-once') {
-          if (!confirmNetworkInterruption('Tester le retour au Wi-Fi connu ?')) {
-            showNetworkActionResult('Test de retour annule.', action);
-            return;
-          }
           if (button) button.textContent = 'Test du retour Wi-Fi...';
           showNetworkActionResult("Test du retour Wi-Fi connu... l'AP peut disparaitre pendant 30 a 40 secondes.", action);
         } else {
@@ -4165,6 +4189,7 @@
         }
       } finally {
         if (button) {
+          if (action === 'ap-return-check-once') delete button.dataset.inlineConfirmed;
           button.disabled = false;
           button.textContent = originalText;
         }
@@ -4970,6 +4995,7 @@
         const lastGood = document.createElement('span');
         const button = document.createElement('button');
         const result = document.createElement('div');
+        const confirmPanel = document.createElement('div');
         const ssid = displaySsid(network);
         const connection = connectionBySsid(ssid);
         const config = runtimeConfig();
@@ -4987,15 +5013,43 @@
         button.disabled = alreadyPreferred;
         result.className = 'callout recovery-result';
         result.hidden = true;
+        confirmPanel.className = 'callout recovery-result';
+        confirmPanel.hidden = true;
 
         button.addEventListener('click', (event) => {
           event.stopPropagation();
-          setPreferredNetwork(network, button, result);
+          const text = document.createElement('p');
+          const actions = document.createElement('div');
+          const confirmButton = document.createElement('button');
+          const cancelButton = document.createElement('button');
+          text.textContent = 'Ce réseau deviendra le réseau principal souhaité pour le démarrage et les retours depuis AP Recovery.';
+          actions.className = 'recovery-actions';
+          confirmButton.type = 'button';
+          confirmButton.className = 'button';
+          confirmButton.textContent = 'Confirmer';
+          cancelButton.type = 'button';
+          cancelButton.className = 'button secondary';
+          cancelButton.textContent = 'Annuler';
+          confirmButton.addEventListener('click', (confirmEvent) => {
+            confirmEvent.stopPropagation();
+            confirmPanel.hidden = true;
+            setPreferredNetwork(network, button, result);
+          });
+          cancelButton.addEventListener('click', (cancelEvent) => {
+            cancelEvent.stopPropagation();
+            confirmPanel.hidden = true;
+            result.textContent = 'Changement de réseau principal annulé.';
+            result.hidden = false;
+          });
+          actions.append(confirmButton, cancelButton);
+          confirmPanel.replaceChildren(text, actions);
+          confirmPanel.hidden = false;
+          result.hidden = true;
         });
         panel.addEventListener('click', (event) => event.stopPropagation());
 
         summary.append(preferred, lastGood);
-        panel.append(summary, button, result);
+        panel.append(summary, button, confirmPanel, result);
         return panel;
     }
 
