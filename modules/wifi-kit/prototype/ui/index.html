@@ -4514,10 +4514,55 @@
       planDetails.addEventListener('click', (event) => {
         event.stopPropagation();
       });
+      const confirmPanel = document.createElement('div');
+      confirmPanel.className = 'callout recovery-result';
+      confirmPanel.hidden = true;
+      const confirmText = document.createElement('p');
+      confirmText.textContent = `Wifi-Kit va tenter de connecter le node au réseau ${ssid}. En cas d'échec, il tentera de revenir automatiquement ou relancera l'AP Recovery.`;
+      const confirmActions = document.createElement('div');
+      confirmActions.className = 'recovery-actions';
+      const confirmButton = document.createElement('button');
+      confirmButton.type = 'button';
+      confirmButton.className = 'button connect-button';
+      confirmButton.textContent = 'Confirmer';
+      const cancelButton = document.createElement('button');
+      cancelButton.type = 'button';
+      cancelButton.className = 'button secondary';
+      cancelButton.textContent = 'Annuler';
+      confirmActions.append(confirmButton, cancelButton);
+      confirmPanel.append(confirmText, confirmActions);
+
       button.addEventListener('click', (event) => {
         event.stopPropagation();
         if (network.current === 'yes') return;
+        confirmPanel.hidden = false;
+        renderConnectResponse({
+          status: 'planned',
+          requested_ssid: ssid,
+          message: 'Confirme la connexion depuis cette carte pour lancer la tentative.',
+          connect_plan: [
+            'Aucune modification réseau lancée pour le moment.',
+            'Le mot de passe reste local au champ de saisie.',
+          ],
+        }, plan);
+      });
+      confirmButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        confirmPanel.hidden = true;
         triggerWifiConnect(network, password, plan, button);
+      });
+      cancelButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        confirmPanel.hidden = true;
+        renderConnectResponse({
+          status: 'planned',
+          requested_ssid: ssid,
+          message: 'Connexion annulée par l’utilisateur.',
+          connect_plan: [
+            'Aucune modification réseau lancée.',
+            'Le réseau principal souhaité reste inchangé.',
+          ],
+        }, plan);
       });
       password.addEventListener('click', (event) => event.stopPropagation());
       password.addEventListener('focus', () => {
@@ -4544,7 +4589,7 @@
       });
       password.addEventListener('keydown', (event) => event.stopPropagation());
 
-      prep.append(passwordLabel, button, summary, planDetails);
+      prep.append(passwordLabel, button, confirmPanel, summary, planDetails);
       return prep;
     }
 
@@ -4775,18 +4820,6 @@
       }
       if (window.location.protocol === 'file:') {
         renderInlinePlan(network, plan);
-        return;
-      }
-      if (!window.confirm(`Wifi-Kit va tenter de connecter le node au réseau ${ssid}. En cas d'échec, il tentera de revenir en AP Recovery.`)) {
-        renderConnectResponse({
-          status: 'planned',
-          requested_ssid: ssid,
-          message: 'Connexion annulée par l’utilisateur.',
-          connect_plan: [
-            'Aucune modification réseau lancée.',
-            'Le réseau principal souhaité reste inchangé.',
-          ],
-        }, plan);
         return;
       }
       const originalText = button.textContent;
