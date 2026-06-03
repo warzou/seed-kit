@@ -374,6 +374,7 @@ ensure_runtime_config() {
       printf 'runtime_recovery_enabled=true\n'
       printf 'runtime_recovery_debug_passive=true\n'
       printf 'runtime_recovery_grace_seconds=30\n'
+      printf 'runtime_recovery_critical_link_loss_seconds=300\n'
       printf 'runtime_recovery_internet_required=true\n'
       printf 'runtime_recovery_internet_probe=1.1.1.1\n'
       printf 'runtime_recovery_instability_window_minutes=10\n'
@@ -389,6 +390,7 @@ ensure_runtime_config() {
   ensure_runtime_config_key return_check_interval_seconds 300
   ensure_runtime_config_key return_check_target primary
   ensure_runtime_config_key return_check_mode periodic-from-ap
+  ensure_runtime_config_key runtime_recovery_critical_link_loss_seconds 300
   upgrade_return_check_defaults
   chown "$install_user:$install_user" "$runtime_config"
   chmod 0600 "$runtime_config"

@@ -2398,79 +2398,80 @@
           </div>
           <span class="chip">SAFE</span>
         </div>
-        <div class="config-recovery-stack diagnostic-settings" aria-label="Options surveillance de connexion">
-          <section class="recovery-setting" aria-labelledby="config-failsafe-heading">
-            <h3 class="recovery-setting-title" id="config-failsafe-heading">Watchdog</h3>
+        <div class="config-recovery-stack diagnostic-settings" aria-label="Surveillance et secours">
+          <section class="recovery-setting" aria-labelledby="config-watchdog-heading">
+            <h3 class="recovery-setting-title" id="config-watchdog-heading">Surveillance et secours</h3>
             <strong class="recovery-setting-current" id="config-failsafe-mode">...</strong>
             <label class="confirm-line">
-              <input id="runtime-failsafe-automatic-input" type="checkbox">
-              <span>Failsafe automatique</span>
+              <input id="runtime-recovery-enabled-input" type="checkbox">
+              <span>Surveiller la connexion</span>
             </label>
-            <small class="setting-help">Par défaut, la surveillance reste en observation : elle détecte et journalise seulement. En mode automatique, elle peut ouvrir le Wi-Fi de secours après une inaccessibilité durable.</small>
-            <button id="config-apply-failsafe" class="button secondary setting-action" type="button">Appliquer le mode de surveillance</button>
-            <div id="diag-failsafe-result" class="callout recovery-result" hidden></div>
-          </section>
-          <section class="recovery-setting" aria-labelledby="diag-internet-heading">
-            <h3 class="recovery-setting-title" id="diag-internet-heading">Declencheurs AP</h3>
-            <label class="confirm-line">
-              <input id="runtime-internet-required-input" type="checkbox">
-              <span>Internet obligatoire pour rester en mode normal</span>
-            </label>
+            <div class="field-label">
+              Mode
+              <label class="confirm-line">
+                <input id="runtime-mode-observation-input" name="runtime-recovery-mode" type="radio" value="observation">
+                <span>Observation seulement</span>
+              </label>
+              <label class="confirm-line">
+                <input id="runtime-mode-automatic-input" name="runtime-recovery-mode" type="radio" value="automatic">
+                <span>Secours automatique</span>
+              </label>
+            </div>
             <label class="field-label">
-              Cible de test Internet
-              <input id="runtime-internet-probe-input" class="password-local" type="text" inputmode="text" placeholder="1.1.1.1">
-            </label>
-            <small class="setting-help">Si desactive, SSID + IP + route locale suffisent. Une passerelle ou Internet momentanement KO ne declenche pas l'AP.</small>
-          </section>
-          <section class="recovery-setting" aria-labelledby="config-recovery-delay-heading">
-            <h3 class="recovery-setting-title" id="config-recovery-delay-heading">Bascule Wi-Fi secours</h3>
-            <strong class="recovery-setting-current" id="config-recovery-delay">...</strong>
-            <label class="field-label">
-              Delai avant Wi-Fi secours
+              Délai avant Wi-Fi de secours
               <span class="input-with-unit">
                 <input id="runtime-recovery-grace-input" class="password-local" type="number" min="0" step="1" inputmode="numeric" placeholder="30">
                 <span class="input-unit">secondes</span>
               </span>
             </label>
-            <small class="setting-help">Le Wi-Fi secours s'ouvre seulement si l'echec persiste pendant ce delai.</small>
-            <button id="config-apply-recovery-delay" class="button secondary setting-action" type="button">Appliquer le delai</button>
-            <div id="diag-recovery-delay-result" class="callout recovery-result" hidden></div>
+            <label class="field-label">
+              Perte critique du lien
+              <span class="input-with-unit">
+                <input id="runtime-critical-link-loss-input" class="password-local" type="number" min="1" max="3600" step="1" inputmode="numeric" placeholder="300">
+                <span class="input-unit">secondes</span>
+              </span>
+            </label>
+            <small class="setting-help">Observation seulement journalise les incidents. Les filets critiques restent bornés pour éviter qu'un node reste perdu sans Wi-Fi de secours.</small>
+            <button id="config-apply-failsafe" class="button secondary setting-action" type="button">Appliquer la surveillance</button>
+            <div id="diag-failsafe-result" class="callout recovery-result" hidden></div>
           </section>
-          <section class="recovery-setting" aria-labelledby="config-watchdog-heading">
-            <h3 class="recovery-setting-title" id="config-watchdog-heading">Retour automatique</h3>
+          <section class="recovery-setting" aria-labelledby="config-return-heading">
+            <h3 class="recovery-setting-title" id="config-return-heading">Retour automatique depuis le Wi-Fi de secours</h3>
             <strong class="recovery-setting-current" id="config-runtime-recovery-status">...</strong>
             <label class="confirm-line">
-              <input id="runtime-recovery-enabled-input" type="checkbox">
-              <span>Surveiller la connexion</span>
+              <input id="return-check-enabled-input" type="checkbox">
+              <span>Tenter de revenir au réseau principal</span>
             </label>
+            <div class="metric"><span>Cible</span><strong id="config-return-check-target">Réseau principal souhaité</strong></div>
             <label class="field-label">
-              Verifier le retour au Wi-Fi principal toutes les
+              Tentative de retour toutes les
               <span class="input-with-unit">
                 <input id="config-return-check-interval-input" class="password-local" type="number" min="0" step="1" inputmode="numeric" placeholder="300">
                 <span class="input-unit">secondes</span>
               </span>
             </label>
-            <small class="setting-help">Mettre une duree a 0 desactive la bascule automatique pour cette condition. Les evenements restent journalises.</small>
-            <button id="config-apply-watchdog" class="button secondary setting-action" type="button">Appliquer la surveillance</button>
+            <label class="field-label">
+              Délai anti-yoyo / validation
+              <span class="input-with-unit">
+                <input id="config-return-check-hold-input" class="password-local" type="number" min="0" max="3600" step="1" inputmode="numeric" placeholder="120">
+                <span class="input-unit">secondes</span>
+              </span>
+            </label>
+            <small class="setting-help">En Wi-Fi de secours, Wifi-Kit retente le réseau principal souhaité à intervalle borné. Si le retour ne tient pas, il reste ou revient en secours.</small>
+            <button id="config-apply-watchdog" class="button secondary setting-action" type="button">Appliquer le retour automatique</button>
             <div id="diag-watchdog-result" class="callout recovery-result" hidden></div>
           </section>
-          <section class="recovery-setting" aria-labelledby="diag-log-policy-heading">
-            <h3 class="recovery-setting-title" id="diag-log-policy-heading">Logs</h3>
-            <label class="field-label">
-              Fenêtre diagnostic d'instabilité
-              <span class="input-with-unit">
-                <input id="runtime-recovery-window-input" class="password-local" type="number" min="1" step="1" inputmode="numeric" placeholder="10">
-                <span class="input-unit">minutes</span>
-              </span>
+          <section class="recovery-setting" aria-labelledby="diag-internet-heading">
+            <h3 class="recovery-setting-title" id="diag-internet-heading">Avancé</h3>
+            <label class="confirm-line">
+              <input id="runtime-internet-required-input" type="checkbox">
+              <span>Internet requis pour valider le réseau</span>
             </label>
             <label class="field-label">
-              Seuil diagnostic
-              <span class="input-with-unit">
-                <input id="runtime-recovery-threshold-input" class="password-local" type="number" min="1" step="1" inputmode="numeric" placeholder="3">
-                <span class="input-unit">événements</span>
-              </span>
+              Sonde Internet
+              <input id="runtime-internet-probe-input" class="password-local" type="text" inputmode="text" placeholder="1.1.1.1">
             </label>
-            <small class="setting-help">Futur : retention 31 jours, maximum 10 Mo, et option Tailscale obligatoire separee.</small>
+            <small class="setting-help">Si désactivé, SSID + IP + route locale suffisent. Garde ce réglage prudent si la passerelle ou Internet sont parfois instables.</small>
           </section>
         </div>
         <div class="node-grid health-section">
@@ -3152,7 +3153,12 @@
 
     function failsafeModeLabel() {
       const debugPassive = String(runtimeConfig().runtime_recovery_debug_passive || watchdogState().runtime_recovery_debug_passive || 'true') === 'true';
-      return debugPassive ? 'Mode observation' : 'Mode automatique';
+      return debugPassive ? 'Observation seulement' : 'Secours automatique';
+    }
+
+    function runtimeDebugPassiveFromInputs() {
+      const automatic = Boolean(document.getElementById('runtime-mode-automatic-input')?.checked);
+      return !automatic;
     }
 
     function mainNetworkHealthLabel() {
@@ -3447,12 +3453,18 @@
       setInputValue('recovery-ap-ssid-input', apSsid);
       setInputValue('recovery-ap-password-input', apPassword);
       setInputValue('config-return-check-interval-input', config.return_check_interval_seconds || '300');
+      setInputValue('config-return-check-hold-input', config.return_check_hold_seconds || '120');
+      setText('config-return-check-target', 'Réseau principal souhaité');
       const runtimeRecoveryEnabled = String(config.runtime_recovery_enabled || 'true') === 'true';
       const runtimeRecoveryEnabledInput = document.getElementById('runtime-recovery-enabled-input');
       if (runtimeRecoveryEnabledInput) runtimeRecoveryEnabledInput.checked = runtimeRecoveryEnabled;
       const runtimeRecoveryDebugPassive = String(config.runtime_recovery_debug_passive || 'true') === 'true';
-      const failsafeAutomaticInput = document.getElementById('runtime-failsafe-automatic-input');
-      if (failsafeAutomaticInput) failsafeAutomaticInput.checked = !runtimeRecoveryDebugPassive;
+      const observationInput = document.getElementById('runtime-mode-observation-input');
+      const automaticInput = document.getElementById('runtime-mode-automatic-input');
+      if (observationInput) observationInput.checked = runtimeRecoveryDebugPassive;
+      if (automaticInput) automaticInput.checked = !runtimeRecoveryDebugPassive;
+      const returnCheckEnabledInput = document.getElementById('return-check-enabled-input');
+      if (returnCheckEnabledInput) returnCheckEnabledInput.checked = String(config.return_check_enabled || 'true') === 'true';
       const internetRequiredInput = document.getElementById('runtime-internet-required-input');
       if (internetRequiredInput) internetRequiredInput.checked = String(config.runtime_recovery_internet_required || 'true') === 'true';
       setInputValue('runtime-internet-probe-input', config.runtime_recovery_internet_probe || '1.1.1.1');
@@ -3462,8 +3474,7 @@
       setText('recovery-failsafe-mode', failsafeModeLabel());
       setText('recovery-watchdog-event', summary.raw);
       setInputValue('runtime-recovery-grace-input', config.runtime_recovery_grace_seconds || '30');
-      setInputValue('runtime-recovery-window-input', config.runtime_recovery_instability_window_minutes || '10');
-      setInputValue('runtime-recovery-threshold-input', config.runtime_recovery_instability_threshold || '3');
+      setInputValue('runtime-critical-link-loss-input', config.runtime_recovery_critical_link_loss_seconds || '300');
       renderReturnConnectionSelect(returnConnection);
       renderReturnConnectionDetails(returnConnection);
       updateRecoveryButtons();
@@ -3546,8 +3557,7 @@
       const currentApPassword = config.ap_password || recovery.ap_password_current || system.recovery_ap_password_current || '';
       setText('config-ap-password-current', `Mot de passe actuel : ${currentApPassword ? 'configuré' : 'non configuré'}`);
       setText('config-failsafe-mode', `Mode actuel : ${failsafeModeLabel()}`);
-      setText('config-recovery-delay', `Actuel : ${config.runtime_recovery_grace_seconds || '30'} secondes`);
-      setText('config-runtime-recovery-status', `Watchdog : ${String(config.runtime_recovery_enabled || 'true') === 'true' ? 'actif' : 'inactif'}`);
+      setText('config-runtime-recovery-status', `Retour automatique : ${String(config.return_check_enabled || 'true') === 'true' ? 'actif' : 'inactif'}`);
       setText('config-ap-password-summary', config.ap_password || recovery.ap_password_current || system.recovery_ap_password_current || '12345678');
       setText('config-ap-password-policy', recovery.ap_password_policy || system.recovery_ap_password_policy || 'min-8-chars');
       setText('config-ui-access-password', recovery.ui_access_password || system.ui_access_password || 'future-not-configured');
@@ -3888,9 +3898,12 @@
         data.recovery.return_check_enabled = payload.config.return_check_enabled;
         data.recovery.return_check_interval_minutes = payload.config.return_check_interval_minutes;
         data.recovery.return_check_interval_seconds = payload.config.return_check_interval_seconds;
+        data.recovery.return_check_hold_seconds = payload.config.return_check_hold_seconds;
+        data.recovery.return_check_target = payload.config.return_check_target;
         data.recovery.runtime_recovery_enabled = payload.config.runtime_recovery_enabled;
         data.recovery.runtime_recovery_debug_passive = payload.config.runtime_recovery_debug_passive;
         data.recovery.runtime_recovery_grace_seconds = payload.config.runtime_recovery_grace_seconds;
+        data.recovery.runtime_recovery_critical_link_loss_seconds = payload.config.runtime_recovery_critical_link_loss_seconds;
         data.recovery.runtime_recovery_internet_required = payload.config.runtime_recovery_internet_required;
         data.recovery.runtime_recovery_internet_probe = payload.config.runtime_recovery_internet_probe;
         data.recovery.runtime_recovery_instability_window_minutes = payload.config.runtime_recovery_instability_window_minutes;
@@ -3906,9 +3919,12 @@
         data.system.return_check_enabled = payload.config.return_check_enabled;
         data.system.return_check_interval_minutes = payload.config.return_check_interval_minutes;
         data.system.return_check_interval_seconds = payload.config.return_check_interval_seconds;
+        data.system.return_check_hold_seconds = payload.config.return_check_hold_seconds;
+        data.system.return_check_target = payload.config.return_check_target;
         data.system.runtime_recovery_enabled = payload.config.runtime_recovery_enabled;
         data.system.runtime_recovery_debug_passive = payload.config.runtime_recovery_debug_passive;
         data.system.runtime_recovery_grace_seconds = payload.config.runtime_recovery_grace_seconds;
+        data.system.runtime_recovery_critical_link_loss_seconds = payload.config.runtime_recovery_critical_link_loss_seconds;
         data.system.runtime_recovery_internet_required = payload.config.runtime_recovery_internet_required;
         data.system.runtime_recovery_internet_probe = payload.config.runtime_recovery_internet_probe;
         data.system.runtime_recovery_instability_window_minutes = payload.config.runtime_recovery_instability_window_minutes;
@@ -3973,14 +3989,14 @@
       const configApPassword = document.getElementById('config-ap-password')?.value || '';
       const apPassword = configApPassword || document.getElementById('recovery-ap-password-input').value;
       const returnCheckIntervalSeconds = document.getElementById('config-return-check-interval-input')?.value.trim() || '300';
-      const returnCheckEnabled = Number(returnCheckIntervalSeconds) > 0;
+      const returnCheckEnabled = Boolean(document.getElementById('return-check-enabled-input')?.checked);
+      const returnCheckHoldSeconds = document.getElementById('config-return-check-hold-input')?.value.trim() || '120';
       const runtimeRecoveryEnabled = Boolean(document.getElementById('runtime-recovery-enabled-input')?.checked);
-      const failsafeAutomatic = Boolean(document.getElementById('runtime-failsafe-automatic-input')?.checked);
+      const runtimeRecoveryDebugPassive = runtimeDebugPassiveFromInputs();
       const internetRequired = Boolean(document.getElementById('runtime-internet-required-input')?.checked);
       const internetProbe = document.getElementById('runtime-internet-probe-input')?.value.trim() || '1.1.1.1';
       const runtimeRecoveryGrace = document.getElementById('runtime-recovery-grace-input')?.value.trim() || '30';
-      const runtimeRecoveryWindow = document.getElementById('runtime-recovery-window-input')?.value.trim() || '10';
-      const runtimeRecoveryThreshold = document.getElementById('runtime-recovery-threshold-input')?.value.trim() || '3';
+      const criticalLinkLossSeconds = document.getElementById('runtime-critical-link-loss-input')?.value.trim() || '300';
       const returnInput = document.getElementById('recovery-return-connection-select');
       const returnConnection = returnInput.value.trim();
       const returnSsid = (returnInput.dataset.ssid || returnConnection).trim();
@@ -4009,6 +4025,11 @@
         else showRecoveryConfigResult('Intervalle de test retour: nombre de secondes requis.');
         return;
       }
+      if (!/^[0-9]+$/.test(returnCheckHoldSeconds) || Number(returnCheckHoldSeconds) > 3600) {
+        if (resultTarget === 'config') showConfigResult('Validation retour : entre 0 et 3600 secondes.');
+        else showRecoveryConfigResult('Validation retour : entre 0 et 3600 secondes.');
+        return;
+      }
       if (!/^[0-9]+$/.test(runtimeRecoveryGrace)) {
         if (resultTarget === 'config') showConfigResult('Delai runtime recovery: nombre de secondes requis.');
         else showRecoveryConfigResult('Delai runtime recovery: nombre de secondes requis.');
@@ -4019,14 +4040,9 @@
         else showRecoveryConfigResult('Cible Internet requise.');
         return;
       }
-      if (!/^[0-9]+$/.test(runtimeRecoveryWindow) || Number(runtimeRecoveryWindow) < 1) {
-        if (resultTarget === 'config') showConfigResult('Fenetre instabilite: minimum 1 minute.');
-        else showRecoveryConfigResult('Fen&ecirc;tre instabilit&eacute;: minimum 1 minute.');
-        return;
-      }
-      if (!/^[0-9]+$/.test(runtimeRecoveryThreshold) || Number(runtimeRecoveryThreshold) < 1) {
-        if (resultTarget === 'config') showConfigResult('Seuil instabilite: minimum 1 coupure.');
-        else showRecoveryConfigResult('Seuil instabilit&eacute;: minimum 1 coupure.');
+      if (!/^[0-9]+$/.test(criticalLinkLossSeconds) || Number(criticalLinkLossSeconds) < 1 || Number(criticalLinkLossSeconds) > 3600) {
+        if (resultTarget === 'config') showConfigResult('Perte critique du lien : entre 1 et 3600 secondes.');
+        else showRecoveryConfigResult('Perte critique du lien : entre 1 et 3600 secondes.');
         return;
       }
       const payload = await saveRuntimeConfig({
@@ -4034,45 +4050,66 @@
         ap_password: apPassword,
         return_ssid: returnSsid,
         return_connection: returnConnection,
-        return_check_enabled: returnCheckEnabled && Number(returnCheckIntervalSeconds) > 0,
+        return_check_enabled: returnCheckEnabled,
         return_check_interval_seconds: returnCheckIntervalSeconds,
         return_check_target: 'primary',
         return_check_mode: 'periodic-from-ap',
-        return_check_hold_seconds: '120',
+        return_check_hold_seconds: returnCheckHoldSeconds,
         runtime_recovery_enabled: runtimeRecoveryEnabled,
-        runtime_recovery_debug_passive: !failsafeAutomatic,
+        runtime_recovery_debug_passive: runtimeRecoveryDebugPassive,
         runtime_recovery_grace_seconds: runtimeRecoveryGrace,
+        runtime_recovery_critical_link_loss_seconds: criticalLinkLossSeconds,
         runtime_recovery_internet_required: internetRequired,
-        runtime_recovery_internet_probe: internetProbe,
-        runtime_recovery_instability_window_minutes: runtimeRecoveryWindow,
-        runtime_recovery_instability_threshold: runtimeRecoveryThreshold
+        runtime_recovery_internet_probe: internetProbe
       }, resultTarget);
     }
 
     async function saveFailsafeMode() {
-      const automatic = Boolean(document.getElementById('runtime-failsafe-automatic-input')?.checked);
+      const runtimeRecoveryEnabled = Boolean(document.getElementById('runtime-recovery-enabled-input')?.checked);
+      const runtimeRecoveryDebugPassive = runtimeDebugPassiveFromInputs();
+      const runtimeRecoveryGrace = document.getElementById('runtime-recovery-grace-input')?.value.trim() || '30';
+      const criticalLinkLossSeconds = document.getElementById('runtime-critical-link-loss-input')?.value.trim() || '300';
       const internetRequired = Boolean(document.getElementById('runtime-internet-required-input')?.checked);
       const internetProbe = document.getElementById('runtime-internet-probe-input')?.value.trim() || '1.1.1.1';
       if (!internetProbe) {
         showRuntimeConfigResult('Cible Internet requise.', 'diag-failsafe-result');
         return;
       }
+      if (!/^[0-9]+$/.test(runtimeRecoveryGrace)) {
+        showRuntimeConfigResult('Délai avant Wi-Fi de secours : nombre de secondes requis.', 'diag-failsafe-result');
+        return;
+      }
+      if (!/^[0-9]+$/.test(criticalLinkLossSeconds) || Number(criticalLinkLossSeconds) < 1 || Number(criticalLinkLossSeconds) > 3600) {
+        showRuntimeConfigResult('Perte critique du lien : entre 1 et 3600 secondes.', 'diag-failsafe-result');
+        return;
+      }
       const payload = await saveRuntimeConfig({
-        runtime_recovery_debug_passive: !automatic,
+        runtime_recovery_enabled: runtimeRecoveryEnabled,
+        runtime_recovery_debug_passive: runtimeRecoveryDebugPassive,
+        runtime_recovery_grace_seconds: runtimeRecoveryGrace,
+        runtime_recovery_critical_link_loss_seconds: criticalLinkLossSeconds,
         runtime_recovery_internet_required: internetRequired,
         runtime_recovery_internet_probe: internetProbe
       }, 'diag-failsafe-result');
-      showRuntimeConfigResult(`Failsafe automatique: ${automatic ? 'mode automatique' : 'mode observation'}. Internet obligatoire: ${internetRequired ? 'oui' : 'non'}.`, 'diag-failsafe-result');
+      showRuntimeConfigResult(`Surveillance : ${runtimeRecoveryEnabled ? 'active' : 'désactivée'}. Mode : ${runtimeRecoveryDebugPassive ? 'observation seulement' : 'secours automatique'}.`, 'diag-failsafe-result');
     }
 
     async function saveRecoveryDelay() {
       const runtimeRecoveryGrace = document.getElementById('runtime-recovery-grace-input')?.value.trim() || '30';
+      const criticalLinkLossSeconds = document.getElementById('runtime-critical-link-loss-input')?.value.trim() || '300';
       if (!/^[0-9]+$/.test(runtimeRecoveryGrace)) {
         showRuntimeConfigResult('Delai avant Wi-Fi secours : nombre de secondes requis.', 'diag-recovery-delay-result');
         return;
       }
-      await saveRuntimeConfig({ runtime_recovery_grace_seconds: runtimeRecoveryGrace }, 'diag-recovery-delay-result');
-      showRuntimeConfigResult(`Délai avant Wi-Fi secours appliqué : ${runtimeRecoveryGrace} secondes.`, 'diag-recovery-delay-result');
+      if (!/^[0-9]+$/.test(criticalLinkLossSeconds) || Number(criticalLinkLossSeconds) < 1 || Number(criticalLinkLossSeconds) > 3600) {
+        showRuntimeConfigResult('Perte critique du lien : entre 1 et 3600 secondes.', 'diag-recovery-delay-result');
+        return;
+      }
+      await saveRuntimeConfig({
+        runtime_recovery_grace_seconds: runtimeRecoveryGrace,
+        runtime_recovery_critical_link_loss_seconds: criticalLinkLossSeconds
+      }, 'diag-recovery-delay-result');
+      showRuntimeConfigResult(`Délais appliqués : Wi-Fi de secours ${runtimeRecoveryGrace} secondes, perte critique ${criticalLinkLossSeconds} secondes.`, 'diag-recovery-delay-result');
     }
 
     function nodeNetworkConfigPayload() {
@@ -4173,30 +4210,25 @@
     }
 
     async function saveRuntimeWatchdogMode() {
-      const runtimeRecoveryEnabled = Boolean(document.getElementById('runtime-recovery-enabled-input')?.checked);
+      const returnCheckEnabled = Boolean(document.getElementById('return-check-enabled-input')?.checked);
       const returnCheckIntervalSeconds = document.getElementById('config-return-check-interval-input')?.value.trim() || '300';
-      const runtimeRecoveryWindow = document.getElementById('runtime-recovery-window-input')?.value.trim() || '10';
-      const runtimeRecoveryThreshold = document.getElementById('runtime-recovery-threshold-input')?.value.trim() || '3';
+      const returnCheckHoldSeconds = document.getElementById('config-return-check-hold-input')?.value.trim() || '120';
       if (!/^[0-9]+$/.test(returnCheckIntervalSeconds)) {
         showRuntimeConfigResult('Verification retour Wi-Fi : nombre de secondes requis.', 'diag-watchdog-result');
         return;
       }
-      if (!/^[0-9]+$/.test(runtimeRecoveryWindow) || Number(runtimeRecoveryWindow) < 1) {
-        showRuntimeConfigResult('Fenetre diagnostic : minimum 1 minute.', 'diag-watchdog-result');
-        return;
-      }
-      if (!/^[0-9]+$/.test(runtimeRecoveryThreshold) || Number(runtimeRecoveryThreshold) < 1) {
-        showRuntimeConfigResult('Seuil diagnostic : minimum 1 evenement.', 'diag-watchdog-result');
+      if (!/^[0-9]+$/.test(returnCheckHoldSeconds) || Number(returnCheckHoldSeconds) > 3600) {
+        showRuntimeConfigResult('Validation retour : entre 0 et 3600 secondes.', 'diag-watchdog-result');
         return;
       }
       await saveRuntimeConfig({
-        runtime_recovery_enabled: runtimeRecoveryEnabled,
-        return_check_enabled: Number(returnCheckIntervalSeconds) > 0,
+        return_check_enabled: returnCheckEnabled,
         return_check_interval_seconds: returnCheckIntervalSeconds,
-        runtime_recovery_instability_window_minutes: runtimeRecoveryWindow,
-        runtime_recovery_instability_threshold: runtimeRecoveryThreshold
+        return_check_target: 'primary',
+        return_check_mode: 'periodic-from-ap',
+        return_check_hold_seconds: returnCheckHoldSeconds
       }, 'diag-watchdog-result');
-      showRuntimeConfigResult(`Surveillance de connexion : ${runtimeRecoveryEnabled ? 'active' : 'désactivée'}. Retour automatique : ${Number(returnCheckIntervalSeconds) > 0 ? `${returnCheckIntervalSeconds} secondes` : 'désactivé'}.`, 'diag-watchdog-result');
+      showRuntimeConfigResult(`Retour automatique : ${returnCheckEnabled ? `${returnCheckIntervalSeconds} secondes, validation ${returnCheckHoldSeconds} secondes` : 'désactivé'}.`, 'diag-watchdog-result');
     }
 
     function networkActionPlan(action) {

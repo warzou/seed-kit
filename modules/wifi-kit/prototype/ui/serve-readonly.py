@@ -174,6 +174,7 @@ RUNTIME_CONFIG_KEYS = {
     "runtime_recovery_enabled",
     "runtime_recovery_debug_passive",
     "runtime_recovery_grace_seconds",
+    "runtime_recovery_critical_link_loss_seconds",
     "runtime_recovery_internet_required",
     "runtime_recovery_internet_probe",
     "runtime_recovery_instability_window_minutes",
@@ -241,6 +242,7 @@ def public_recovery_status(recovery: dict | None) -> dict:
         "runtime_recovery_enabled",
         "runtime_recovery_debug_passive",
         "runtime_recovery_grace_seconds",
+        "runtime_recovery_critical_link_loss_seconds",
         "runtime_recovery_internet_required",
         "runtime_recovery_internet_probe",
         "runtime_recovery_instability_window_minutes",
@@ -937,6 +939,7 @@ def default_runtime_config() -> dict[str, str]:
         "runtime_recovery_enabled": "true",
         "runtime_recovery_debug_passive": "true",
         "runtime_recovery_grace_seconds": "30",
+        "runtime_recovery_critical_link_loss_seconds": "300",
         "runtime_recovery_internet_required": "true",
         "runtime_recovery_internet_probe": "1.1.1.1",
         "runtime_recovery_instability_window_minutes": "10",
@@ -1017,6 +1020,7 @@ def redact_runtime_config(config: dict[str, str]) -> dict[str, object]:
         "runtime_recovery_enabled": config.get("runtime_recovery_enabled", "true"),
         "runtime_recovery_debug_passive": config.get("runtime_recovery_debug_passive", "true"),
         "runtime_recovery_grace_seconds": config.get("runtime_recovery_grace_seconds", "30"),
+        "runtime_recovery_critical_link_loss_seconds": config.get("runtime_recovery_critical_link_loss_seconds", "300"),
         "runtime_recovery_internet_required": config.get("runtime_recovery_internet_required", "true"),
         "runtime_recovery_internet_probe": config.get("runtime_recovery_internet_probe", "1.1.1.1"),
         "runtime_recovery_instability_window_minutes": config.get("runtime_recovery_instability_window_minutes", "10"),
@@ -1144,6 +1148,7 @@ def write_runtime_config(config: dict[str, str]) -> None:
         f"runtime_recovery_enabled={config.get('runtime_recovery_enabled', 'true')}",
         f"runtime_recovery_debug_passive={config.get('runtime_recovery_debug_passive', 'true')}",
         f"runtime_recovery_grace_seconds={config.get('runtime_recovery_grace_seconds', '30')}",
+        f"runtime_recovery_critical_link_loss_seconds={config.get('runtime_recovery_critical_link_loss_seconds', '300')}",
         f"runtime_recovery_internet_required={config.get('runtime_recovery_internet_required', 'true')}",
         f"runtime_recovery_internet_probe={config.get('runtime_recovery_internet_probe', '1.1.1.1')}",
         f"runtime_recovery_instability_window_minutes={config.get('runtime_recovery_instability_window_minutes', '10')}",
@@ -1317,6 +1322,11 @@ def update_runtime_config(payload: dict) -> tuple[dict, int]:
         if not grace.isdigit() or int(grace) < 0:
             return {"status": "failure", "error": "runtime-recovery-grace-invalid"}, 400
         config["runtime_recovery_grace_seconds"] = str(int(grace))
+    if "runtime_recovery_critical_link_loss_seconds" in payload:
+        critical = str(payload.get("runtime_recovery_critical_link_loss_seconds", "")).strip()
+        if not critical.isdigit() or int(critical) < 1 or int(critical) > 3600:
+            return {"status": "failure", "error": "runtime-recovery-critical-link-loss-invalid"}, 400
+        config["runtime_recovery_critical_link_loss_seconds"] = str(int(critical))
     if "runtime_recovery_internet_required" in payload:
         internet_required = str(payload.get("runtime_recovery_internet_required", "")).strip().lower()
         if internet_required in {"true", "1", "yes", "on"}:
@@ -1899,6 +1909,7 @@ def backend_status(recovery: dict | None = None) -> dict[str, object]:
             "runtime_recovery_enabled": config.get("runtime_recovery_enabled", "true"),
             "runtime_recovery_debug_passive": config.get("runtime_recovery_debug_passive", "true"),
             "runtime_recovery_grace_seconds": config.get("runtime_recovery_grace_seconds", "30"),
+            "runtime_recovery_critical_link_loss_seconds": config.get("runtime_recovery_critical_link_loss_seconds", "300"),
             "runtime_recovery_internet_required": config.get("runtime_recovery_internet_required", "true"),
             "runtime_recovery_internet_probe": config.get("runtime_recovery_internet_probe", "1.1.1.1"),
             "runtime_recovery_instability_window_minutes": config.get("runtime_recovery_instability_window_minutes", "10"),
@@ -4177,6 +4188,7 @@ def system_info(diagnose: dict, recovery: dict | None = None) -> dict:
         "runtime_recovery_enabled": config.get("runtime_recovery_enabled", "true"),
         "runtime_recovery_debug_passive": config.get("runtime_recovery_debug_passive", "true"),
         "runtime_recovery_grace_seconds": config.get("runtime_recovery_grace_seconds", "30"),
+        "runtime_recovery_critical_link_loss_seconds": config.get("runtime_recovery_critical_link_loss_seconds", "300"),
         "runtime_recovery_internet_required": config.get("runtime_recovery_internet_required", "true"),
         "runtime_recovery_internet_probe": config.get("runtime_recovery_internet_probe", "1.1.1.1"),
         "runtime_recovery_instability_window_minutes": config.get("runtime_recovery_instability_window_minutes", "10"),
@@ -4220,6 +4232,7 @@ def ui_data(recovery: dict | None = None) -> dict:
         "runtime_recovery_enabled": config.get("runtime_recovery_enabled", "true"),
         "runtime_recovery_debug_passive": config.get("runtime_recovery_debug_passive", "true"),
         "runtime_recovery_grace_seconds": config.get("runtime_recovery_grace_seconds", "30"),
+        "runtime_recovery_critical_link_loss_seconds": config.get("runtime_recovery_critical_link_loss_seconds", "300"),
         "runtime_recovery_internet_required": config.get("runtime_recovery_internet_required", "true"),
         "runtime_recovery_internet_probe": config.get("runtime_recovery_internet_probe", "1.1.1.1"),
         "runtime_recovery_instability_window_minutes": config.get("runtime_recovery_instability_window_minutes", "10"),
@@ -4242,6 +4255,7 @@ def ui_data(recovery: dict | None = None) -> dict:
         recovery_payload["runtime_recovery_enabled"] = config.get("runtime_recovery_enabled", "true")
         recovery_payload["runtime_recovery_debug_passive"] = config.get("runtime_recovery_debug_passive", "true")
         recovery_payload["runtime_recovery_grace_seconds"] = config.get("runtime_recovery_grace_seconds", "30")
+        recovery_payload["runtime_recovery_critical_link_loss_seconds"] = config.get("runtime_recovery_critical_link_loss_seconds", "300")
         recovery_payload["runtime_recovery_internet_required"] = config.get("runtime_recovery_internet_required", "true")
         recovery_payload["runtime_recovery_internet_probe"] = config.get("runtime_recovery_internet_probe", "1.1.1.1")
         recovery_payload["runtime_recovery_instability_window_minutes"] = config.get("runtime_recovery_instability_window_minutes", "10")
