@@ -2544,9 +2544,9 @@
         <div class="section-head">
           <div>
             <h2 id="config-network-title">Réseau du node</h2>
-            <p class="section-copy">Préparation IP fixe. Aucune modification réseau n'est appliquée dans cette version.</p>
+            <p class="section-copy">Réglages réseau préparés et tests SAFE. Cette page distingue l'état enregistré de l'état réellement appliqué.</p>
           </div>
-          <span class="chip">Futur</span>
+          <span class="chip">SAFE</span>
         </div>
         <div class="config-recovery-stack">
           <section class="recovery-setting" aria-labelledby="config-preferred-network-heading">
@@ -2556,7 +2556,7 @@
             <small class="setting-help">Le réseau principal souhaité est choisi par l'utilisateur. Le dernier réseau validé reste mis à jour automatiquement par Wifi-Kit.</small>
           </section>
           <section class="recovery-setting" aria-labelledby="config-ip-mode-heading">
-            <h3 class="recovery-setting-title" id="config-ip-mode-heading">Mode IP</h3>
+            <h3 class="recovery-setting-title" id="config-ip-mode-heading">Mode IP préparé</h3>
             <div class="network-mode-options">
               <label class="confirm-line">
                 <input id="config-ip-mode-dhcp" name="config-ip-mode" type="radio" value="dhcp" checked>
@@ -2567,15 +2567,19 @@
                 <span>IP fixe</span>
               </label>
             </div>
-            <small class="setting-help">Laisser en DHCP pour utiliser l'adresse fournie par la box/routeur.</small>
+            <small class="setting-help">Ce choix est la configuration enregistrée par Wifi-Kit. Il ne garantit pas que l'IP fixe est actuellement appliquée.</small>
             <div class="status-summary-grid">
               <div class="status-summary-card"><span>IP actuelle</span><strong id="config-current-ip">...</strong></div>
+              <div class="status-summary-card"><span>Mode actuel</span><strong id="config-current-ip-mode">...</strong></div>
+              <div class="status-summary-card"><span>Configuration IP fixe enregistrée</span><strong id="config-static-saved-state">...</strong></div>
+              <div class="status-summary-card"><span>État IP fixe</span><strong id="config-static-applied-state">...</strong></div>
               <div class="status-summary-card"><span>Passerelle actuelle</span><strong id="config-current-gateway">...</strong></div>
               <div class="status-summary-card"><span>DNS actuels</span><strong id="config-current-dns">...</strong></div>
             </div>
+            <p id="config-static-network-warning" class="network-identity-warning" hidden>Attention : cette configuration ne correspond pas forcément au réseau actuellement connecté.</p>
           </section>
           <section class="recovery-setting" aria-labelledby="config-static-ip-heading">
-            <h3 class="recovery-setting-title" id="config-static-ip-heading">Paramètres IP fixe</h3>
+            <h3 class="recovery-setting-title" id="config-static-ip-heading">Configuration IP fixe enregistrée</h3>
             <div class="network-address-grid">
               <label class="field-label">
                 Adresse IP fixe
@@ -3558,6 +3562,39 @@
       return '';
     }
 
+    function ipWithoutPrefix(ip) {
+      return String(ip || '').split('/')[0].trim();
+    }
+
+    function routeLooksDhcp() {
+      const route = String(data.diagnose?.default_route || data.snapshot?.default_route || systemState().default_route || '');
+      return /\bproto\s+dhcp\b/i.test(route);
+    }
+
+    function currentIpModeLabel() {
+      if (routeLooksDhcp()) return 'DHCP';
+      return 'statique ou non déterminé';
+    }
+
+    function staticConfigSaved(config) {
+      return Boolean(config.node_ip_mode === 'static' && config.node_static_ip && config.node_static_gateway);
+    }
+
+    function staticConfigMatchesCurrentNetwork(config, currentGateway) {
+      if (!staticConfigSaved(config)) return true;
+      const configuredGateway = ipWithoutPrefix(config.node_static_gateway);
+      if (!configuredGateway || !currentGateway) return true;
+      return configuredGateway === ipWithoutPrefix(currentGateway);
+    }
+
+    function staticAppliedLabel(config, currentIp) {
+      if (!staticConfigSaved(config)) return 'non configurée';
+      const configuredIp = ipWithoutPrefix(config.node_static_ip);
+      const activeIp = ipWithoutPrefix(currentIp);
+      if (configuredIp && activeIp && configuredIp === activeIp && !routeLooksDhcp()) return 'actuellement appliquée';
+      return 'enregistrée, non appliquée au réseau courant';
+    }
+
     function renderConfiguration() {
       const system = systemState();
       const recovery = recoveryState();
@@ -3574,8 +3611,19 @@
       setText('config-preferred-network', `Réseau principal souhaité : ${preferredNetworkLabel()}`);
       setText('config-last-good-network', `Dernier réseau validé : ${lastGoodNetworkLabel()}`);
       setText('config-current-ip', currentIp);
+      setText('config-current-ip-mode', currentIpModeLabel());
+      setText('config-static-saved-state', staticConfigSaved(config) ? 'oui' : 'non');
+      setText('config-static-applied-state', staticAppliedLabel(config, currentIp));
       setText('config-current-gateway', currentGateway || 'inconnu');
       setText('config-current-dns', currentDns || 'inconnu');
+      const staticWarning = document.getElementById('config-static-network-warning');
+      if (staticWarning) {
+        const showWarning = staticConfigSaved(config) && (!staticConfigMatchesCurrentNetwork(config, currentGateway) || staticAppliedLabel(config, currentIp).includes('non appliquée'));
+        staticWarning.hidden = !showWarning;
+        staticWarning.textContent = !staticConfigMatchesCurrentNetwork(config, currentGateway)
+          ? "Attention : cette configuration ne correspond pas forcément au réseau actuellement connecté."
+          : "Configuration IP fixe enregistrée, mais le node utilise actuellement une autre adresse.";
+      }
       const dhcpMode = document.getElementById('config-ip-mode-dhcp');
       const staticMode = document.getElementById('config-ip-mode-static');
       if (dhcpMode) dhcpMode.checked = nodeIpMode === 'dhcp';
