@@ -4794,6 +4794,15 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
             self.send_headers_only(200, "text/html; charset=utf-8", body_length)
             return
 
+        if path == "/favicon.svg":
+            try:
+                body_length = FAVICON_SVG.stat().st_size
+            except FileNotFoundError:
+                self.send_headers_only(404, "image/svg+xml; charset=utf-8", 0)
+                return
+            self.send_headers_only(200, "image/svg+xml; charset=utf-8", body_length)
+            return
+
         self.send_headers_only(404, "application/json; charset=utf-8", 0)
 
     def do_GET(self) -> None:
