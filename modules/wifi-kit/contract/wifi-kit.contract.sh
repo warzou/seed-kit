@@ -50,6 +50,7 @@ privileged-actions
 WIFI_KIT_FILES='
 prototype/ui/serve-readonly.py
 prototype/ui/index.html
+prototype/ui/favicon.svg
 prototype/ap-setup-test.sh
 prototype/wifi-kit-connect-recovery.sh
 prototype/wifi-kit-recovery-guard.sh

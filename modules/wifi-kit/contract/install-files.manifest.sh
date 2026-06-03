@@ -28,6 +28,7 @@ WIFI_KIT_INSTALL_DIRS='
 WIFI_KIT_INSTALL_FILES='
 prototype/ui/serve-readonly.py|/opt/seed-kit/wifi-kit/ui/serve-readonly.py|root:root|0644|normal-ui-backend
 prototype/ui/index.html|/opt/seed-kit/wifi-kit/ui/index.html|root:root|0644|normal-ui-static
+prototype/ui/favicon.svg|/opt/seed-kit/wifi-kit/ui/favicon.svg|root:root|0644|normal-ui-favicon
 prototype/ap-setup-test.sh|/opt/seed-kit/wifi-kit/ap-setup-test.sh|root:root|0755|recovery-ap-helper
 prototype/wifi-kit-connect-recovery.sh|/opt/seed-kit/wifi-kit/wifi-kit-connect-recovery.sh|root:root|0755|recovery-connect-helper
 prototype/wifi-kit-connect-transaction.sh|/opt/seed-kit/wifi-kit/wifi-kit-connect-transaction.sh|root:root|0755|connect-transaction-helper

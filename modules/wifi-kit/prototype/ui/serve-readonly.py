@@ -35,6 +35,7 @@ UI_SERVICE_NAME = os.environ.get("WIFI_KIT_UI_SERVICE", "wifi-kit-ui.service")
 BOOT_GUARD_SERVICE_NAME = os.environ.get("WIFI_KIT_BOOT_GUARD_SERVICE", "wifi-kit-boot-guard.service")
 RUNTIME_WATCHDOG_SERVICE_NAME = os.environ.get("WIFI_KIT_RUNTIME_WATCHDOG_SERVICE", "wifi-kit-runtime-watchdog.service")
 INDEX_HTML = SCRIPT_DIR / "index.html"
+FAVICON_SVG = SCRIPT_DIR / "favicon.svg"
 RUNTIME_UI_EXPECTED_MARKERS = (
     "config-recovery-stack",
     "Laisser vide pour conserver le mot de passe actuel.",
@@ -4834,6 +4835,13 @@ class WifiKitReadOnlyHandler(BaseHTTPRequestHandler):
                 log_recovery_trace("recovery-after-send", route="recovery", path=path, bytes=len(body))
                 return
             self.send_bytes(200, "text/html; charset=utf-8", render_index(self.recovery).encode("utf-8"))
+            return
+
+        if path == "/favicon.svg":
+            try:
+                self.send_bytes(200, "image/svg+xml; charset=utf-8", FAVICON_SVG.read_bytes())
+            except FileNotFoundError:
+                self.send_headers_only(404, "image/svg+xml; charset=utf-8", 0)
             return
 
         if path == "/status":

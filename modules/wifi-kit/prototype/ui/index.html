@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Wifi-Kit - Seed-Kit</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <style>
     :root {
       --bg: #07111c;
@@ -484,6 +485,69 @@
       display: grid;
       gap: 5px;
       width: 100%;
+    }
+
+    .network-identity-card {
+      display: grid;
+      gap: 10px;
+      margin: 0 0 12px;
+      border: 1px solid rgba(68, 212, 230, 0.16);
+      border-radius: var(--radius-sm);
+      background: rgba(68, 212, 230, 0.055);
+      padding: 13px;
+    }
+
+    .network-identity-card[hidden] {
+      display: none;
+    }
+
+    .network-identity-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--ink);
+      font-size: 0.95rem;
+      font-weight: 950;
+    }
+
+    .network-identity-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px 12px;
+    }
+
+    .network-identity-item span {
+      display: block;
+      color: var(--dim);
+      font-size: 0.62rem;
+      font-weight: 950;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .network-identity-item strong {
+      display: block;
+      margin-top: 3px;
+      overflow-wrap: anywhere;
+      color: var(--ink);
+      font-size: 0.86rem;
+      line-height: 1.2;
+    }
+
+    .network-identity-warning {
+      margin: 0;
+      border-radius: 12px;
+      background: rgba(255, 177, 61, 0.1);
+      color: #ffd59a;
+      padding: 9px 10px;
+      font-size: 0.82rem;
+      line-height: 1.35;
+    }
+
+    @media (max-width: 680px) {
+      .network-identity-grid {
+        grid-template-columns: 1fr;
+      }
     }
 
     .network-section-title {
@@ -2117,6 +2181,7 @@
         </div>
         <span id="scan-spinner" class="scan-spinner" hidden>Scan en cours</span>
         <div id="connect-status-banner" class="callout info" hidden></div>
+        <div id="network-identity-card" class="network-identity-card" hidden></div>
         <div id="scan-message" class="callout" hidden></div>
         <div id="network-list" class="network-list"></div>
       </section>
@@ -2142,15 +2207,15 @@
           <div class="status-summary-grid">
             <div class="status-summary-card"><span>Reseau principal</span><strong id="recovery-primary-status">...</strong></div>
             <div class="status-summary-card"><span>Mode</span><strong id="recovery-watchdog-mode">...</strong></div>
-            <div class="status-summary-card"><span>AP recovery</span><strong id="recovery-ap-status">...</strong></div>
+            <div class="status-summary-card"><span>Wi-Fi secours</span><strong id="recovery-ap-status">...</strong></div>
             <div class="status-summary-card"><span>Dernier incident</span><strong id="recovery-watchdog-summary">...</strong></div>
           </div>
           <div class="recovery-reassurance">
             <strong>Dernier recovery</strong>
             <div class="status-summary-grid">
               <div class="status-summary-card"><span>Date</span><strong id="recovery-last-time">...</strong></div>
-              <div class="status-summary-card"><span>Trigger</span><strong id="recovery-last-trigger">...</strong></div>
-              <div class="status-summary-card"><span>Resultat</span><strong id="recovery-last-result">...</strong></div>
+              <div class="status-summary-card"><span>Déclencheur</span><strong id="recovery-last-trigger">...</strong></div>
+              <div class="status-summary-card"><span>Résultat</span><strong id="recovery-last-result">...</strong></div>
             </div>
           </div>
         </article>
@@ -2175,7 +2240,7 @@
             <span class="muted">Lecture seule : ne démarre pas l’AP.</span>
           </div>
           <details class="return-profile-details-panel">
-            <summary>Détails AP recovery</summary>
+            <summary>Détails Wi-Fi secours</summary>
             <dl class="detail-grid">
               <dt>SSID attendu</dt><dd><span id="ap-health-ssid">...</span></dd>
               <dt>URL manuelle</dt><dd><span id="ap-health-url">http://192.168.50.1</span></dd>
@@ -2199,14 +2264,14 @@
               <div class="metric"><span>Interface</span><strong id="recovery-ui">...</strong></div>
               <div class="metric"><span>Clients AP</span><strong id="recovery-clients">...</strong></div>
               <div class="metric"><span>Reseau principal</span><strong id="recovery-main-health">...</strong></div>
-              <div class="metric"><span>AP recovery</span><strong id="recovery-ap-health">...</strong></div>
+              <div class="metric"><span>Wi-Fi secours</span><strong id="recovery-ap-health">...</strong></div>
               <div class="metric"><span>Runtime /opt</span><strong id="recovery-runtime-sync">...</strong></div>
               <div class="metric"><span>Failsafe</span><strong id="recovery-failsafe-mode">...</strong></div>
-              <div class="metric"><span>Etat watchdog</span><strong id="recovery-watchdog-state">...</strong></div>
-              <div class="metric"><span>Decision watchdog</span><strong id="recovery-watchdog-decision">...</strong></div>
-              <div class="metric"><span>Delai watchdog</span><strong id="recovery-watchdog-delay">...</strong></div>
+              <div class="metric"><span>Etat surveillance</span><strong id="recovery-watchdog-state">...</strong></div>
+              <div class="metric"><span>Decision surveillance</span><strong id="recovery-watchdog-decision">...</strong></div>
+              <div class="metric"><span>Delai surveillance</span><strong id="recovery-watchdog-delay">...</strong></div>
               <div class="metric"><span>Reseau surveille</span><strong id="recovery-watchdog-network">...</strong></div>
-              <div class="metric"><span>Watchdog brut</span><strong id="recovery-watchdog-event">...</strong></div>
+              <div class="metric"><span>Dernier signal brut</span><strong id="recovery-watchdog-event">...</strong></div>
             </div>
           </div>
           <div class="recovery-reassurance">
@@ -2290,7 +2355,7 @@
             <div id="start-ap-mode-result" class="callout recovery-result" hidden></div>
             <details class="action-plan">
               <summary>Afficher le plan</summary>
-              <p>Demande au backend SAFE d'ouvrir le mode AP recovery puis confirme l'etat reel avant d'annoncer le succes.</p>
+              <p>Demande au backend SAFE d'ouvrir le Wi-Fi de secours puis confirme l'etat reel avant d'annoncer le succes.</p>
             </details>
           </div>
           <div class="action-card">
@@ -2310,7 +2375,7 @@
             <div id="ap-return-check-once-result" class="callout recovery-result" hidden></div>
             <details class="action-plan">
               <summary>Afficher le plan</summary>
-              <p>Depuis le mode AP recovery, stoppe l'AP, tente une fois le dernier Wi-Fi connu, puis reste en mode normal si le retour reussit. En cas d'echec, relance l'AP recovery.</p>
+              <p>Depuis le Wi-Fi de secours, stoppe l'AP, tente une fois le dernier Wi-Fi connu, puis reste en mode normal si le retour reussit. En cas d'echec, relance le Wi-Fi de secours.</p>
             </details>
           </div>
           <div class="action-card">
@@ -2333,7 +2398,7 @@
           </div>
           <span class="chip">SAFE</span>
         </div>
-        <div class="config-recovery-stack diagnostic-settings" aria-label="Options watchdog">
+        <div class="config-recovery-stack diagnostic-settings" aria-label="Options surveillance de connexion">
           <section class="recovery-setting" aria-labelledby="config-failsafe-heading">
             <h3 class="recovery-setting-title" id="config-failsafe-heading">Watchdog</h3>
             <strong class="recovery-setting-current" id="config-failsafe-mode">...</strong>
@@ -2341,8 +2406,8 @@
               <input id="runtime-failsafe-automatic-input" type="checkbox">
               <span>Failsafe automatique</span>
             </label>
-            <small class="setting-help">Par defaut, le watchdog reste en observation : il detecte et journalise seulement. En mode automatique, il peut ouvrir l'AP recovery apres une inaccessibilite durable.</small>
-            <button id="config-apply-failsafe" class="button secondary setting-action" type="button">Appliquer le mode watchdog</button>
+            <small class="setting-help">Par défaut, la surveillance reste en observation : elle détecte et journalise seulement. En mode automatique, elle peut ouvrir le Wi-Fi de secours après une inaccessibilité durable.</small>
+            <button id="config-apply-failsafe" class="button secondary setting-action" type="button">Appliquer le mode de surveillance</button>
             <div id="diag-failsafe-result" class="callout recovery-result" hidden></div>
           </section>
           <section class="recovery-setting" aria-labelledby="diag-internet-heading">
@@ -2358,7 +2423,7 @@
             <small class="setting-help">Si desactive, SSID + IP + route locale suffisent. Une passerelle ou Internet momentanement KO ne declenche pas l'AP.</small>
           </section>
           <section class="recovery-setting" aria-labelledby="config-recovery-delay-heading">
-            <h3 class="recovery-setting-title" id="config-recovery-delay-heading">Bascule AP recovery</h3>
+            <h3 class="recovery-setting-title" id="config-recovery-delay-heading">Bascule Wi-Fi secours</h3>
             <strong class="recovery-setting-current" id="config-recovery-delay">...</strong>
             <label class="field-label">
               Delai avant Wi-Fi secours
@@ -2422,11 +2487,11 @@
           <div class="metric"><span>DHCP</span><strong id="node-dhcp">...</strong></div>
           <div class="metric"><span>Dernier evenement</span><strong id="diag-last-event">...</strong></div>
           <h3>Runtime</h3>
-          <div class="metric"><span>Watchdog runtime</span><strong id="diag-runtime-watchdog">...</strong></div>
+          <div class="metric"><span>Surveillance runtime</span><strong id="diag-runtime-watchdog">...</strong></div>
           <div class="metric"><span>Cause runtime</span><strong id="diag-runtime-reason">...</strong></div>
-          <div class="metric"><span>Debug passif</span><strong id="diag-runtime-debug-passive">...</strong></div>
+          <div class="metric"><span>Observation seulement</span><strong id="diag-runtime-debug-passive">...</strong></div>
           <div class="metric"><span>Connexion actuelle</span><strong id="diag-current-connection">...</strong></div>
-          <div class="metric"><span>Last good attendu</span><strong id="diag-last-good">...</strong></div>
+          <div class="metric"><span>Dernier réseau validé</span><strong id="diag-last-good">...</strong></div>
           <div class="metric"><span>SSID instable</span><strong id="diag-unstable-ssid">...</strong></div>
           <h3>Services</h3>
           <div class="metric"><span>AP</span><strong id="diag-ap">...</strong></div>
@@ -2503,8 +2568,8 @@
               </label>
             </div>
             <small class="setting-help">Exemple : 192.168.8.50/24 avec passerelle 192.168.8.1. Une IP fixe mal configurée peut rendre le node inaccessible.</small>
-            <small class="setting-help">L'application réelle de l'IP fixe nécessitera une validation SAFE avec retour possible en AP recovery.</small>
-            <small class="setting-help">Le test applique l'IP fixe pendant 120 secondes. Confirme depuis la nouvelle adresse pour la conserver; sinon Wifi-Kit revient au DHCP et tente l'AP recovery si le rollback échoue.</small>
+            <small class="setting-help">L'application réelle de l'IP fixe nécessitera une validation SAFE avec retour possible en Wi-Fi de secours.</small>
+            <small class="setting-help">Le test applique l'IP fixe pendant 120 secondes. Confirme depuis la nouvelle adresse pour la conserver; sinon Wifi-Kit revient au DHCP et tente le Wi-Fi de secours si le rollback échoue.</small>
             <label class="confirm-line">
               <input id="config-static-ip-confirm" type="checkbox">
               <span>Je confirme le test IP fixe avec rollback automatique</span>
@@ -2977,7 +3042,7 @@
       if (scan.refresh_attempted) {
         const status = scan.refresh_status || 'unknown';
         if (scan.scan_mode === 'nm-hotspot-nondisruptive') return `${label}; scan experimental sans coupure AP`;
-        if (status === 'started') return `${label}; AP recovery interrompu puis redemarre apres scan`;
+        if (status === 'started') return `${label}; Wi-Fi de secours interrompu puis redemarre apres scan`;
         if (status === 'ok') return `${label} après scan`;
         if (status === 'failed-used-existing-results') return `${label}; cache conservé`;
         return `${label}; scan ${status}`;
@@ -3034,14 +3099,15 @@
 
     function describeScanReason(scan) {
       const reason = scan.reason || scan.status || 'unknown';
+      if (['loading', 'pending', 'started'].includes(reason)) return 'Recherche des réseaux Wi-Fi...';
       if (reason === 'scan-readonly-failed') return 'Le Raspberry Pi ne peut pas lire les resultats Wi-Fi pour le moment. La connexion actuelle reste preservee.';
       if (reason === 'scan-tools-missing') return "Le scan Wi-Fi n'est pas disponible car nmcli et iw sont absents ou introuvables.";
       if (reason === 'iw-scan-failed') return 'Le fallback iw ne peut pas scanner les reseaux pour le moment tout en gardant la connexion Wi-Fi actuelle.';
       if (reason === 'iw-missing') return "Le scan Wi-Fi n'est pas disponible car l'outil iw est absent.";
       if (reason === 'nm-hotspot-scan-ok') return "Scan experimental sans coupure AP. Si l'AP disparait, c'est une limite driver ou NetworkManager, pas une coupure volontaire du backend.";
-      if (reason === 'ap-recovery-scan-started') return "Le scan interrompt temporairement l'AP recovery et deconnecte les appareils. Reconnecte-toi au Wi-Fi AP apres son redemarrage.";
-      if (reason === 'scan-cache-missing') return "Aucun scan recent n'est encore disponible en mode AP recovery. Scanner interrompt temporairement l'AP et deconnecte les appareils.";
-      if (reason === 'scan-from-ap-recovery-failed') return "Le scan depuis AP recovery a echoue, mais l'AP doit etre relance automatiquement.";
+      if (reason === 'ap-recovery-scan-started') return "Le scan interrompt temporairement le Wi-Fi de secours et deconnecte les appareils. Reconnecte-toi au Wi-Fi de secours apres son redemarrage.";
+      if (reason === 'scan-cache-missing') return "Aucun scan recent n'est encore disponible en mode Wi-Fi de secours. Scanner interrompt temporairement l'AP et deconnecte les appareils.";
+      if (reason === 'scan-from-ap-recovery-failed') return "Le scan depuis le Wi-Fi de secours a echoue, mais l'AP doit etre relance automatiquement.";
       if (reason === 'no-wifi-interface') return "Interface Wi-Fi non detectee dans cet environnement. C'est normal en previsualisation locale/WSL. Sur pocket-node, les reseaux apparaitront si wlan0 est disponible.";
       if (reason === 'demo-data') return 'Aucun reseau reel dans la demo. Lance le serveur local read-only pour afficher les donnees du Raspberry Pi.';
       return `Le scan Wi-Fi est indisponible pour le moment (${reason}).`;
@@ -3125,10 +3191,10 @@
       const active = summary === 'active-ok';
       const ready = summary === 'ready' || active;
       setText('ap-health-summary', active
-        ? 'AP recovery actif et UI joignable selon les signaux locaux.'
+        ? 'Wi-Fi de secours actif et UI joignable selon les signaux locaux.'
         : ready
           ? 'Les briques du secours AP sont prêtes. Ce test ne démarre pas l’AP.'
-          : 'Secours AP incomplet : vérifie les détails avant d’activer un watchdog automatique.');
+          : 'Secours AP incomplet : vérifie les détails avant d’activer une surveillance automatique.');
       setText('ap-health-badge', active ? 'AP actif' : (ready ? 'Prêt' : 'À vérifier'));
       setText('ap-health-configured', okKo(checks.ap_configured));
       setText('ap-health-profile', checks.ap_profile_present ? 'présent' : 'absent');
@@ -3193,10 +3259,28 @@
     function recoveryResultLabel(result) {
       const value = String(result || '').trim();
       if (!value) return 'aucun';
-      if (value === 'starting') return 'demarrage';
-      if (value === 'success') return 'succes';
-      if (value === 'failure') return 'echec';
+      if (value === 'starting') return 'démarrage';
+      if (value === 'success') return 'réussi';
+      if (value === 'failure') return 'échec';
       return value.replace(/[-_]/g, ' ');
+    }
+
+    function recoveryTriggerLabel(trigger) {
+      const value = String(trigger || '').trim();
+      if (!value) return 'aucun';
+      const labels = {
+        'critical-link-loss': 'perte durable du lien Wi-Fi',
+        'gateway-and-internet-unreachable': 'passerelle et Internet injoignables',
+        'gateway-unreachable': 'passerelle injoignable',
+        'internet-unreachable': 'Internet injoignable',
+        'manual': 'action manuelle',
+        'start-ap-mode': 'action manuelle',
+        'boot-guard': 'protection au démarrage',
+        'no-ip': 'adresse IP absente',
+        'no-default-route': 'route par défaut absente',
+        'disconnected': 'Wi-Fi déconnecté',
+      };
+      return labels[value] || value.replace(/[-_]/g, ' ');
     }
 
     function watchdogSummary() {
@@ -3321,8 +3405,8 @@
       const summary = watchdogSummary();
       document.getElementById('recovery-chip').textContent = active ? 'Mode AP actif' : 'Mode AP inactif';
       document.getElementById('recovery-copy').textContent = active
-        ? 'AP recovery actif. Garde cette page ouverte pour revenir au reseau normal.'
-        : 'Surveille le failsafe et ouvre le Wi-Fi de secours si le node devient inaccessible.';
+        ? 'Wi-Fi de secours actif. Garde cette page ouverte pour revenir au réseau normal.'
+        : 'Surveille la connexion et ouvre le Wi-Fi de secours si le node devient inaccessible.';
       setText('recovery-safety-title', summary.title);
       setText('recovery-safety-copy', summary.copy);
       setText('recovery-safety-badge', summary.badge);
@@ -3332,7 +3416,7 @@
       setText('recovery-watchdog-mode', summary.mode);
       setText('recovery-watchdog-summary', summary.event);
       setText('recovery-last-time', config.last_recovery_time ? formatLocalDateTime(config.last_recovery_time) : 'aucun');
-      setText('recovery-last-trigger', config.last_recovery_trigger ? config.last_recovery_trigger.replace(/[-_]/g, ' ') : 'aucun');
+      setText('recovery-last-trigger', recoveryTriggerLabel(config.last_recovery_trigger));
       setText('recovery-last-result', recoveryResultLabel(config.last_recovery_result));
       setText('recovery-watchdog-decision', summary.decision);
       setText('recovery-watchdog-delay', summary.delay);
@@ -3395,8 +3479,8 @@
         ? 'Le node reste client du Wi-Fi habituel.'
         : 'Le node sert le Wi-Fi Wifi-Kit local.');
       setText('mode-detail', normal
-        ? 'Mode AP inactif. Wifi-Kit observe, prepare et affiche les plans sans mutation HTTP.'
-        : 'AP, DHCP, DNS captive et UI locale sont temporaires et doivent revenir a NetworkManager au cleanup.');
+        ? 'Wi-Fi de secours inactif. Wifi-Kit observe, prépare et affiche les plans sans action réseau directe.'
+        : 'Wi-Fi de secours, DHCP, DNS captive et UI locale sont temporaires et doivent revenir à NetworkManager au nettoyage.');
       setText('node-hostname', system.hostname || 'inconnu');
       setText('node-ip', currentIp);
       setText('node-wifi', currentSsid);
@@ -3467,6 +3551,57 @@
       setText('config-ap-password-summary', config.ap_password || recovery.ap_password_current || system.recovery_ap_password_current || '12345678');
       setText('config-ap-password-policy', recovery.ap_password_policy || system.recovery_ap_password_policy || 'min-8-chars');
       setText('config-ui-access-password', recovery.ui_access_password || system.ui_access_password || 'future-not-configured');
+    }
+
+    function networkIdentityItem(label, value) {
+      const item = document.createElement('div');
+      const labelNode = document.createElement('span');
+      const valueNode = document.createElement('strong');
+      item.className = 'network-identity-item';
+      labelNode.textContent = label;
+      valueNode.textContent = value || 'inconnu';
+      item.append(labelNode, valueNode);
+      return item;
+    }
+
+    function renderNetworkIdentityCard() {
+      const card = document.getElementById('network-identity-card');
+      if (!card) return;
+      const config = runtimeConfig();
+      const currentSsid = resolveCurrentSsid();
+      const preferredSsid = config.preferred_ssid || '';
+      const currentIp = resolveCurrentIp();
+      const currentGateway = data.diagnose?.gateway && data.diagnose.gateway !== 'unknown'
+        ? data.diagnose.gateway
+        : gatewayFromRoute(data.diagnose?.default_route || data.snapshot?.default_route || systemState().default_route || '');
+      const mismatch = currentSsid
+        && currentSsid !== 'inconnu'
+        && preferredSsid
+        && currentSsid !== preferredSsid
+        && !isRecoverySsid(currentSsid);
+
+      const title = document.createElement('div');
+      title.className = 'network-identity-title';
+      title.append(makeIcon('network'), 'État réseau');
+
+      const grid = document.createElement('div');
+      grid.className = 'network-identity-grid';
+      grid.append(
+        networkIdentityItem('Connecté actuellement à', currentSsid || 'inconnu'),
+        networkIdentityItem('Réseau principal souhaité', preferredNetworkLabel()),
+        networkIdentityItem('Dernier réseau validé', lastGoodNetworkLabel()),
+        networkIdentityItem('IP actuelle', currentIp || 'inconnu'),
+        networkIdentityItem('Passerelle actuelle', currentGateway || 'inconnu')
+      );
+
+      card.replaceChildren(title, grid);
+      if (mismatch) {
+        const warning = document.createElement('p');
+        warning.className = 'network-identity-warning';
+        warning.textContent = 'Le node est actuellement connecté à un autre réseau que le réseau principal souhaité.';
+        card.appendChild(warning);
+      }
+      card.hidden = false;
     }
 
     function renderDiagnostics() {
@@ -4023,7 +4158,7 @@
 
     async function refreshApRecoveryHealth() {
       if (window.location.protocol === 'file:') return;
-      showRuntimeConfigResult('Vérification AP recovery en cours...', 'start-ap-mode-result');
+      showRuntimeConfigResult('Vérification Wi-Fi de secours en cours...', 'start-ap-mode-result');
       try {
         const response = await fetch('/api/ap-recovery-health', { cache: 'no-store' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -4031,9 +4166,9 @@
         data.recovery = data.recovery || {};
         data.recovery.ap_recovery_health = payload;
         renderApRecoveryHealth();
-        showRuntimeConfigResult('Vérification AP recovery terminée. Aucune action réseau lancée.', 'start-ap-mode-result');
+        showRuntimeConfigResult('Vérification Wi-Fi de secours terminée. Aucune action réseau lancée.', 'start-ap-mode-result');
       } catch (error) {
-        showRuntimeConfigResult(`Vérification AP recovery impossible: ${error.message}`, 'start-ap-mode-result');
+        showRuntimeConfigResult(`Vérification Wi-Fi de secours impossible: ${error.message}`, 'start-ap-mode-result');
       }
     }
 
@@ -4061,7 +4196,7 @@
         runtime_recovery_instability_window_minutes: runtimeRecoveryWindow,
         runtime_recovery_instability_threshold: runtimeRecoveryThreshold
       }, 'diag-watchdog-result');
-      showRuntimeConfigResult(`Watchdog runtime : ${runtimeRecoveryEnabled ? 'surveillance active' : 'surveillance desactivee'}. Retour automatique : ${Number(returnCheckIntervalSeconds) > 0 ? `${returnCheckIntervalSeconds} secondes` : 'desactive'}.`, 'diag-watchdog-result');
+      showRuntimeConfigResult(`Surveillance de connexion : ${runtimeRecoveryEnabled ? 'active' : 'désactivée'}. Retour automatique : ${Number(returnCheckIntervalSeconds) > 0 ? `${returnCheckIntervalSeconds} secondes` : 'désactivé'}.`, 'diag-watchdog-result');
     }
 
     function networkActionPlan(action) {
@@ -4085,7 +4220,7 @@
       const actions = document.createElement('div');
       const confirmButton = document.createElement('button');
       const cancelButton = document.createElement('button');
-      message.textContent = "Le Wi-Fi actuel peut etre interrompu pendant quelques secondes. En cas d'echec, le node tentera de revenir automatiquement ou relancera l'AP recovery.";
+      message.textContent = "Le Wi-Fi actuel peut etre interrompu pendant quelques secondes. En cas d'echec, le node tentera de revenir automatiquement ou relancera le Wi-Fi de secours.";
       actions.className = 'recovery-actions';
       confirmButton.type = 'button';
       confirmButton.className = 'button';
@@ -4543,7 +4678,7 @@
       confirmPanel.className = 'callout recovery-result';
       confirmPanel.hidden = true;
       const confirmText = document.createElement('p');
-      confirmText.textContent = `Wifi-Kit va tenter de connecter le node au réseau ${ssid}. En cas d'échec, il tentera de revenir automatiquement ou relancera l'AP Recovery.`;
+      confirmText.textContent = `Wifi-Kit va tenter de connecter le node au réseau ${ssid}. En cas d'échec, il tentera de revenir automatiquement ou relancera le Wi-Fi de secours.`;
       const confirmActions = document.createElement('div');
       confirmActions.className = 'recovery-actions';
       const confirmButton = document.createElement('button');
@@ -4595,7 +4730,7 @@
           password.value = '';
           password.dataset.savedSecretEditing = 'true';
           passwordHint.classList.remove('saved-secret');
-          passwordHint.textContent = 'Nouveau mot de passe runtime-only, non journalis\u00e9.';
+          passwordHint.textContent = 'Nouveau mot de passe utilisé uniquement pour cette tentative.';
         }
       });
       password.addEventListener('blur', () => {
@@ -4715,7 +4850,7 @@
         event.stopPropagation();
         const ssid = ssidInput.value.trim() || 'SSID masque';
         passwordInput.value = '';
-        result.textContent = `Prototype : aucune connexion reelle n'est lancee. Plan local pour ${ssid} : demander le SSID masque, utiliser une cle runtime-only, valider la connexion, puis garder le mode AP si l'essai echoue.`;
+        result.textContent = `Prototype : aucune connexion reelle n'est lancee. Plan local pour ${ssid} : demander le SSID masque, utiliser un mot de passe non enregistré par Wifi-Kit, valider la connexion, puis garder le Wi-Fi de secours si l'essai echoue.`;
         result.hidden = false;
       });
       [ssidInput, passwordInput, securityDropdown, button, panel].forEach((node) => {
@@ -4792,7 +4927,7 @@
       note.textContent = payload.status === 'done' || payload.ok === true
         ? (payload.message || 'Réseau connecté et validé. Voulez-vous le définir comme réseau principal ?')
         : payload.connect_started
-        ? "Tentative de connexion en cours... si la connexion réussit, le portail disparaîtra. En cas d'echec, Wifi-Kit tentera de revenir en AP Recovery."
+        ? "Tentative de connexion en cours... si la connexion réussit, le portail disparaîtra. En cas d'echec, Wifi-Kit tentera de revenir au Wi-Fi de secours."
         : payload.message || payload.secret_policy || payload.warning_if_recovery_active || 'Connexion non validée, le mode recovery reste actif.';
       plan.append(title, list, note);
       plan.hidden = false;
@@ -4831,7 +4966,7 @@
         message: 'Connexion en cours. Cette page peut se fermer si le node rejoint le Wi-Fi. Si rien ne se passe, reconnectez-vous au SSID Wifi-Kit-pocket-node.',
         connect_plan: [
           'Connexion demandee depuis la page recovery.',
-          'Le node peut quitter l AP recovery si le Wi-Fi rejoint fonctionne.',
+          'Le node peut quitter le Wi-Fi de secours si le Wi-Fi rejoint fonctionne.',
           'En cas d echec, reconnectez-vous au SSID Wifi-Kit-pocket-node pour relire le statut.'
         ]
       }, plan);
@@ -4937,10 +5072,14 @@
       const networks = displayedScanNetworks(scan).filter((network) => !isRecoveryApNetwork(network));
       const currentNetworks = networks.filter((network) => network.current === 'yes');
       const availableNetworks = networks.filter((network) => network.current !== 'yes');
+      const scanReason = scan.reason || scan.status || '';
+      const scanLoading = ['loading', 'pending', 'started'].includes(scanReason);
       setText('network-title', activeAp ? 'Reseaux disponibles' : 'Wi-Fi');
       document.getElementById('scan-source').textContent = describeScanBackend(scan);
       document.getElementById('scan-status').textContent = describeScanStatus(scan, networks);
       target.innerHTML = '';
+      message.hidden = true;
+      renderNetworkIdentityCard();
       if (activeAp) {
         target.append(networkSectionTitle('Etat actuel'), buildActiveApCard());
       } else if (currentNetworks.length > 0) {
@@ -4949,8 +5088,9 @@
 
       if (networks.length === 0) {
         message.hidden = false;
-        message.classList.toggle('info', scan.reason === 'no-wifi-interface');
+        message.classList.toggle('info', scan.reason === 'no-wifi-interface' || scanLoading);
         message.textContent = describeScanReason(scan);
+        if (scanLoading) return;
         const placeholder = document.createElement('div');
         placeholder.className = 'network';
         const title = document.createElement('h3');
@@ -4958,7 +5098,7 @@
         title.textContent = 'Aucun reseau affiche';
         body.className = 'empty';
         body.textContent = activeAp
-          ? "Aucun autre Wi-Fi affiche. L'AP recovery reste actif; relance le scan si besoin."
+          ? "Aucun autre Wi-Fi affiche. Le Wi-Fi de secours reste actif; relance le scan si besoin."
           : 'La connexion actuelle reste preservee. Scanne plus tard ou ouvre les diagnostics.';
         placeholder.append(title, body);
         target.append(placeholder);
@@ -5022,7 +5162,7 @@
           const actions = document.createElement('div');
           const confirmButton = document.createElement('button');
           const cancelButton = document.createElement('button');
-          text.textContent = 'Ce réseau deviendra le réseau principal souhaité pour le démarrage et les retours depuis AP Recovery.';
+          text.textContent = 'Ce réseau deviendra le réseau principal souhaité pour le démarrage et les retours depuis le Wi-Fi de secours.';
           actions.className = 'recovery-actions';
           confirmButton.type = 'button';
           confirmButton.className = 'button';

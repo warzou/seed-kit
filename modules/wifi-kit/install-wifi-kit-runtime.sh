@@ -143,6 +143,7 @@ prototype/wifi-kit-runtime-watchdog.sh
 prototype/wifi-kit-nm-ap-lab.sh
 prototype/ui/serve-readonly.py
 prototype/ui/index.html
+prototype/ui/favicon.svg
 EOF
 }
 
@@ -492,6 +493,7 @@ cmd_install() {
   copy_file "prototype/wifi-kit-nm-ap-lab.sh" "$app_dir/wifi-kit-nm-ap-lab.sh" 0755
   copy_file "prototype/ui/serve-readonly.py" "$ui_dir/serve-readonly.py" 0755
   copy_file "prototype/ui/index.html" "$ui_dir/index.html" 0644
+  copy_file "prototype/ui/favicon.svg" "$ui_dir/favicon.svg" 0644
   printf '%s\n' "$repo_dir" > "$app_dir/repo-dir"
   chown root:root "$app_dir/repo-dir"
   chmod 0644 "$app_dir/repo-dir"
