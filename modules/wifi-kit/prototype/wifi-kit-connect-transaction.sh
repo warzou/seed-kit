@@ -391,14 +391,18 @@ wait_validate() {
   elapsed=0
   last_reason="not-started"
   while [ "$elapsed" -lt "$timeout" ]; do
-    if reason=$(validate_network "$expected_ssid" "$require_internet"); then
+    set +e
+    reason=$(validate_network "$expected_ssid" "$require_internet")
+    validate_rc=$?
+    set -e
+    if [ "$validate_rc" -eq 0 ]; then
       printf 'validated'
       return 0
     fi
     last_reason=$reason
     case "$elapsed" in
       0|15|30|60|90|120|150)
-        log_event "waiting" "step=validate reason=$(quote "$last_reason") elapsed_seconds=$(quote "$elapsed")"
+        log_event "waiting" "step=validate reason=$(quote "$last_reason") elapsed_seconds=$(quote "$elapsed")" >/dev/null
         ;;
     esac
     sleep 3
