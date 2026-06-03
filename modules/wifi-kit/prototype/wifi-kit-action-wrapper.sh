@@ -285,6 +285,26 @@ forensics_file_tail() {
   "$tail_bin" -n "$lines" "$path" 2>&1 | redact_forensics || true
 }
 
+cmd_forensics_last() {
+  tail_bin=$(find_readonly_tool tail /usr/bin/tail /bin/tail || true)
+  snapshot_path="/var/log/seed-kit/wifi-kit/forensics-last.log"
+  max_bytes=200000
+
+  forensics_section "forensics-last"
+  forensics_kv "path" "$snapshot_path"
+  forensics_kv "max_bytes" "$max_bytes"
+  if [ ! -r "$snapshot_path" ]; then
+    forensics_kv "status" "unreadable-or-missing"
+    return 1
+  fi
+  if [ -z "$tail_bin" ]; then
+    forensics_kv "status" "tail-missing"
+    return 1
+  fi
+  forensics_kv "status" "ok"
+  "$tail_bin" -c "$max_bytes" "$snapshot_path" 2>&1 | redact_forensics || true
+}
+
 forensics_journal_filtered() {
   label=$1
   shift
@@ -501,7 +521,7 @@ require_root() {
 
 if [ "$#" -ne 1 ]; then
   log_event "unknown" "refused" "usage"
-  reply "refused" "unknown" "usage: wifi-kit-action-wrapper.sh start-ap-mode|return-default-network|connect-wifi|ap-return-check-once|node-ip-test|node-ip-confirm|node-ip-rollback|reboot-system|shutdown-system|reinstall-runtime|restart-ui|forensics-snapshot"
+  reply "refused" "unknown" "usage: wifi-kit-action-wrapper.sh start-ap-mode|return-default-network|connect-wifi|ap-return-check-once|node-ip-test|node-ip-confirm|node-ip-rollback|reboot-system|shutdown-system|reinstall-runtime|restart-ui|forensics-snapshot|forensics-last"
   exit 2
 fi
 
@@ -716,6 +736,10 @@ case "$action" in
   forensics-snapshot)
     require_root "$action"
     cmd_forensics_snapshot
+    ;;
+  forensics-last)
+    require_root "$action"
+    cmd_forensics_last
     ;;
   reboot-system)
     read_system_power_request

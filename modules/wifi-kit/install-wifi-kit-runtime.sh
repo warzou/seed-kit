@@ -230,7 +230,7 @@ render_sudoers() {
 # Wifi-Kit runtime sudoers.
 # Managed by install-wifi-kit-runtime.sh.
 # No shell, wildcard, nmcli, systemctl, hostapd, dnsmasq, or direct reboot grant.
-$install_user ALL=(root) NOPASSWD: $app_dir/wifi-kit-action-wrapper.sh start-ap-mode, $app_dir/wifi-kit-action-wrapper.sh return-default-network, $app_dir/wifi-kit-action-wrapper.sh connect-wifi, $app_dir/wifi-kit-action-wrapper.sh ap-return-check-once, $app_dir/wifi-kit-action-wrapper.sh node-ip-test, $app_dir/wifi-kit-action-wrapper.sh node-ip-confirm, $app_dir/wifi-kit-action-wrapper.sh node-ip-rollback, $app_dir/wifi-kit-action-wrapper.sh reboot-system, $app_dir/wifi-kit-action-wrapper.sh shutdown-system, $app_dir/wifi-kit-action-wrapper.sh reinstall-runtime, $app_dir/wifi-kit-action-wrapper.sh restart-ui, $app_dir/wifi-kit-action-wrapper.sh forensics-snapshot
+$install_user ALL=(root) NOPASSWD: $app_dir/wifi-kit-action-wrapper.sh start-ap-mode, $app_dir/wifi-kit-action-wrapper.sh return-default-network, $app_dir/wifi-kit-action-wrapper.sh connect-wifi, $app_dir/wifi-kit-action-wrapper.sh ap-return-check-once, $app_dir/wifi-kit-action-wrapper.sh node-ip-test, $app_dir/wifi-kit-action-wrapper.sh node-ip-confirm, $app_dir/wifi-kit-action-wrapper.sh node-ip-rollback, $app_dir/wifi-kit-action-wrapper.sh reboot-system, $app_dir/wifi-kit-action-wrapper.sh shutdown-system, $app_dir/wifi-kit-action-wrapper.sh reinstall-runtime, $app_dir/wifi-kit-action-wrapper.sh restart-ui, $app_dir/wifi-kit-action-wrapper.sh forensics-snapshot, $app_dir/wifi-kit-action-wrapper.sh forensics-last
 EOF
 }
 

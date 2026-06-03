@@ -34,6 +34,7 @@ shutdown-system
 reinstall-runtime
 restart-ui
 forensics-snapshot
+forensics-last
 '
 
 WIFI_KIT_SUDOERS_ALLOWED_COMMANDS='
@@ -49,6 +50,7 @@ WIFI_KIT_SUDOERS_ALLOWED_COMMANDS='
 /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh reinstall-runtime
 /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh restart-ui
 /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh forensics-snapshot
+/opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh forensics-last
 '
 
 WIFI_KIT_SUDOERS_ALLOWED_SUDO_COMMANDS='
@@ -64,9 +66,10 @@ sudo -n /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh shutdown-system
 sudo -n /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh reinstall-runtime
 sudo -n /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh restart-ui
 sudo -n /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh forensics-snapshot
+sudo -n /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh forensics-last
 '
 
-WIFI_KIT_SUDOERS_PREVIEW_RULE='seed-kit-wifi ALL=(root) NOPASSWD: /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh start-ap-mode, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh return-default-network, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh connect-wifi, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh ap-return-check-once, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh node-ip-test, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh node-ip-confirm, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh node-ip-rollback, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh reboot-system, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh shutdown-system, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh reinstall-runtime, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh restart-ui, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh forensics-snapshot'
+WIFI_KIT_SUDOERS_PREVIEW_RULE='seed-kit-wifi ALL=(root) NOPASSWD: /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh start-ap-mode, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh return-default-network, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh connect-wifi, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh ap-return-check-once, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh node-ip-test, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh node-ip-confirm, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh node-ip-rollback, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh reboot-system, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh shutdown-system, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh reinstall-runtime, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh restart-ui, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh forensics-snapshot, /opt/seed-kit/wifi-kit/wifi-kit-action-wrapper.sh forensics-last'
 
 WIFI_KIT_SUDOERS_FORBIDDEN='
 no-sudo-sh
