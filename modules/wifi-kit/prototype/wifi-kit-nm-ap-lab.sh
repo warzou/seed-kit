@@ -686,6 +686,61 @@ run_nmcli_hotspot_up() {
   return "$nmcli_up_rc"
 }
 
+nm_iface_state() {
+  nmcli_bin=$1
+  [ -n "$nmcli_bin" ] || return 1
+  "$nmcli_bin" -t --escape no -f DEVICE,TYPE,STATE,CONNECTION device status 2>/dev/null |
+    awk -F: -v iface="$iface" '$1 == iface { print $3; exit }'
+}
+
+nm_iface_is_unmanaged() {
+  nmcli_bin=$1
+  state=$(nm_iface_state "$nmcli_bin" || true)
+  [ "$state" = "unmanaged" ]
+}
+
+recover_unmanaged_wlan0_for_ap_start() {
+  nmcli_bin=$1
+  timeout=${2:-5}
+  elapsed=0
+
+  section "nm-ap-lab-recover-unmanaged-wlan0"
+  kv "reason" "nmcli-exit-4-wlan0-unmanaged"
+  kv "command" "nmcli device set $iface managed yes"
+  kv "timeout_seconds" "$timeout"
+  nm_debug_snapshot "before_managed_yes"
+  emit_radio_status "radio_before_managed_yes"
+
+  set +e
+  "$nmcli_bin" device set "$iface" managed yes
+  managed_rc=$?
+  set -e
+  kv "nmcli_device_set_managed_exit_code" "$managed_rc"
+  if [ "$managed_rc" -ne 0 ]; then
+    kv "result" "managed-yes-failed"
+    return "$managed_rc"
+  fi
+
+  while [ "$elapsed" -le "$timeout" ]; do
+    state=$(nm_iface_state "$nmcli_bin" || true)
+    kv "managed-recovery-check" "elapsed=${elapsed} state=${state:-missing}"
+    if [ "$state" != "unmanaged" ] && [ -n "$state" ]; then
+      nm_debug_snapshot "after_managed_yes"
+      emit_radio_status "radio_after_managed_yes"
+      kv "result" "managed-restored"
+      return 0
+    fi
+    [ "$elapsed" -ge "$timeout" ] && break
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+
+  nm_debug_snapshot "managed_yes_timeout"
+  emit_radio_status "radio_managed_yes_timeout"
+  kv "result" "managed-yes-timeout"
+  return 1
+}
+
 port_is_listening() {
   ss_bin=$(ss_path)
   [ -n "$ss_bin" ] || return 1
@@ -1208,18 +1263,26 @@ cmd_start_hotspot() {
     nm_debug_snapshot "after_start"
     emit_radio_status "radio_after_start"
     if [ "$nmcli_up_rc" -eq 4 ]; then
-      kv "result" "hotspot-start-failed-will-retry-once"
-      emit_ap_start_failure_forensics "$nmcli_up_rc" "$nmcli_up_log"
-      sleep 5
-      nm_debug_snapshot "before_retry_after_exit_4"
-      emit_radio_status "radio_before_retry_after_exit_4"
-      if run_nmcli_hotspot_up "$nmcli_bin" "2" "$nmcli_up_log"; then
-        nmcli_up_rc=0
+      if nm_iface_is_unmanaged "$nmcli_bin"; then
+        kv "result" "wlan0-unmanaged-detected"
+        emit_ap_start_failure_forensics "$nmcli_up_rc" "$nmcli_up_log"
+        if recover_unmanaged_wlan0_for_ap_start "$nmcli_bin" 5; then
+          kv "result" "hotspot-start-retry-after-managed-yes"
+          if run_nmcli_hotspot_up "$nmcli_bin" "2" "$nmcli_up_log"; then
+            nmcli_up_rc=0
+          else
+            nmcli_up_rc=$?
+          fi
+          nm_debug_snapshot "after_retry_after_managed_yes"
+          emit_radio_status "radio_after_retry_after_managed_yes"
+        else
+          kv "result" "wlan0-unmanaged-recovery-failed"
+        fi
       else
-        nmcli_up_rc=$?
+        kv "result" "hotspot-start-failed-exit-4-not-unmanaged"
+        nm_debug_snapshot "exit_4_not_unmanaged"
+        emit_radio_status "radio_exit_4_not_unmanaged"
       fi
-      nm_debug_snapshot "after_retry_after_exit_4"
-      emit_radio_status "radio_after_retry_after_exit_4"
     fi
     if [ "$nmcli_up_rc" -ne 0 ]; then
       kv "result" "hotspot-start-failed"
