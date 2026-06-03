@@ -2290,9 +2290,10 @@
               </details>
             </div>
             <div class="action-card">
-              <strong>Tester le retour au Wi-Fi connu</strong>
+              <strong>Tester le retour au réseau principal</strong>
               <p>Le Wi-Fi de secours peut disparaître pendant 30 à 40 secondes. Si le Wi-Fi principal revient, tu seras reconnecté au réseau normal. Sinon le Wi-Fi de secours revient.</p>
-              <button id="ap-return-check-once-button" class="button secondary" type="button" data-network-action="ap-return-check-once">Tester le retour au Wi-Fi connu</button>
+              <p id="ap-return-check-once-availability" class="muted">Disponible uniquement lorsque le Wi-Fi de secours est actif.</p>
+              <button id="ap-return-check-once-button" class="button secondary" type="button" data-network-action="ap-return-check-once" disabled>Tester le retour au réseau principal</button>
               <div id="ap-return-check-once-result" class="callout recovery-result" hidden></div>
               <details class="action-plan">
                 <summary>Afficher le plan</summary>
@@ -3736,9 +3737,20 @@
       const confirmed = Boolean(document.getElementById('ap-confirmed')?.checked);
       const startButton = document.getElementById('start-ap-mode-button');
       const returnButton = document.getElementById('return-default-network-button');
+      const returnCheckButton = document.getElementById('ap-return-check-once-button');
+      const returnCheckAvailability = document.getElementById('ap-return-check-once-availability');
       const returnConnection = (runtimeConfig().return_connection || runtimeConfig().return_ssid || recoveryState().return_connection || '').trim();
+      const recoveryActive = Boolean(systemState().recovery_active || recoveryState().active);
       if (startButton) startButton.disabled = !confirmed;
       if (returnButton) returnButton.disabled = !returnConnection;
+      if (returnCheckButton) {
+        returnCheckButton.disabled = !recoveryActive;
+        returnCheckButton.textContent = recoveryActive ? 'Tester le retour au réseau principal' : 'Indisponible hors Wi-Fi de secours';
+      }
+      if (returnCheckAvailability) {
+        returnCheckAvailability.hidden = recoveryActive;
+        returnCheckAvailability.textContent = 'Disponible uniquement lorsque le Wi-Fi de secours est actif.';
+      }
     }
 
     function updateSystemButtons() {

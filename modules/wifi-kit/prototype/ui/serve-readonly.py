@@ -2324,6 +2324,20 @@ def ap_return_check_once(payload: dict) -> tuple[dict, int]:
     action = "ap-return-check-once"
     config = read_runtime_config()
     target = resolve_primary_return_target(config)
+    if not nm_hotspot_recovery_active():
+        append_action_log(AP_RETURN_CHECK_ONCE_LOG, action=action, status="refused", reason="ap-recovery-not-active")
+        return {
+            "status": "refused",
+            "action": action,
+            "return_check_started": False,
+            "reason": "ap-recovery-not-active",
+            "error": "ap-recovery-not-active",
+            "message": "Le Wi-Fi de secours n'est pas actif.",
+            "target_source": target["source"],
+            "target_ssid": target["ssid"],
+            "target_connection": target["connection"],
+            "log": str(AP_RETURN_CHECK_ONCE_LOG),
+        }, 409
     if dry_run or not privileged_actions_enabled():
         append_action_log(
             AP_RETURN_CHECK_ONCE_LOG,
