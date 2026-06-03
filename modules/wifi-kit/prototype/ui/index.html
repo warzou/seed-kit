@@ -2192,48 +2192,23 @@
         <div class="section-head">
           <div>
             <h2 id="recovery-title">Secours</h2>
-            <p class="section-copy" id="recovery-copy">Les actions utiles quand le node doit rester joignable.</p>
+            <p class="section-copy" id="recovery-copy">État du Wi-Fi de secours, dernier passage et actions contrôlées.</p>
           </div>
           <span class="chip" id="recovery-chip">Lecture seule</span>
         </div>
-        <article class="appliance-card primary" aria-label="Sécurité réseau">
+        <article class="appliance-card" aria-label="État du Wi-Fi de secours">
           <div class="appliance-card-header">
             <div>
-              <h3 id="recovery-safety-title">Sécurité réseau</h3>
-              <p class="appliance-copy" id="recovery-safety-copy">Lecture en cours...</p>
-            </div>
-            <span id="recovery-safety-badge" class="chip">Observation</span>
-          </div>
-          <div class="status-summary-grid">
-            <div class="status-summary-card"><span>Réseau principal</span><strong id="recovery-primary-status">...</strong></div>
-            <div class="status-summary-card"><span>Mode</span><strong id="recovery-watchdog-mode">...</strong></div>
-            <div class="status-summary-card"><span>Wi-Fi de secours</span><strong id="recovery-ap-status">...</strong></div>
-            <div class="status-summary-card"><span>Dernier incident</span><strong id="recovery-watchdog-summary">...</strong></div>
-          </div>
-          <div class="recovery-reassurance">
-            <strong>Dernier passage en Wi-Fi de secours</strong>
-            <div class="status-summary-grid">
-              <div class="status-summary-card"><span>Date</span><strong id="recovery-last-time">...</strong></div>
-              <div class="status-summary-card"><span>Déclencheur</span><strong id="recovery-last-trigger">...</strong></div>
-              <div class="status-summary-card"><span>Résultat</span><strong id="recovery-last-result">...</strong></div>
-            </div>
-          </div>
-        </article>
-        <article class="appliance-card" aria-label="Vérification du Wi-Fi de secours">
-          <div class="appliance-card-header">
-            <div>
-              <h3>Vérification du Wi-Fi de secours</h3>
+              <h3>État du Wi-Fi de secours</h3>
               <p class="appliance-copy" id="ap-health-summary">Lecture en cours...</p>
             </div>
             <span id="ap-health-badge" class="chip">Lecture seule</span>
           </div>
           <div class="status-summary-grid">
-            <div class="status-summary-card"><span>Configuration</span><strong id="ap-health-configured">...</strong></div>
-            <div class="status-summary-card"><span>Profil de secours</span><strong id="ap-health-profile">...</strong></div>
+            <div class="status-summary-card"><span>Statut court</span><strong id="recovery-ap-status">...</strong></div>
+            <div class="status-summary-card"><span>SSID du Wi-Fi de secours</span><strong id="ap-health-ssid">...</strong></div>
             <div class="status-summary-card"><span>IP de secours</span><strong id="ap-health-ip">...</strong></div>
             <div class="status-summary-card"><span>Portail de secours</span><strong id="ap-health-ui">...</strong></div>
-            <div class="status-summary-card"><span>Port 80</span><strong id="ap-health-port">...</strong></div>
-            <div class="status-summary-card"><span>DNS captive</span><strong id="ap-health-captive">...</strong></div>
           </div>
           <div class="recovery-actions">
             <button id="ap-health-refresh" class="button secondary" type="button">Vérifier le Wi-Fi de secours</button>
@@ -2242,15 +2217,98 @@
           <details class="return-profile-details-panel">
             <summary>Détails Wi-Fi de secours</summary>
             <dl class="detail-grid">
-              <dt>SSID attendu</dt><dd><span id="ap-health-ssid">...</span></dd>
+              <dt>Configuration</dt><dd><span id="ap-health-configured">...</span></dd>
+              <dt>Profil de secours</dt><dd><span id="ap-health-profile">...</span></dd>
+              <dt>Port 80</dt><dd><span id="ap-health-port">...</span></dd>
+              <dt>DNS captive</dt><dd><span id="ap-health-captive">...</span></dd>
               <dt>URL manuelle</dt><dd><span id="ap-health-url">http://192.168.50.1</span></dd>
               <dt>SSH</dt><dd><span id="ap-health-ssh">ssh warzy@192.168.50.1</span></dd>
               <dt>Dernier log</dt><dd><span id="ap-health-log">...</span></dd>
             </dl>
           </details>
         </article>
+        <article class="appliance-card primary" aria-label="Dernier passage en Wi-Fi de secours">
+          <div class="appliance-card-header">
+            <div>
+              <h3>Dernier passage en Wi-Fi de secours</h3>
+              <p class="appliance-copy" id="recovery-safety-copy">Lecture en cours...</p>
+            </div>
+            <span class="chip">Historique</span>
+          </div>
+          <div class="status-summary-grid">
+            <div class="status-summary-card"><span>Date</span><strong id="recovery-last-time">...</strong></div>
+            <div class="status-summary-card"><span>Déclencheur</span><strong id="recovery-last-trigger">...</strong></div>
+            <div class="status-summary-card"><span>Résultat</span><strong id="recovery-last-result">...</strong></div>
+            <div class="status-summary-card"><span>Message</span><strong id="recovery-watchdog-summary">...</strong></div>
+          </div>
+        </article>
+        <article class="appliance-card" aria-label="État du réseau principal">
+          <div class="appliance-card-header">
+            <div>
+              <h3 id="recovery-safety-title">Santé du retour réseau</h3>
+              <p class="appliance-copy">Résumé du réseau principal utilisé pour revenir au mode normal.</p>
+            </div>
+            <span id="recovery-safety-badge" class="chip">Lecture seule</span>
+          </div>
+          <div class="status-summary-grid">
+            <div class="status-summary-card"><span>Réseau principal</span><strong id="recovery-primary-status">...</strong></div>
+            <div class="status-summary-card"><span>Mode</span><strong id="recovery-watchdog-mode">...</strong></div>
+          </div>
+        </article>
+        <article class="appliance-card network-actions-panel" aria-labelledby="network-actions-title">
+          <div class="section-head">
+            <div>
+              <h2 id="network-actions-title">Actions contrôlées</h2>
+              <p class="section-copy">Ces actions peuvent changer la connexion réseau du node.</p>
+            </div>
+            <span class="chip">SAFE</span>
+          </div>
+          <div class="recovery-actions secondary-action-grid">
+            <div class="action-card">
+              <span class="chip">Wi-Fi de secours</span>
+              <strong>Activer le Wi-Fi de secours</strong>
+              <p>Le node crée son propre Wi-Fi de secours et ouvre le portail de secours.</p>
+              <label class="confirm-line">
+                <input id="ap-confirmed" type="checkbox">
+                Je comprends que le Wi-Fi de secours peut couper temporairement l'accès réseau.
+              </label>
+              <button id="start-ap-mode-button" class="button primary-action-button" type="button" data-network-action="start-ap-mode" disabled>Activer le Wi-Fi de secours</button>
+              <div id="start-ap-mode-result" class="callout recovery-result" hidden></div>
+              <details class="action-plan">
+                <summary>Afficher le plan</summary>
+                <p>Demande au système réseau d'ouvrir le Wi-Fi de secours puis confirme l'état réel avant d'annoncer le succès.</p>
+              </details>
+            </div>
+            <div class="action-card">
+              <strong>Retour réseau principal</strong>
+              <p>Reconnecte le node au Wi-Fi principal configuré.</p>
+              <button id="return-default-network-button" class="button secondary primary-action-button" type="button" data-network-action="return-default-network">Retour réseau principal</button>
+              <div id="return-default-network-result" class="callout recovery-result" hidden></div>
+              <details class="action-plan">
+                <summary>Afficher le plan</summary>
+                <p>Demande au système réseau de reconnecter uniquement le profil principal enregistré. L'accès réseau peut couper quelques secondes.</p>
+              </details>
+            </div>
+            <div class="action-card">
+              <strong>Tester le retour au Wi-Fi connu</strong>
+              <p>Le Wi-Fi de secours peut disparaître pendant 30 à 40 secondes. Si le Wi-Fi principal revient, tu seras reconnecté au réseau normal. Sinon le Wi-Fi de secours revient.</p>
+              <button id="ap-return-check-once-button" class="button secondary" type="button" data-network-action="ap-return-check-once">Tester le retour au Wi-Fi connu</button>
+              <div id="ap-return-check-once-result" class="callout recovery-result" hidden></div>
+              <details class="action-plan">
+                <summary>Afficher le plan</summary>
+                <p>Depuis le Wi-Fi de secours, tente une fois le dernier Wi-Fi connu, puis reste en mode normal si le retour réussit. En cas d'échec, relance le Wi-Fi de secours.</p>
+              </details>
+            </div>
+            <div class="action-card">
+              <strong>Exporter diagnostic</strong>
+              <p>Prépare un fichier court pour comprendre l'état du node.</p>
+              <button class="button secondary diagnostic-export-trigger" type="button">Exporter diagnostic</button>
+              <div id="recovery-diagnostic-export-result" class="callout recovery-result" hidden></div>
+            </div>
+          </div>
+        </article>
         <details class="advanced-details" id="recovery-advanced">
-            <summary>Paramètres avancés</summary>
+            <summary>Détails techniques</summary>
           <div class="advanced-details-body recovery-settings" aria-label="Configuration Wi-Fi de secours">
           <div class="recovery-settings-section">
             <h3 class="settings-title">Détails techniques du Wi-Fi de secours</h3>
@@ -2332,59 +2390,6 @@
           <div id="recovery-config-result" class="callout recovery-result" hidden></div>
           </div>
         </details>
-      </section>
-
-      <section class="panel network-actions-panel appliance-card" aria-labelledby="network-actions-title">
-        <div class="section-head">
-          <div>
-            <h2 id="network-actions-title">Action principale</h2>
-            <p class="section-copy">Une action claire, puis des options secondaires si besoin.</p>
-          </div>
-          <span class="chip">SAFE</span>
-        </div>
-        <div class="recovery-actions secondary-action-grid">
-          <div class="action-card">
-            <span class="chip">Wi-Fi de secours</span>
-            <strong>Activer le Wi-Fi de secours</strong>
-            <p>Le node crée son propre Wi-Fi de secours et ouvre le portail de secours.</p>
-            <label class="confirm-line">
-              <input id="ap-confirmed" type="checkbox">
-              Je comprends que le Wi-Fi de secours peut couper temporairement l'accès réseau.
-            </label>
-            <button id="start-ap-mode-button" class="button primary-action-button" type="button" data-network-action="start-ap-mode" disabled>Activer le Wi-Fi de secours</button>
-            <div id="start-ap-mode-result" class="callout recovery-result" hidden></div>
-            <details class="action-plan">
-              <summary>Afficher le plan</summary>
-              <p>Demande au système réseau d'ouvrir le Wi-Fi de secours puis confirme l'état réel avant d'annoncer le succès.</p>
-            </details>
-          </div>
-          <div class="action-card">
-            <strong>Retour réseau principal</strong>
-            <p>Reconnecte le node au Wi-Fi principal configuré.</p>
-            <button id="return-default-network-button" class="button secondary primary-action-button" type="button" data-network-action="return-default-network">Retour réseau principal</button>
-            <div id="return-default-network-result" class="callout recovery-result" hidden></div>
-            <details class="action-plan">
-              <summary>Afficher le plan</summary>
-              <p>Demande au système réseau de reconnecter uniquement le profil principal enregistré. L'accès réseau peut couper quelques secondes.</p>
-            </details>
-          </div>
-          <div class="action-card">
-            <strong>Tester le retour au Wi-Fi connu</strong>
-            <p>Le Wi-Fi de secours peut disparaître pendant 30 à 40 secondes. Si le Wi-Fi principal revient, tu seras reconnecté au réseau normal. Sinon le Wi-Fi de secours revient.</p>
-            <button id="ap-return-check-once-button" class="button secondary" type="button" data-network-action="ap-return-check-once">Tester le retour au Wi-Fi connu</button>
-            <div id="ap-return-check-once-result" class="callout recovery-result" hidden></div>
-            <details class="action-plan">
-              <summary>Afficher le plan</summary>
-              <p>Depuis le Wi-Fi de secours, tente une fois le dernier Wi-Fi connu, puis reste en mode normal si le retour réussit. En cas d'échec, relance le Wi-Fi de secours.</p>
-            </details>
-          </div>
-          <div class="action-card">
-            <strong>Exporter diagnostic</strong>
-            <p>Prépare un fichier court pour comprendre l'état du node.</p>
-            <button class="button secondary diagnostic-export-trigger" type="button">Exporter diagnostic</button>
-            <div id="recovery-diagnostic-export-result" class="callout recovery-result" hidden></div>
-          </div>
-        </div>
       </section>
 
     </div>
