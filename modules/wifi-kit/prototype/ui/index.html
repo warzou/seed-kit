@@ -1538,8 +1538,7 @@
       grid-template-columns: 1fr;
       grid-template-areas:
         "update"
-        "reboot"
-        "shutdown";
+        "danger";
       gap: 12px;
     }
 
@@ -1553,6 +1552,20 @@
 
     .maintenance-shutdown-card {
       grid-area: shutdown;
+    }
+
+    .maintenance-danger-zone-card {
+      grid-area: danger;
+      display: grid;
+      gap: 12px;
+      border-color: rgba(255, 85, 77, 0.28);
+      background: rgba(45, 14, 18, 0.24);
+    }
+
+    .maintenance-danger-zone-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
     }
 
     .config-recovery-stack {
@@ -2044,10 +2057,13 @@
       .status-pill-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .secondary-action-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .maintenance-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: 1fr;
         grid-template-areas:
-          "update update"
-          "reboot shutdown";
+          "update"
+          "danger";
+      }
+      .maintenance-danger-zone-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
       .status-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .tab-button { font-size: 0.74rem; }
@@ -2659,27 +2675,34 @@
             <button id="ui-restart-button" class="button secondary" type="button" hidden>Redémarrer l'interface</button>
             <div id="ui-restart-result" class="callout recovery-result" hidden></div>
           </div>
-          <div class="action-card maintenance-card maintenance-reboot-card">
-            <span class="chip">Danger</span>
-            <strong>Redémarrer le node</strong>
-            <p>Le node va redémarrer proprement. L'interface sera indisponible puis devrait revenir sur le même Wi-Fi.</p>
-            <label class="confirm-line">
-              <input id="system-reboot-confirmed" type="checkbox">
-              Confirmer le red&eacute;marrage
-            </label>
-            <button id="system-reboot-button" class="button warn" type="button" data-system-action="system-reboot" disabled>Redémarrer le node</button>
-            <div id="system-reboot-result" class="callout recovery-result" hidden></div>
-          </div>
-          <div class="action-card maintenance-card maintenance-shutdown-card">
-            <span class="chip">Danger</span>
-            <strong>Éteindre le node</strong>
-            <p>Le node va s'éteindre proprement. Il faudra le rallumer physiquement.</p>
-            <label class="confirm-line">
-              <input id="system-shutdown-confirmed" type="checkbox">
-              Confirmer l'arr&ecirc;t
-            </label>
-            <button id="system-shutdown-button" class="button danger" type="button" data-system-action="system-shutdown" disabled>Éteindre le node</button>
-            <div id="system-shutdown-result" class="callout recovery-result" hidden></div>
+          <div class="action-card maintenance-card maintenance-danger-zone-card">
+            <span class="chip">Zone dangereuse</span>
+            <strong>Arrêt et redémarrage du node</strong>
+            <p>Ces actions interrompent temporairement l'accès au node.</p>
+            <div class="maintenance-danger-zone-grid">
+              <div class="action-card maintenance-card maintenance-reboot-card">
+                <span class="chip">Danger</span>
+                <strong>Redémarrer le node</strong>
+                <p>Le node va redémarrer proprement. L'interface sera indisponible puis devrait revenir sur le même Wi-Fi.</p>
+                <label class="confirm-line">
+                  <input id="system-reboot-confirmed" type="checkbox">
+                  Confirmer le red&eacute;marrage
+                </label>
+                <button id="system-reboot-button" class="button warn" type="button" data-system-action="system-reboot" disabled>Redémarrer le node</button>
+                <div id="system-reboot-result" class="callout recovery-result" hidden></div>
+              </div>
+              <div class="action-card maintenance-card maintenance-shutdown-card">
+                <span class="chip">Danger</span>
+                <strong>Éteindre le node</strong>
+                <p>Le node va s'éteindre proprement. Il faudra le rallumer physiquement.</p>
+                <label class="confirm-line">
+                  <input id="system-shutdown-confirmed" type="checkbox">
+                  Confirmer l'arr&ecirc;t
+                </label>
+                <button id="system-shutdown-button" class="button danger" type="button" data-system-action="system-shutdown" disabled>Éteindre le node</button>
+                <div id="system-shutdown-result" class="callout recovery-result" hidden></div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
