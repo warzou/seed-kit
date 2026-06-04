@@ -2447,6 +2447,14 @@
               </span>
             </label>
             <label class="field-label">
+              Réseau connecté mais inutilisable
+              <span class="input-with-unit">
+                <input id="runtime-gateway-internet-loss-input" class="password-local" type="number" min="1" max="3600" step="1" inputmode="numeric" placeholder="120">
+                <span class="input-unit">secondes</span>
+              </span>
+              <small class="setting-help">Utilisé quand le node garde son Wi-Fi et son IP, mais ne peut plus joindre la passerelle ni Internet.</small>
+            </label>
+            <label class="field-label">
               Perte critique du lien
               <span class="input-with-unit">
                 <input id="runtime-critical-link-loss-input" class="password-local" type="number" min="1" max="3600" step="1" inputmode="numeric" placeholder="300">
@@ -3507,6 +3515,7 @@
       setText('recovery-failsafe-mode', failsafeModeLabel());
       setText('recovery-watchdog-event', summary.raw);
       setInputValue('runtime-recovery-grace-input', config.runtime_recovery_grace_seconds || '30');
+      setInputValue('runtime-gateway-internet-loss-input', config.runtime_recovery_gateway_internet_loss_seconds || '120');
       setInputValue('runtime-critical-link-loss-input', config.runtime_recovery_critical_link_loss_seconds || '300');
       renderReturnConnectionSelect(returnConnection);
       renderReturnConnectionDetails(returnConnection);
@@ -3991,6 +4000,7 @@
         data.recovery.runtime_recovery_enabled = payload.config.runtime_recovery_enabled;
         data.recovery.runtime_recovery_debug_passive = payload.config.runtime_recovery_debug_passive;
         data.recovery.runtime_recovery_grace_seconds = payload.config.runtime_recovery_grace_seconds;
+        data.recovery.runtime_recovery_gateway_internet_loss_seconds = payload.config.runtime_recovery_gateway_internet_loss_seconds;
         data.recovery.runtime_recovery_critical_link_loss_seconds = payload.config.runtime_recovery_critical_link_loss_seconds;
         data.recovery.runtime_recovery_internet_required = payload.config.runtime_recovery_internet_required;
         data.recovery.runtime_recovery_internet_probe = payload.config.runtime_recovery_internet_probe;
@@ -4012,6 +4022,7 @@
         data.system.runtime_recovery_enabled = payload.config.runtime_recovery_enabled;
         data.system.runtime_recovery_debug_passive = payload.config.runtime_recovery_debug_passive;
         data.system.runtime_recovery_grace_seconds = payload.config.runtime_recovery_grace_seconds;
+        data.system.runtime_recovery_gateway_internet_loss_seconds = payload.config.runtime_recovery_gateway_internet_loss_seconds;
         data.system.runtime_recovery_critical_link_loss_seconds = payload.config.runtime_recovery_critical_link_loss_seconds;
         data.system.runtime_recovery_internet_required = payload.config.runtime_recovery_internet_required;
         data.system.runtime_recovery_internet_probe = payload.config.runtime_recovery_internet_probe;
@@ -4084,6 +4095,7 @@
       const internetRequired = Boolean(document.getElementById('runtime-internet-required-input')?.checked);
       const internetProbe = document.getElementById('runtime-internet-probe-input')?.value.trim() || '1.1.1.1';
       const runtimeRecoveryGrace = document.getElementById('runtime-recovery-grace-input')?.value.trim() || '30';
+      const gatewayInternetLossSeconds = document.getElementById('runtime-gateway-internet-loss-input')?.value.trim() || '120';
       const criticalLinkLossSeconds = document.getElementById('runtime-critical-link-loss-input')?.value.trim() || '300';
       const returnInput = document.getElementById('recovery-return-connection-select');
       const returnConnection = returnInput.value.trim();
@@ -4123,6 +4135,11 @@
         else showRecoveryConfigResult('Délai du Wi-Fi de secours : nombre de secondes requis.');
         return;
       }
+      if (!/^[0-9]+$/.test(gatewayInternetLossSeconds) || Number(gatewayInternetLossSeconds) < 1 || Number(gatewayInternetLossSeconds) > 3600) {
+        if (resultTarget === 'config') showConfigResult('Réseau connecté mais inutilisable : entre 1 et 3600 secondes.');
+        else showRecoveryConfigResult('Réseau connecté mais inutilisable : entre 1 et 3600 secondes.');
+        return;
+      }
       if (!internetProbe) {
         if (resultTarget === 'config') showConfigResult('Cible Internet requise.');
         else showRecoveryConfigResult('Cible Internet requise.');
@@ -4146,6 +4163,7 @@
         runtime_recovery_enabled: runtimeRecoveryEnabled,
         runtime_recovery_debug_passive: runtimeRecoveryDebugPassive,
         runtime_recovery_grace_seconds: runtimeRecoveryGrace,
+        runtime_recovery_gateway_internet_loss_seconds: gatewayInternetLossSeconds,
         runtime_recovery_critical_link_loss_seconds: criticalLinkLossSeconds,
         runtime_recovery_internet_required: internetRequired,
         runtime_recovery_internet_probe: internetProbe
@@ -4156,6 +4174,7 @@
       const runtimeRecoveryEnabled = Boolean(document.getElementById('runtime-recovery-enabled-input')?.checked);
       const runtimeRecoveryDebugPassive = runtimeDebugPassiveFromInputs();
       const runtimeRecoveryGrace = document.getElementById('runtime-recovery-grace-input')?.value.trim() || '30';
+      const gatewayInternetLossSeconds = document.getElementById('runtime-gateway-internet-loss-input')?.value.trim() || '120';
       const criticalLinkLossSeconds = document.getElementById('runtime-critical-link-loss-input')?.value.trim() || '300';
       const internetRequired = Boolean(document.getElementById('runtime-internet-required-input')?.checked);
       const internetProbe = document.getElementById('runtime-internet-probe-input')?.value.trim() || '1.1.1.1';
@@ -4167,6 +4186,10 @@
         showRuntimeConfigResult('Délai avant Wi-Fi de secours : nombre de secondes requis.', 'diag-failsafe-result');
         return;
       }
+      if (!/^[0-9]+$/.test(gatewayInternetLossSeconds) || Number(gatewayInternetLossSeconds) < 1 || Number(gatewayInternetLossSeconds) > 3600) {
+        showRuntimeConfigResult('Réseau connecté mais inutilisable : entre 1 et 3600 secondes.', 'diag-failsafe-result');
+        return;
+      }
       if (!/^[0-9]+$/.test(criticalLinkLossSeconds) || Number(criticalLinkLossSeconds) < 1 || Number(criticalLinkLossSeconds) > 3600) {
         showRuntimeConfigResult('Perte critique du lien : entre 1 et 3600 secondes.', 'diag-failsafe-result');
         return;
@@ -4175,6 +4198,7 @@
         runtime_recovery_enabled: runtimeRecoveryEnabled,
         runtime_recovery_debug_passive: runtimeRecoveryDebugPassive,
         runtime_recovery_grace_seconds: runtimeRecoveryGrace,
+        runtime_recovery_gateway_internet_loss_seconds: gatewayInternetLossSeconds,
         runtime_recovery_critical_link_loss_seconds: criticalLinkLossSeconds,
         runtime_recovery_internet_required: internetRequired,
         runtime_recovery_internet_probe: internetProbe
@@ -4184,9 +4208,14 @@
 
     async function saveRecoveryDelay() {
       const runtimeRecoveryGrace = document.getElementById('runtime-recovery-grace-input')?.value.trim() || '30';
+      const gatewayInternetLossSeconds = document.getElementById('runtime-gateway-internet-loss-input')?.value.trim() || '120';
       const criticalLinkLossSeconds = document.getElementById('runtime-critical-link-loss-input')?.value.trim() || '300';
       if (!/^[0-9]+$/.test(runtimeRecoveryGrace)) {
         showRuntimeConfigResult('Délai avant Wi-Fi de secours : nombre de secondes requis.', 'diag-recovery-delay-result');
+        return;
+      }
+      if (!/^[0-9]+$/.test(gatewayInternetLossSeconds) || Number(gatewayInternetLossSeconds) < 1 || Number(gatewayInternetLossSeconds) > 3600) {
+        showRuntimeConfigResult('Réseau connecté mais inutilisable : entre 1 et 3600 secondes.', 'diag-recovery-delay-result');
         return;
       }
       if (!/^[0-9]+$/.test(criticalLinkLossSeconds) || Number(criticalLinkLossSeconds) < 1 || Number(criticalLinkLossSeconds) > 3600) {
@@ -4195,9 +4224,10 @@
       }
       await saveRuntimeConfig({
         runtime_recovery_grace_seconds: runtimeRecoveryGrace,
+        runtime_recovery_gateway_internet_loss_seconds: gatewayInternetLossSeconds,
         runtime_recovery_critical_link_loss_seconds: criticalLinkLossSeconds
       }, 'diag-recovery-delay-result');
-      showRuntimeConfigResult(`Délais appliqués : Wi-Fi de secours ${runtimeRecoveryGrace} secondes, perte critique ${criticalLinkLossSeconds} secondes.`, 'diag-recovery-delay-result');
+      showRuntimeConfigResult(`Délais appliqués : Wi-Fi de secours ${runtimeRecoveryGrace} secondes, réseau connecté mais inutilisable ${gatewayInternetLossSeconds} secondes, perte critique ${criticalLinkLossSeconds} secondes.`, 'diag-recovery-delay-result');
     }
 
     function nodeNetworkConfigPayload() {

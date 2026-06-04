@@ -610,7 +610,7 @@ config_values() {
   internet_required=$(normalize_bool "$internet_required_raw")
   internet_probe=$(runtime_value runtime_recovery_internet_probe "${WIFI_KIT_RUNTIME_WATCHDOG_INTERNET_PROBE:-1.1.1.1}")
   internet_ping_status=$(ping_internet_probe)
-  minimal_ap_safety_seconds="${WIFI_KIT_RUNTIME_WATCHDOG_MINIMAL_AP_SAFETY_SECONDS:-300}"
+  gateway_internet_loss_seconds=$(runtime_value runtime_recovery_gateway_internet_loss_seconds "${WIFI_KIT_RUNTIME_WATCHDOG_MINIMAL_AP_SAFETY_SECONDS:-120}")
   critical_link_loss_seconds=$(runtime_value runtime_recovery_critical_link_loss_seconds "${WIFI_KIT_RUNTIME_WATCHDOG_CRITICAL_LINK_LOSS_SECONDS:-300}")
   min_unavailable_seconds="${WIFI_KIT_RUNTIME_WATCHDOG_MIN_UNAVAILABLE_SECONDS:-0}"
   window_minutes=$(runtime_value runtime_recovery_instability_window_minutes 10)
@@ -678,9 +678,12 @@ config_values() {
   case "$min_unavailable_seconds" in
     ''|*[!0-9]*) min_unavailable_seconds=0 ;;
   esac
-  case "$minimal_ap_safety_seconds" in
-    ''|*[!0-9]*) minimal_ap_safety_seconds=300 ;;
+  case "$gateway_internet_loss_seconds" in
+    ''|*[!0-9]*) gateway_internet_loss_seconds=120 ;;
   esac
+  if [ "$gateway_internet_loss_seconds" -lt 1 ]; then
+    gateway_internet_loss_seconds=120
+  fi
   case "$critical_link_loss_seconds" in
     ''|*[!0-9]*) critical_link_loss_seconds=300 ;;
   esac
@@ -726,8 +729,8 @@ config_values() {
     runtime_reason="mismatch-last-good"
   fi
   classify_health
-  if minimal_ap_safety_active && [ "$effective_grace_seconds" -lt "$minimal_ap_safety_seconds" ]; then
-    effective_grace_seconds=$minimal_ap_safety_seconds
+  if minimal_ap_safety_active && [ "$effective_grace_seconds" -lt "$gateway_internet_loss_seconds" ]; then
+    effective_grace_seconds=$gateway_internet_loss_seconds
   fi
   critical_link_loss_active=no
   if critical_link_loss_active; then
@@ -919,6 +922,20 @@ start_ap_recovery() {
     write_state "ap-recovery-active" "$trigger" "$last_good_ssid"
     return 0
   fi
+  original_trigger=$trigger
+  config_values
+  if is_runtime_healthy; then
+    log_event "recovery-cancelled link-restored-before-ap" "trigger=$original_trigger ssid=${current_ssid:-unknown} health_reason=$health_reason runtime_reason=$runtime_reason ip=${iface_ipv4:-none} default_route=$default_route_present gateway=${gateway:-none} gateway_ping=$gateway_ping_status internet_ping=$internet_ping_status"
+    write_state "watching" "$health_reason" "${current_ssid:-$last_good_ssid}"
+    return 0
+  fi
+  trigger=$health_reason
+  if [ "$critical_link_loss_active" = "yes" ]; then
+    trigger="critical-link-loss"
+  fi
+  if [ "$trigger" != "$original_trigger" ]; then
+    log_event "recovery-preflight-trigger-updated" "original_trigger=$original_trigger trigger=$trigger health_reason=$health_reason runtime_reason=$runtime_reason"
+  fi
   if [ "$debug_passive" = "true" ] && [ "$trigger" != "gateway-and-internet-unreachable" ]; then
     if [ "$trigger" = "critical-link-loss" ]; then
       log_event "debug-passive-bypass-critical-link-loss" "trigger=$trigger health_reason=$health_reason runtime_reason=$runtime_reason elapsed_grace=$effective_grace_seconds critical_link_loss_seconds=$critical_link_loss_seconds"
@@ -968,7 +985,7 @@ cmd_audit() {
   kv "runtime_recovery_debug_passive_raw" "$debug_passive_raw"
   kv "runtime_recovery_grace_seconds" "$grace_seconds"
   kv "runtime_recovery_effective_grace_seconds" "$effective_grace_seconds"
-  kv "runtime_recovery_minimal_ap_safety_seconds" "$minimal_ap_safety_seconds"
+  kv "runtime_recovery_gateway_internet_loss_seconds" "$gateway_internet_loss_seconds"
   kv "runtime_recovery_critical_link_loss_seconds" "$critical_link_loss_seconds"
   kv "runtime_recovery_critical_link_loss_active" "$critical_link_loss_active"
   if minimal_ap_safety_active; then
@@ -1036,7 +1053,8 @@ cmd_plan() {
   kv "02c.instability" "short repeated failures are logged as diagnostic-only; they do not force AP by themselves"
   kv "02c.internet" "if runtime_recovery_internet_required=true, internet probe failure can trigger AP after grace"
   kv "02d.bootstrap" "if last_good is absent and current Wi-Fi is healthy, write the initial baseline to runtime.conf only"
-  kv "02e.critical" "critical link loss bypasses debug_passive after runtime_recovery_critical_link_loss_seconds"
+  kv "02e.gateway" "gateway+internet loss bypasses debug_passive after runtime_recovery_gateway_internet_loss_seconds"
+  kv "02f.critical" "critical link loss bypasses debug_passive after runtime_recovery_critical_link_loss_seconds"
   kv "03.cancel" "if last_good returns during grace, log recovery-cancelled link-restored"
   kv "04.recover" "if still disconnected from last_good, or gateway+internet stay unreachable past safety grace, call wrapper start-ap-mode"
   kv "05.ap" "AP return-check loop handles periodic last_good retry from AP recovery"
