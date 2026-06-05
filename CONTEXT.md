@@ -1,5 +1,9 @@
 # Seed-Kit - Context
 
+> **Recovery guidance**
+>
+> Human and operator rules are documented in [ARCHITECTURE-GUARDRAILS.md](ARCHITECTURE-GUARDRAILS.md).
+
 Seed-Kit is a lightweight POSIX-shell toolkit for installing and resuming small machines:
 Debian, Raspberry Pi OS, mini VPS, and later OpenWRT/Flint.
 
